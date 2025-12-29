@@ -34,7 +34,9 @@ jobs:
         run: npm run build
 
       - name: Capacitor Sync
-        run: npx cap sync
+        run: |
+          npm install -D typescript
+          npx cap sync
 
       - name: Build Android APK
         run: |
