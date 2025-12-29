@@ -1,0 +1,272 @@
+<template>
+  <Transition name="fade">
+    <div class="overlay" @click.self="$emit('close')">
+      <div class="panel">
+        <div class="head">
+          <div class="title-area">
+            <span class="title">历史记录</span>
+            <span class="count">{{ messages.length }} 条消息</span>
+          </div>
+          <button class="close-icon" @click="$emit('close')">
+            <el-icon><Close /></el-icon>
+          </button>
+        </div>
+        <div class="list">
+          <div v-if="messages.length === 0" class="empty-state">
+            <el-icon size="48" color="#94a3b8"><MessageBox /></el-icon>
+            <p>暂无对话记录</p>
+          </div>
+          <div v-for="(m, i) in messages" :key="i" :class="['row', m.role]">
+            <div class="row-header">
+              <span class="role-tag">{{ m.role === 'user' ? '我' : 'Pero' }}</span>
+              <span class="time">{{ formatTime(m.timestamp) }}</span>
+            </div>
+            <div class="content">{{ cleanMessageContent(m.content) }}</div>
+            <div class="row-tools">
+              <el-tooltip content="复制内容" placement="top" :hide-after="1000">
+                <button class="tool-btn" @click="$emit('copy', m)"><el-icon size="14"><CopyDocument /></el-icon></button>
+              </el-tooltip>
+              <el-tooltip content="重新生成" placement="top" v-if="m.role === 'assistant'">
+                <button class="tool-btn" @click="$emit('regenerate', i)"><el-icon size="14"><Refresh /></el-icon></button>
+              </el-tooltip>
+              <el-tooltip content="删除消息" placement="top">
+                <button class="tool-btn delete" @click="$emit('delete', i)"><el-icon size="14"><Delete /></el-icon></button>
+              </el-tooltip>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </Transition>
+</template>
+
+<script setup>
+import { defineProps, defineEmits } from 'vue'
+import { Delete, Refresh, CopyDocument, Close, MessageBox } from '@element-plus/icons-vue'
+
+const props = defineProps({
+  messages: {
+    type: Array,
+    default: () => []
+  }
+})
+
+const emit = defineEmits(['close', 'delete', 'regenerate', 'copy'])
+
+// 格式化时间
+function formatTime(ts) {
+  if (!ts) return ''
+  const date = new Date(ts)
+  return date.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })
+}
+
+// 清理消息中的隐藏标签
+function cleanMessageContent(text) {
+  if (!text) return ''
+  if (text === '__loading__') return '正在思考...'
+  return text
+    .replace(/<PEROCUE>[\s\S]*?<\/PEROCUE>/g, '')
+    .replace(/<MEMORY>[\s\S]*?<\/MEMORY>/g, '')
+    .replace(/<CLICK_MESSAGES>[\s\S]*?<\/CLICK_MESSAGES>/g, '')
+    .replace(/<IDLE_MESSAGES>[\s\S]*?<\/IDLE_MESSAGES>/g, '')
+    .replace(/<BACK_MESSAGES>[\s\S]*?<\/BACK_MESSAGES>/g, '')
+    .replace(/<REMINDER>[\s\S]*?<\/REMINDER>/g, '')
+    .replace(/<TOPIC>[\s\S]*?<\/TOPIC>/g, '')
+    .trim()
+}
+
+</script>
+
+<style scoped>
+.overlay { 
+  position: fixed; 
+  inset: 0; 
+  background: rgba(15, 23, 42, 0.4); 
+  backdrop-filter: blur(8px); 
+  -webkit-backdrop-filter: blur(8px);
+  display: grid; 
+  place-items: center; 
+  z-index: 2000;
+}
+
+.panel { 
+  width: 92vw; 
+  max-width: 600px; 
+  max-height: 85vh; 
+  border-radius: 28px; 
+  border: 1px solid rgba(255, 255, 255, 0.5); 
+  background: rgba(255, 255, 255, 0.8); 
+  backdrop-filter: blur(20px); 
+  -webkit-backdrop-filter: blur(20px);
+  color: #1e293b; 
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+  overflow: hidden;
+  animation: slideUp 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes slideUp {
+  from { opacity: 0; transform: translateY(20px) scale(0.95); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+.head { 
+  display: flex; 
+  align-items: center; 
+  justify-content: space-between; 
+  padding: 20px 24px; 
+  border-bottom: 1px solid rgba(0, 0, 0, 0.05);
+}
+
+.title-area {
+  display: flex;
+  flex-direction: column;
+}
+
+.title {
+  font-size: 18px;
+  font-weight: 700;
+  color: #0f172a;
+}
+
+.count {
+  font-size: 12px;
+  color: #64748b;
+  margin-top: 2px;
+}
+
+.close-icon {
+  width: 32px;
+  height: 32px;
+  border-radius: 16px;
+  border: none;
+  background: rgba(0, 0, 0, 0.05);
+  color: #64748b;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.close-icon:hover {
+  background: rgba(239, 68, 68, 0.1);
+  color: #ef4444;
+}
+
+.list { 
+  flex: 1;
+  padding: 16px 20px; 
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+/* 自定义滚动条 */
+.list::-webkit-scrollbar { width: 5px; }
+.list::-webkit-scrollbar-track { background: transparent; }
+.list::-webkit-scrollbar-thumb { background: rgba(0, 0, 0, 0.1); border-radius: 10px; }
+
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 60px 0;
+  color: #94a3b8;
+  gap: 12px;
+}
+
+.row { 
+  border-radius: 18px; 
+  padding: 16px; 
+  word-break: break-word; 
+  background: white; 
+  border: 1px solid rgba(0, 0, 0, 0.03); 
+  display: flex; 
+  flex-direction: column; 
+  gap: 10px;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
+  transition: transform 0.2s;
+}
+
+.row:hover {
+  transform: translateY(-2px);
+}
+
+.row-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.role-tag {
+  font-size: 12px;
+  font-weight: 700;
+  padding: 2px 10px;
+  border-radius: 20px;
+}
+
+.row.user .role-tag {
+  background: #eff6ff;
+  color: #3b82f6;
+}
+
+.row.assistant .role-tag {
+  background: #fdf2f8;
+  color: #ec4899;
+}
+
+.time {
+  font-size: 11px;
+  color: #94a3b8;
+}
+
+.content {
+  font-size: 14px;
+  line-height: 1.6;
+  color: #334155;
+  white-space: pre-wrap;
+}
+
+.row-tools { 
+  display: flex; 
+  gap: 8px; 
+  justify-content: flex-end; 
+  border-top: 1px solid rgba(0, 0, 0, 0.05); 
+  padding-top: 10px; 
+}
+
+.tool-btn { 
+  width: 32px; 
+  height: 32px; 
+  display: flex; 
+  align-items: center; 
+  justify-content: center; 
+  border-radius: 10px; 
+  border: 1px solid rgba(0, 0, 0, 0.05); 
+  background: #f8fafc; 
+  color: #64748b; 
+  cursor: pointer; 
+  transition: all 0.2s; 
+}
+
+.tool-btn:hover { 
+  background: #eff6ff; 
+  border-color: #3b82f6; 
+  color: #3b82f6; 
+  transform: scale(1.1);
+}
+
+.tool-btn.delete:hover {
+  background: #fef2f2;
+  border-color: #ef4444;
+  color: #ef4444;
+}
+
+/* 消息淡入动画 */
+.fade-enter-active, .fade-leave-active { transition: opacity 0.3s; }
+.fade-enter-from, .fade-leave-to { opacity: 0; }
+</style>

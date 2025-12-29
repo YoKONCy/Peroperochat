@@ -1,0 +1,13 @@
+{
+  "name": "Peroperochat",
+  "short_name": "Peroperochat",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#111827",
+  "theme_color": "#111827",
+  "lang": "zh-CN",
+  "orientation": "portrait",
+  "categories": ["productivity", "communication"],
+  "icons": []
+}
