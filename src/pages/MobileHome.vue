@@ -1,7 +1,7 @@
 <template>
   <div class="home">
     <div class="hero">
-      <Live2DWidget />
+      <Live2DWidget @click="handleWaifuClick" />
       
       <!-- 话题气泡容器 (左上角) -->
       <div class="topic-bubbles-container" v-if="topics.length > 0">
@@ -95,11 +95,14 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, onUnmounted, nextTick, watch } from 'vue'
+import { useRouter } from 'vue-router'
+import { Haptics, ImpactStyle } from '@capacitor/haptics'
+import { LocalNotifications } from '@capacitor/local-notifications'
+import { Capacitor } from '@capacitor/core'
 import Live2DWidget from '../components/Live2DWidget.vue'
 import HistoryOverlay from '../components/HistoryOverlay.vue'
 import { chat as chatApi, chatStream, getRelevantMemories, saveMemory, deleteMemoriesByMsgTimestamp, getDefaultPrompts } from '../api'
-import { useRouter } from 'vue-router'
 import { Promotion } from '@element-plus/icons-vue'
 
 const router = useRouter()
@@ -124,6 +127,44 @@ const reminders = ref(lsGet('ppc.reminders', []))
 // 主动话题列表
 const topics = ref(lsGet('ppc.topics', []))
 
+// 初始化通知权限
+const initNotifications = async () => {
+  if (Capacitor.isNativePlatform()) {
+    try {
+      const perm = await LocalNotifications.checkPermissions()
+      if (perm.display !== 'granted') {
+        await LocalNotifications.requestPermissions()
+      }
+    } catch (e) {
+      console.warn('Notifications permission failed', e)
+    }
+  }
+}
+
+// 发送系统通知
+const sendSystemNotification = async (title, body) => {
+  if (Capacitor.isNativePlatform()) {
+    try {
+      await LocalNotifications.schedule({
+        notifications: [
+          {
+            title,
+            body,
+            id: Date.now(),
+            schedule: { at: new Date(Date.now() + 1000) }, // 1秒后立即发送
+            sound: 'beep.wav',
+            attachments: [],
+            actionTypeId: '',
+            extra: null
+          }
+        ]
+      })
+    } catch (e) {
+      console.warn('Notification failed', e)
+    }
+  }
+}
+
 // 检查提醒任务和主动话题
 function checkReminders() {
   if (isLoading.value) return
@@ -141,6 +182,9 @@ function checkReminders() {
     reminders.value = reminders.value.filter(r => r.time !== task.time)
     lsSet('ppc.reminders', reminders.value)
     onSend(`【管理系统提醒：Pero，你与主人的约定时间已到，请主动提醒主人。约定内容：${task.task}】`)
+    
+    // 发送系统级通知 (App环境)
+    sendSystemNotification('Pero 的任务提醒', task.task)
     return // 优先处理任务
   }
 
@@ -155,10 +199,15 @@ function checkReminders() {
     topics.value = topics.value.filter(t => t.time !== topic.time)
     lsSet('ppc.topics', topics.value)
     onSend(`【管理系统提醒：Pero，你刚才有话题想找主人聊哦，内容是：${topic.topic}；去和主人聊天吧！】`)
+    
+    // 发送系统级通知 (App环境)
+    sendSystemNotification('Pero 想找你聊天', topic.topic)
   }
 }
 
 onMounted(() => {
+  // 初始化通知
+  initNotifications()
   // 每 10 秒检查一次提醒
   setInterval(checkReminders, 10000)
 })
@@ -181,7 +230,22 @@ function toggleTopicReveal(idx) {
   lsSet('ppc.topics', topics.value)
 }
 
-// 格式化提醒时间显示
+// 处理角色点击事件（增加震动）
+const handleWaifuClick = async () => {
+  // 如果在 App 环境，提供微弱震动反馈
+  if (Capacitor.isNativePlatform()) {
+    try {
+      await Haptics.impact({ style: ImpactStyle.Light })
+    } catch (e) {
+      console.warn('Haptics failed', e)
+    }
+  }
+  
+  // 触发原本的点击交互逻辑
+  window.dispatchEvent(new CustomEvent('ppc:waifu-click'))
+}
+
+// 格式化时间显示
 function formatReminderTime(timeStr) {
   try {
     const d = new Date(timeStr)
