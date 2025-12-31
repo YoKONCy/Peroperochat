@@ -1,14 +1,11 @@
 {
   "models": [
-    "potion-Maker-Pio",
-    "potion-Maker-Tia"
+    "potion-Maker-Pio"
   ],
   "model_textures": [
-    7,
-    6
+    7
   ],
   "messages": [
-    "我是 Pio，很高兴见到你！",
-    "我是 Tia，我们可以一起玩吗？"
+    "我是 Pio，很高兴见到你！"
   ]
 }

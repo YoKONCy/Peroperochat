@@ -32,7 +32,7 @@ function loadWidget(config) {
         const T = window.WAIFU_TEXTS || {}
         const messageArray = (Array.isArray(T.idleMessages) && T.idleMessages.length ? T.idleMessages : ["好久不见，日子过得好快呢……", "大坏蛋！你都多久没理人家了呀，嘤嘤嘤～", "嗨～快来逗我玩吧！", "拿小拳拳锤你胸口！"])
         showMessage(randomSelection(messageArray), 6000, 9) 
-      }, 20000) 
+      }, 120000) 
     }
   }, 1000)
 
@@ -170,10 +170,13 @@ function loadWidget(config) {
 
   async function loadRandModel() {
     const T = window.WAIFU_TEXTS || {}
+    if (useCDN && !modelList) await loadModelList();
+    
     let modelId = parseInt(localStorage.getItem("modelId") || "0")
     let modelTexturesId = parseInt(localStorage.getItem("modelTexturesId") || "0")
+    
     if (useCDN) {
-      if (!modelList) await loadModelList();
+      if (isNaN(modelId) || modelId >= modelList.models.length) modelId = 0;
       const maxTextures = modelList.model_textures[modelId] || 1;
       modelTexturesId++;
       if (modelTexturesId >= maxTextures) modelTexturesId = 0;
@@ -186,6 +189,7 @@ function loadWidget(config) {
     let modelId = parseInt(localStorage.getItem("modelId") || "0")
     if (useCDN) { 
       if (!modelList) await loadModelList(); 
+      if (isNaN(modelId) || modelId >= modelList.models.length) modelId = 0;
       const index = (++modelId >= modelList.models.length) ? 0 : modelId; 
       loadModel(index, 0, modelList.messages[index]) 
     }

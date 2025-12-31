@@ -499,25 +499,38 @@ function parsePeroStatus(content) {
   const clickMatch = content.match(clickRegex)
   if (clickMatch) {
     try {
-      const messages = JSON.parse(clickMatch[1].trim())
-      if (Array.isArray(messages) && messages.length >= 3) {
-        let cur = {}
-        try {
-          const saved = localStorage.getItem('ppc.waifu.texts')
-          if (saved) cur = JSON.parse(saved)
-        } catch (e) {}
-        
-        cur.click_messages_01 = messages[0]
-        cur.click_messages_02 = messages[1]
-        cur.click_messages_03 = messages[2]
-        // 移除多余字段
-        delete cur['click_messages_04']
-        delete cur['click_messages_05']
-        delete cur['click_messages_06']
-        
-        localStorage.setItem('ppc.waifu.texts', JSON.stringify(cur))
-        window.dispatchEvent(new CustomEvent('ppc:waifu-texts-updated', { detail: cur }))
+      const data = JSON.parse(clickMatch[1].trim())
+      let cur = {}
+      try {
+        const saved = localStorage.getItem('ppc.waifu.texts')
+        if (saved) cur = JSON.parse(saved)
+      } catch (e) {}
+
+      if (Array.isArray(data)) {
+        // 兼容旧版数组格式
+        if (data.length >= 3) {
+          cur.click_messages_01 = data[0]
+          cur.click_messages_02 = data[1]
+          cur.click_messages_03 = data[2]
+        }
+      } else if (typeof data === 'object') {
+        // 新版部位格式
+        if (data.head) {
+          cur.click_head_01 = data.head[0] || ''
+          cur.click_head_02 = data.head[1] || ''
+        }
+        if (data.chest) {
+          cur.click_chest_01 = data.chest[0] || ''
+          cur.click_chest_02 = data.chest[1] || ''
+        }
+        if (data.body) {
+          cur.click_body_01 = data.body[0] || ''
+          cur.click_body_02 = data.body[1] || ''
+        }
       }
+      
+      localStorage.setItem('ppc.waifu.texts', JSON.stringify(cur))
+      window.dispatchEvent(new CustomEvent('ppc:waifu-texts-updated', { detail: cur }))
     } catch (e) {
       console.warn('Failed to parse click messages JSON:', e)
     }
@@ -640,6 +653,20 @@ function cleanMessageContent(text) {
     .trim()
 }
 
+// 清理发送给 API 的历史记录，仅保留 PEROCUE，移除其他冗余标签以节省 Token 并防止 Few-shot 干扰
+function cleanHistoryForApi(text) {
+  if (!text) return ''
+  // 这里的逻辑是：先把除了 PEROCUE 以外的所有已知标签都删掉
+  return text
+    .replace(/<MEMORY>[\s\S]*?<\/MEMORY>/g, '')
+    .replace(/<CLICK_MESSAGES>[\s\S]*?<\/CLICK_MESSAGES>/g, '')
+    .replace(/<IDLE_MESSAGES>[\s\S]*?<\/IDLE_MESSAGES>/g, '')
+    .replace(/<BACK_MESSAGES>[\s\S]*?<\/BACK_MESSAGES>/g, '')
+    .replace(/<REMINDER>[\s\S]*?<\/REMINDER>/g, '')
+    .replace(/<TOPIC>[\s\S]*?<\/TOPIC>/g, '')
+    .trim()
+}
+
 // 获取当前环境信息 Prompt (时间、地点、天气)
 function getEnvPrompt() {
   const d = new Date()
@@ -685,7 +712,10 @@ async function onSend(systemMsg = null) {
     // 构建请求消息，添加提示词
     // 根据设置的记忆轮次截断历史记录（1轮 = 1对消息）
     const limitCount = memoryRounds.value * 2
-    let reqForApi = messages.value.slice(0, idx).slice(-limitCount)
+    let reqForApi = messages.value.slice(0, idx).slice(-limitCount).map(m => ({
+      role: m.role,
+      content: m.role === 'assistant' ? cleanHistoryForApi(m.content) : m.content
+    }))
     
     // 注入当前环境信息
     reqForApi = [{ role: 'system', content: getEnvPrompt() }, ...reqForApi]
@@ -758,7 +788,8 @@ async function onSend(systemMsg = null) {
       await parseAndSaveMemory(String(final || ''), messages.value[idx].timestamp)
       
       // 发送聊天事件到 Live2D 气泡
-      window.dispatchEvent(new CustomEvent('ppc:chat', { detail: cleanMessageContent(String(final || '')) }))
+      const cleanContent = cleanMessageContent(String(final || ''))
+      window.dispatchEvent(new CustomEvent('ppc:chat', { detail: cleanContent }))
 
       persistMessages()
       scrollToBottom() // 最终消息更新后滚动到底部
@@ -769,7 +800,8 @@ async function onSend(systemMsg = null) {
       await parseAndSaveMemory(String(r?.content || ''), messages.value[idx].timestamp)
       
       // 发送聊天事件到 Live2D 气泡
-      window.dispatchEvent(new CustomEvent('ppc:chat', { detail: cleanMessageContent(String(r?.content || '')) }))
+      const cleanContent = cleanMessageContent(String(r?.content || ''))
+      window.dispatchEvent(new CustomEvent('ppc:chat', { detail: cleanContent }))
 
       persistMessages()
       scrollToBottom() // 消息更新后滚动到底部
