@@ -7,6 +7,9 @@
 <img alt="Vue" src="https://img.shields.io/badge/Vue.js-3.x-4fc08d?logo=vue.js">
 <img alt="Vite" src="https://img.shields.io/badge/Vite-5.x-646cff?logo=vite">
 <img alt="Capacitor" src="https://img.shields.io/badge/Capacitor-6.x-119eff?logo=capacitor">
+<a href="https://github.com/YoKONCy/Perocore">
+  <img alt="Desktop" src="https://img.shields.io/badge/Desktop-PeroCore-7C3AED?logo=github&logoColor=white">
+</a>
 <img alt="FastAPI" src="https://img.shields.io/badge/FastAPI-0.100+-009688?logo=fastapi">
 <img alt="License" src="https://img.shields.io/badge/License-MIT-green">
 
@@ -40,7 +43,7 @@
 - 🫧 **拟物化气泡 UI**: 采用 Glassmorphism（毛玻璃）设计风格，Pero 的回复像吹出的泡泡一样自然漂浮。
 - ⏰ **主动提醒与通知**: 自动识别约定并生成任务气泡。移动端支持 **Local Notifications**，即使应用关闭也能收到 Pero 的提醒。
 - 🤫 **动态话题机制**: 遵循最新的 2-8 小时时间策略，Pero 会在合适的时机产生“想聊的话题”，增强互动的真实感。
-- 🌐 **跨端兼容性**: 移动端通过 API 与 [PeroCore](file:///c:/Users/Administrator/Desktop/Peroperochat/PeroCore) 后端同步，实现记忆与状态的无缝衔接。
+- 🌐 **跨端兼容性**: 移动端通过 API 与 [PeroCore](https://github.com/YoKONCy/Perocore) 后端同步，实现记忆与状态的无缝衔接。
 
 ---
 
@@ -81,7 +84,7 @@ graph TD
 我们设计了**双轨同步记忆机制**，确保 Pero 在任何设备上都记得你：
 
 - **本地存储 (IndexedDB)**: 基于 Dexie.js v3，存储包含 `type`（类型）和 `source`（来源）的结构化记忆，保证离线可用与极速检索。
-- **云端同步**: 移动端生成的记忆会实时同步至 [PeroCore](file:///c:/Users/Administrator/Desktop/Peroperochat/PeroCore) 后端。
+- **云端同步**: 移动端生成的记忆会实时同步至 [PeroCore](https://github.com/YoKONCy/Perocore) 后端。
 - **分类检索**: 记忆分为 `event` (事件)、`fact` (事实)、`preference` (偏好) 等类型，提升 RAG 检索的精准度。
 - **重要性评估**: AI 自动为每条记忆打分 (1-10)，优先保留深刻的情感连接。
 
