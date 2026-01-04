@@ -77,6 +77,12 @@ function loadWidget(config) {
     if (!text || (sessionStorage.getItem("waifu-text") && sessionStorage.getItem("waifu-text") > priority)) return
     if (messageTimer) { clearTimeout(messageTimer); messageTimer = null }
     text = randomSelection(text)
+    
+    // 触发自定义事件，允许外部（如 Vue）拦截消息显示
+    window.dispatchEvent(new CustomEvent('waifu-message', { 
+      detail: { text, timeout, priority } 
+    }))
+
     sessionStorage.setItem("waifu-text", priority)
     const tips = document.getElementById("waifu-tips")
     if (!tips) return

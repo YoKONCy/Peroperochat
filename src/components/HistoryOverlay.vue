@@ -64,14 +64,12 @@ function formatTime(ts) {
 function cleanMessageContent(text) {
   if (!text) return ''
   if (text === '__loading__') return '正在思考...'
+  
+  // 移除所有 XML 标签及其内容 (因为现在使用 NIT 协议，XML 仅用于内部逻辑)
+  // 同时也移除 NIT 调用块，保持历史记录纯净
   return text
-    .replace(/<PEROCUE>[\s\S]*?<\/PEROCUE>/g, '')
-    .replace(/<MEMORY>[\s\S]*?<\/MEMORY>/g, '')
-    .replace(/<CLICK_MESSAGES>[\s\S]*?<\/CLICK_MESSAGES>/g, '')
-    .replace(/<IDLE_MESSAGES>[\s\S]*?<\/IDLE_MESSAGES>/g, '')
-    .replace(/<BACK_MESSAGES>[\s\S]*?<\/BACK_MESSAGES>/g, '')
-    .replace(/<REMINDER>[\s\S]*?<\/REMINDER>/g, '')
-    .replace(/<TOPIC>[\s\S]*?<\/TOPIC>/g, '')
+    .replace(/<([A-Z_]+)>[\s\S]*?<\/\1>/g, '')
+    .replace(/\[\[\[NIT_CALL\]\]\][\s\S]*?\[\[\[NIT_END\]\]\]/g, '')
     .trim()
 }
 

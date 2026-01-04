@@ -642,21 +642,20 @@ function parsePeroStatus(content) {
 function cleanMessageContent(text) {
   if (!text) return ''
   if (text === '__loading__') return '正在思考...'
+  
+  // 移除所有 XML 标签及其内容 (因为现在使用 NIT 协议，XML 仅用于内部逻辑)
+  // 同时也移除 NIT 调用块，保持历史记录纯净
   return text
-    .replace(/<PEROCUE>[\s\S]*?<\/PEROCUE>/g, '')
-    .replace(/<MEMORY>[\s\S]*?<\/MEMORY>/g, '')
-    .replace(/<CLICK_MESSAGES>[\s\S]*?<\/CLICK_MESSAGES>/g, '')
-    .replace(/<IDLE_MESSAGES>[\s\S]*?<\/IDLE_MESSAGES>/g, '')
-    .replace(/<BACK_MESSAGES>[\s\S]*?<\/BACK_MESSAGES>/g, '')
-    .replace(/<REMINDER>[\s\S]*?<\/REMINDER>/g, '')
-    .replace(/<TOPIC>[\s\S]*?<\/TOPIC>/g, '')
+    .replace(/<([A-Z_]+)>[\s\S]*?<\/\1>/g, '')
+    .replace(/\[\[\[NIT_CALL\]\]\][\s\S]*?\[\[\[NIT_END\]\]\]/g, '')
     .trim()
 }
 
-// 清理发送给 API 的历史记录，仅保留 PEROCUE，移除其他冗余标签以节省 Token 并防止 Few-shot 干扰
+// 清理发送给 API 的历史记录，仅保留 PEROCUE (用于后端状态机，可选)，移除其他冗余标签以节省 Token 并防止 Few-shot 干扰
 function cleanHistoryForApi(text) {
   if (!text) return ''
-  // 这里的逻辑是：先把除了 PEROCUE 以外的所有已知标签都删掉
+  // 移除大部分 XML 标签，保留 PEROCUE 作为后端状态参考（如果需要）
+  // 注意：NIT 协议块不应在历史记录中传递，LLM 应该根据最新状态生成
   return text
     .replace(/<MEMORY>[\s\S]*?<\/MEMORY>/g, '')
     .replace(/<CLICK_MESSAGES>[\s\S]*?<\/CLICK_MESSAGES>/g, '')
@@ -664,6 +663,7 @@ function cleanHistoryForApi(text) {
     .replace(/<BACK_MESSAGES>[\s\S]*?<\/BACK_MESSAGES>/g, '')
     .replace(/<REMINDER>[\s\S]*?<\/REMINDER>/g, '')
     .replace(/<TOPIC>[\s\S]*?<\/TOPIC>/g, '')
+    .replace(/\[\[\[NIT_CALL\]\]\][\s\S]*?\[\[\[NIT_END\]\]\]/g, '')
     .trim()
 }
 

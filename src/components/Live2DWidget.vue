@@ -185,7 +185,7 @@ function showChatBubble(text) {
     if (chatTimer) clearTimeout(chatTimer)
     chatTimer = setTimeout(() => {
       chatVisible.value = false
-    }, 8000)
+    }, 15000)
   }, 0)
 }
 
