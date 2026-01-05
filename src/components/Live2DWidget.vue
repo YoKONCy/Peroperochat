@@ -44,7 +44,7 @@
     <!-- 原本的卡片已拆散到顶部，这里保留 Live2D 的挂载容器 -->
   </div>
 
-  <div id="l2d-panel" class="l2d-panel">
+  <div id="l2d-panel" class="l2d-panel" v-bind="$attrs">
     <div v-if="chatVisible" class="chat-bubble-container">
       <div class="chat-bubble">
         {{ chatText }}
@@ -205,6 +205,7 @@ const onMood = e => { try { moodText.value = String(e.detail || '').trim() || '�
 const onMind = e => { try { mindText.value = String(e.detail || '').trim() || '"Pero要永远跟主人在一起！"' } catch {} }
 const onVibe = e => { try { vibeText.value = String(e.detail || '').trim() || '--' } catch {} }
 const onChat = e => { try { showChatBubble(String(e.detail || '').trim()) } catch {} }
+const onWaifuMessage = e => { try { showChatBubble(String(e.detail.text || '').trim()) } catch {} }
 
 async function fetchLocationAndWeather(force = false) {
   try {
@@ -323,6 +324,7 @@ onMounted(async () => {
   window.addEventListener('ppc:mind', onMind)
   window.addEventListener('ppc:vibe', onVibe)
   window.addEventListener('ppc:chat', onChat)
+  window.addEventListener('waifu-message', onWaifuMessage)
   window.addEventListener('ppc:pero-status-updated', (e) => {
     const status = e.detail
     moodText.value = status.mood || '--'
@@ -343,6 +345,7 @@ onBeforeUnmount(() => {
   window.removeEventListener('ppc:mind', onMind)
   window.removeEventListener('ppc:vibe', onVibe)
   window.removeEventListener('ppc:chat', onChat)
+  window.removeEventListener('waifu-message', onWaifuMessage)
 })
 </script>
 

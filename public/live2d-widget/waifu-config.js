@@ -59,12 +59,22 @@
           }
         },
         randTexturesNoClothes: v.randTexturesNoClothes || fallback.WAIFU_TEXTS.randTexturesNoClothes,
-        randTexturesSuccess: v.randTexturesSuccess || fallback.WAIFU_TEXTS.randTexturesSuccess
+        randTexturesSuccess: v.randTexturesSuccess || fallback.WAIFU_TEXTS.randTexturesSuccess,
+        // 保存部位点击台词
+        click_head_01: v.click_head_01,
+        click_head_02: v.click_head_02,
+        click_chest_01: v.click_chest_01,
+        click_chest_02: v.click_chest_02,
+        click_body_01: v.click_body_01,
+        click_body_02: v.click_body_02
       }
       window.WAIFU_CONFIG = {
         click: [
           { selector: '#live2d', text: [
-            v.click_messages_01, v.click_messages_02, v.click_messages_03
+            v.click_messages_01, v.click_messages_02, v.click_messages_03,
+            v.click_head_01, v.click_head_02,
+            v.click_chest_01, v.click_chest_02,
+            v.click_body_01, v.click_body_02
           ].filter(Boolean) }
         ]
       }

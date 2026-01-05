@@ -143,6 +143,39 @@ function loadWidget(config) {
         return
       }
     })
+
+    // 监听来自 Vue 层的手动点击触发
+    window.addEventListener("ppc:waifu-click", (e) => {
+      const C = window.WAIFU_CONFIG || { click: [] }
+      const area = e.detail && e.detail.area // 可能包含 'head', 'chest', 'body'
+      
+      const config = C.click.find(c => c.selector === "#live2d")
+      if (config && config.text) {
+        let t;
+        const T = window.WAIFU_TEXTS || {}
+        
+        // 如果指定了部位，尝试从 WAIFU_TEXTS 中找对应部位的台词
+        if (area && T[`click_${area}_01`]) {
+          const areaTexts = [T[`click_${area}_01`], T[`click_${area}_02`]].filter(Boolean)
+          if (areaTexts.length > 0) {
+            t = randomSelection(areaTexts)
+          }
+        }
+
+        // 如果没找到部位台词，回退到通用逻辑
+        if (!t) {
+          if (Array.isArray(config.text)) {
+            if (config.nextIndex === undefined) config.nextIndex = 0;
+            t = config.text[config.nextIndex];
+            config.nextIndex = (config.nextIndex + 1) % config.text.length;
+          } else {
+            t = config.text;
+          }
+        }
+        
+        showMessage(t, 4000, 8);
+      }
+    })
   })()
 
   async function loadModelList() { const response = await fetch(`${cdnPath}model_list.json`); modelList = await response.json() }

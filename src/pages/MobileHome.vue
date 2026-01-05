@@ -275,6 +275,12 @@ onMounted(() => {
   initNotifications()
   // 每 10 秒检查一次提醒
   setInterval(checkReminders, 10000)
+
+  // 状态恢复：根据最后一条 AI 消息恢复 Pero 的状态
+  const lastAssistantMsg = [...messages.value].reverse().find(m => m.role === 'assistant')
+  if (lastAssistantMsg) {
+    parsePeroStatus(lastAssistantMsg.content)
+  }
 })
 
 // 移除提醒任务
@@ -305,8 +311,8 @@ function toggleTopicReveal(idx) {
   lsSet('ppc.topics', topics.value)
 }
 
-// 处理角色点击事件（增加震动）
-const handleWaifuClick = async () => {
+// 处理角色点击事件（增加震动与部位判断）
+const handleWaifuClick = async (event) => {
   // 如果在 App 环境，提供微弱震动反馈
   if (Capacitor.isNativePlatform()) {
     try {
@@ -316,8 +322,24 @@ const handleWaifuClick = async () => {
     }
   }
   
-  // 触发原本的点击交互逻辑
-  window.dispatchEvent(new CustomEvent('ppc:waifu-click'))
+  // 简单的部位判断逻辑
+  let area = 'general'
+  if (event && event.target) {
+    const rect = event.target.getBoundingClientRect()
+    const relativeY = (event.clientY - rect.top) / rect.height
+    
+    if (relativeY < 0.3) {
+      area = 'head'
+    } else if (relativeY < 0.6) {
+      area = 'chest'
+    } else {
+      area = 'body'
+    }
+    console.log(`[Click] Area detected: ${area} (Y: ${relativeY.toFixed(2)})`)
+  }
+  
+  // 触发原本的点击交互逻辑，传递部位信息
+  window.dispatchEvent(new CustomEvent('ppc:waifu-click', { detail: { area } }))
 }
 
 // 删除任务并取消通知
@@ -508,11 +530,9 @@ function parsePeroStatus(content) {
 
       if (Array.isArray(data)) {
         // 兼容旧版数组格式
-        if (data.length >= 3) {
-          cur.click_messages_01 = data[0]
-          cur.click_messages_02 = data[1]
-          cur.click_messages_03 = data[2]
-        }
+        data.forEach((msg, i) => {
+          cur[`click_messages_0${i + 1}`] = msg
+        })
       } else if (typeof data === 'object') {
         // 新版部位格式
         if (data.head) {
@@ -526,6 +546,12 @@ function parsePeroStatus(content) {
         if (data.body) {
           cur.click_body_01 = data.body[0] || ''
           cur.click_body_02 = data.body[1] || ''
+        }
+        // 同时兼容旧版，如果 object 里有 general 字段或者直接取前几个作为通用
+        if (data.general) {
+          cur.click_messages_01 = data.general[0] || ''
+          cur.click_messages_02 = data.general[1] || ''
+          cur.click_messages_03 = data.general[2] || ''
         }
       }
       
