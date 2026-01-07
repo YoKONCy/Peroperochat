@@ -311,17 +311,8 @@ function toggleTopicReveal(idx) {
   lsSet('ppc.topics', topics.value)
 }
 
-// 处理角色点击事件（增加震动与部位判断）
+// 处理角色点击事件（增加部位判断）
 const handleWaifuClick = async (event) => {
-  // 如果在 App 环境，提供微弱震动反馈
-  if (Capacitor.isNativePlatform()) {
-    try {
-      await Haptics.impact({ style: ImpactStyle.Light })
-    } catch (e) {
-      console.warn('Haptics failed', e)
-    }
-  }
-  
   // 简单的部位判断逻辑
   let area = 'general'
   if (event && event.target) {
