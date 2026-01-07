@@ -5,7 +5,10 @@
       
       <!-- 话题气泡容器 (左上角) - 聚合模式 -->
       <div class="topic-bubbles-container" v-if="topics.length > 0">
-        <div class="topic-aggregate-bubble" @click="showTopicList = true">
+        <div 
+          :class="['topic-aggregate-bubble', { 'bubble-shattering': isTopicExploding }]" 
+          @click="handleTopicClick"
+        >
           <div class="bubble-content">
             <i class="fas fa-user-secret secret-icon"></i>
             <span class="topic-text">秘密话题</span>
@@ -20,9 +23,9 @@
         <div 
           v-for="(r, idx) in reminders" 
           :key="r.time + r.task"
-          class="reminder-bubble"
+          :class="['reminder-bubble', { 'bubble-shattering': explodingReminders.has(idx) }]"
           :style="getBubbleStyle(idx)"
-          @click="deleteReminder(idx)"
+          @click="handleReminderClick(idx)"
         >
           <div class="bubble-content">
             <span class="task-text">{{ r.task }}</span>
@@ -88,6 +91,12 @@
             <span class="title">与 Pero 对话</span>
             <button class="close-btn" @click="collapseInput"><i class="fas fa-times"></i></button>
           </div>
+          <div class="image-preview-container" v-if="pendingImage">
+            <img :src="pendingImage" class="image-preview" />
+            <button class="remove-image-btn" @click="removeImage">
+              <i class="fas fa-times"></i>
+            </button>
+          </div>
           <textarea 
             ref="inputRef"
             v-model="text" 
@@ -96,8 +105,20 @@
             @keyup.ctrl.enter="onSend"
           ></textarea>
           <div class="card-footer">
-            <span class="hint">Ctrl + Enter 发送</span>
-            <button class="send-btn" :disabled="!text.trim() || isLoading" @click="onSend">
+            <div class="footer-left">
+              <input 
+                type="file" 
+                ref="fileInputRef" 
+                style="display: none" 
+                accept="image/*" 
+                @change="handleImageUpload"
+              />
+              <button class="tool-btn" @click="triggerUpload" title="上传图片">
+                <i class="fas fa-image"></i>
+              </button>
+              <span class="hint">Ctrl + Enter 发送</span>
+            </div>
+            <button class="send-btn" :disabled="(!text.trim() && !pendingImage) || isLoading" @click="onSend">
               <el-icon><Promotion /></el-icon>
               <span>发送</span>
             </button>
@@ -143,8 +164,12 @@ const stream = ref(false)
 const memoryRounds = ref(40)
 const showHistory = ref(false)
 const showTopicList = ref(false) // 是否显示话题列表
+const explodingReminders = ref(new Set()) // 正在炸裂的任务气泡索引
+const isTopicExploding = ref(false) // 话题聚合气泡是否正在炸裂
 const chatPreview = ref(null) // 引用聊天预览区域
 const isLoading = ref(false) // 是否正在请求中
+const pendingImage = ref(null) // 待发送的图片 Base64
+const fileInputRef = ref(null)
 const sessionId = ref(lsGet('ppc.sessionId', ''))
 
 // 初始化 Session ID
@@ -205,8 +230,25 @@ function checkReminders() {
   // 1. 检查任务提醒
   const toTriggerReminder = reminders.value.filter(r => {
     const targetTime = new Date(r.time).getTime()
-    return now >= targetTime
+    const isDue = now >= targetTime
+    
+    // 如果任务过期超过 12 小时，视为失效，直接过滤掉
+    if (isDue && (now - targetTime) > 12 * 60 * 60 * 1000) {
+      console.log(`[Reminder] Task expired (>12h), skipping: ${r.task}`)
+      return false
+    }
+    return isDue
   })
+
+  // 清理掉那些已经失效（超过12小时）的任务
+  const expiredReminders = reminders.value.filter(r => {
+    const targetTime = new Date(r.time).getTime()
+    return now > targetTime && (now - targetTime) > 12 * 60 * 60 * 1000
+  })
+  if (expiredReminders.length > 0) {
+    reminders.value = reminders.value.filter(r => !expiredReminders.includes(r))
+    lsSet('ppc.reminders', reminders.value)
+  }
 
   if (toTriggerReminder.length > 0) {
     const task = toTriggerReminder[0]
@@ -225,11 +267,26 @@ function checkReminders() {
   
   // 1. 找出所有已到期的话题
   const dueIndices = []
+  const staleIndices = []
   topics.value.forEach((t, i) => {
-    if (new Date(t.time) <= nowDate) {
-      dueIndices.push(i)
+    const tTime = new Date(t.time)
+    if (tTime <= nowDate) {
+      // 如果话题过期超过 24 小时，视为过时
+      if ((nowDate.getTime() - tTime.getTime()) > 24 * 60 * 60 * 1000) {
+        staleIndices.push(i)
+      } else {
+        dueIndices.push(i)
+      }
     }
   })
+
+  // 自动清理过期超过 24 小时的话题
+  if (staleIndices.length > 0) {
+    console.log(`[Topic] Cleaning ${staleIndices.length} stale topics (>24h)`)
+    // 倒序删除
+    staleIndices.sort((a, b) => b - a).forEach(i => topics.value.splice(i, 1))
+    lsSet('ppc.topics', topics.value)
+  }
 
   if (dueIndices.length > 0) {
     // 2. 如果有到期的话题，进一步检查是否有其他话题在未来10分钟内
@@ -289,6 +346,33 @@ function removeReminder(idx) {
   lsSet('ppc.reminders', reminders.value)
 }
 
+// 图片处理
+function triggerUpload() {
+  fileInputRef.value?.click()
+}
+
+async function handleImageUpload(e) {
+  const file = e.target.files?.[0]
+  if (!file) return
+  
+  if (file.size > 10 * 1024 * 1024) {
+    alert('图片大小不能超过 10MB')
+    return
+  }
+
+  const reader = new FileReader()
+  reader.onload = (ev) => {
+    pendingImage.value = ev.target.result
+    // 重置 input 以允许再次选择同一张图
+    e.target.value = ''
+  }
+  reader.readAsDataURL(file)
+}
+
+function removeImage() {
+  pendingImage.value = null
+}
+
 // 删除话题并取消通知
 const deleteTopic = async (idx) => {
   const topic = topics.value[idx]
@@ -331,6 +415,44 @@ const handleWaifuClick = async (event) => {
   
   // 触发原本的点击交互逻辑，传递部位信息
   window.dispatchEvent(new CustomEvent('ppc:waifu-click', { detail: { area } }))
+}
+
+// 处理任务气泡点击
+const handleReminderClick = async (idx) => {
+  if (explodingReminders.value.has(idx)) return
+  
+  // 1. 触发震动
+  if (Capacitor.isNativePlatform()) {
+    await Haptics.impact({ style: ImpactStyle.Medium })
+  }
+  
+  // 2. 标记正在炸裂
+  explodingReminders.value.add(idx)
+  
+  // 3. 等待动画结束 (300ms)
+  setTimeout(async () => {
+    await deleteReminder(idx)
+    explodingReminders.value.delete(idx)
+  }, 300)
+}
+
+// 处理话题聚合气泡点击
+const handleTopicClick = async () => {
+  if (isTopicExploding.value) return
+  
+  // 1. 触发震动
+  if (Capacitor.isNativePlatform()) {
+    await Haptics.impact({ style: ImpactStyle.Heavy })
+  }
+  
+  // 2. 标记正在炸裂
+  isTopicExploding.value = true
+  
+  // 3. 等待动画结束 (300ms)
+  setTimeout(() => {
+    showTopicList.value = true
+    isTopicExploding.value = false
+  }, 300)
 }
 
 // 删除任务并取消通知
@@ -660,9 +782,14 @@ function cleanMessageContent(text) {
   if (!text) return ''
   if (text === '__loading__') return '正在思考...'
   
+  let content = text
+  if (Array.isArray(content)) {
+    content = content.find(c => c.type === 'text')?.text || ''
+  }
+
   // 移除所有 XML 标签及其内容 (因为现在使用 NIT 协议，XML 仅用于内部逻辑)
   // 同时也移除 NIT 调用块，保持历史记录纯净
-  return text
+  return content
     .replace(/<([A-Z_]+)>[\s\S]*?<\/\1>/g, '')
     .replace(/\[\[\[NIT_CALL\]\]\][\s\S]*?\[\[\[NIT_END\]\]\]/g, '')
     .trim()
@@ -671,9 +798,16 @@ function cleanMessageContent(text) {
 // 清理发送给 API 的历史记录，仅保留 PEROCUE (用于后端状态机，可选)，移除其他冗余标签以节省 Token 并防止 Few-shot 干扰
 function cleanHistoryForApi(text) {
   if (!text) return ''
+  
+  let content = text
+  if (Array.isArray(content)) {
+    // 移除图片，仅保留文本部分发送给历史记录（OpenAI 建议历史记录中不带 Base64 以节省空间）
+    content = content.find(c => c.type === 'text')?.text || ''
+  }
+
   // 移除大部分 XML 标签，保留 PEROCUE 作为后端状态参考（如果需要）
   // 注意：NIT 协议块不应在历史记录中传递，LLM 应该根据最新状态生成
-  return text
+  return content
     .replace(/<MEMORY>[\s\S]*?<\/MEMORY>/g, '')
     .replace(/<CLICK_MESSAGES>[\s\S]*?<\/CLICK_MESSAGES>/g, '')
     .replace(/<IDLE_MESSAGES>[\s\S]*?<\/IDLE_MESSAGES>/g, '')
@@ -698,14 +832,26 @@ function getEnvPrompt() {
 
 async function onSend(systemMsg = null) {
   const t = typeof systemMsg === 'string' ? systemMsg : String(text.value || '').trim()
-  if (!t || isLoading.value) return
+  const img = pendingImage.value
+  if (!t && !img && !systemMsg) return
+  if (isLoading.value) return
   
-  // 只有非系统消息才清空输入框
-  if (!systemMsg) text.value = ''
+  // 只有非系统消息才清空输入框和图片
+  if (!systemMsg) {
+    text.value = ''
+    pendingImage.value = null
+  }
   isLoading.value = true
   
   const now = Date.now()
-  const user = { role: 'user', content: t, timestamp: now }
+  const user = { 
+    role: 'user', 
+    content: img ? [
+      { type: 'text', text: t || '这张图片里有什么？' },
+      { type: 'image_url', image_url: { url: img } }
+    ] : t, 
+    timestamp: now 
+  }
   messages.value = [...messages.value, user, { role: 'assistant', content: '__loading__', timestamp: now + 1 }]
   
   // 发送消息后折叠
@@ -738,7 +884,8 @@ async function onSend(systemMsg = null) {
     reqForApi = [{ role: 'system', content: getEnvPrompt() }, ...reqForApi]
     
     // 检索并注入长期记忆
-    const relevantMemories = await getRelevantMemories(t)
+    const lastUserText = typeof user.content === 'string' ? user.content : (user.content.find(c => c.type === 'text')?.text || '')
+    const relevantMemories = await getRelevantMemories(lastUserText)
     if (relevantMemories.length > 0) {
       const memoryPrompt = `<LONG_TERM_MEMORY>\n${relevantMemories.map(m => `[${m.realTime || '未知时间'}] ${m.content}`).join('\n')}\n</LONG_TERM_MEMORY>`
       reqForApi = [{ role: 'system', content: memoryPrompt }, ...reqForApi]
@@ -776,11 +923,17 @@ async function onSend(systemMsg = null) {
     if (postSystemPrompt && reqForApi.length > 0) {
       const lastUserIndex = reqForApi.map(m => m.role).lastIndexOf('user')
       if (lastUserIndex >= 0) {
-        const userMsg = reqForApi[lastUserIndex].content
-        if (!userMsg.includes(postSystemPrompt)) {
-          reqForApi[lastUserIndex] = {
-            role: 'user',
-            content: `${userMsg}\n\n${postSystemPrompt}`
+        const lastUserMsg = reqForApi[lastUserIndex]
+        if (typeof lastUserMsg.content === 'string') {
+          if (!lastUserMsg.content.includes(postSystemPrompt)) {
+            lastUserMsg.content = `${lastUserMsg.content}\n\n${postSystemPrompt}`
+          }
+        } else if (Array.isArray(lastUserMsg.content)) {
+          const textPart = lastUserMsg.content.find(c => c.type === 'text')
+          if (textPart && !textPart.text.includes(postSystemPrompt)) {
+            textPart.text = `${textPart.text}\n\n${postSystemPrompt}`
+          } else if (!textPart) {
+            lastUserMsg.content.push({ type: 'text', text: postSystemPrompt })
           }
         }
       }
@@ -983,8 +1136,10 @@ async function regenerateAt(idx) {
     baseReq = [{ role: 'system', content: getEnvPrompt() }, ...baseReq]
     
     // 检索并注入长期记忆（获取上一条用户消息作为检索词）
-    const lastUserMsg = baseReq.slice().reverse().find(m => m.role === 'user')?.content || ''
-    const relevantMemories = await getRelevantMemories(lastUserMsg)
+    const lastUserMsgText = typeof (baseReq.slice().reverse().find(m => m.role === 'user')?.content) === 'string' 
+      ? baseReq.slice().reverse().find(m => m.role === 'user')?.content 
+      : (baseReq.slice().reverse().find(m => m.role === 'user')?.content?.find(c => c.type === 'text')?.text || '')
+    const relevantMemories = await getRelevantMemories(lastUserMsgText || '')
     if (relevantMemories.length > 0) {
       const memoryPrompt = `<LONG_TERM_MEMORY>\n${relevantMemories.map(m => `[${m.realTime || '未知时间'}] ${m.content}`).join('\n')}\n</LONG_TERM_MEMORY>`
       baseReq = [{ role: 'system', content: memoryPrompt }, ...baseReq]
@@ -1022,11 +1177,17 @@ async function regenerateAt(idx) {
     if (postSystemPrompt && baseReq.length > 0) {
       const lastUserIndex = baseReq.map(m => m.role).lastIndexOf('user')
       if (lastUserIndex >= 0) {
-        const userMsg = baseReq[lastUserIndex].content
-        if (!userMsg.includes(postSystemPrompt)) {
-          baseReq[lastUserIndex] = {
-            role: 'user',
-            content: `${userMsg}\n\n${postSystemPrompt}`
+        const lastUserMsg = baseReq[lastUserIndex]
+        if (typeof lastUserMsg.content === 'string') {
+          if (!lastUserMsg.content.includes(postSystemPrompt)) {
+            lastUserMsg.content = `${lastUserMsg.content}\n\n${postSystemPrompt}`
+          }
+        } else if (Array.isArray(lastUserMsg.content)) {
+          const textPart = lastUserMsg.content.find(c => c.type === 'text')
+          if (textPart && !textPart.text.includes(postSystemPrompt)) {
+            textPart.text = `${textPart.text}\n\n${postSystemPrompt}`
+          } else if (!textPart) {
+            lastUserMsg.content.push({ type: 'text', text: postSystemPrompt })
           }
         }
       }
@@ -1081,6 +1242,15 @@ async function regenerateAt(idx) {
 }
 
 onMounted(() => {
+  // 自动迁移提示词限制
+  const savedPostPrompt = lsGet('ppc.postSystemPrompt', '')
+  const oldLimit = '只说1~2句话，字数控制在15-40字左右'
+  const newLimit = '说2~5句话，字数控制在50-150字左右'
+  if (savedPostPrompt && savedPostPrompt.includes(oldLimit)) {
+    console.log('[Migration] Updating Pero response limit to 2-5 sentences...')
+    lsSet('ppc.postSystemPrompt', savedPostPrompt.replace(oldLimit, newLimit))
+  }
+
   const saved = lsGet('ppc.messages', [])
   if (Array.isArray(saved)) {
     messages.value = saved
@@ -1181,6 +1351,40 @@ onMounted(() => {
   transform: scale(1.1);
   background: rgba(255, 255, 255, 0.6);
   box-shadow: 0 6px 20px rgba(219, 39, 119, 0.2);
+}
+
+/* 炸裂动画状态 */
+.bubble-shattering {
+  animation: 
+    bubbleVibrate 0.1s linear infinite,
+    bubbleShatter 0.3s cubic-bezier(0.19, 1, 0.22, 1) forwards !important;
+  pointer-events: none;
+}
+
+@keyframes bubbleVibrate {
+  0% { transform: translate(0, 0) rotate(0deg); }
+  25% { transform: translate(1px, 1px) rotate(0.5deg); }
+  50% { transform: translate(-1px, -1px) rotate(-0.5deg); }
+  75% { transform: translate(1px, -1px) rotate(0.5deg); }
+  100% { transform: translate(-1px, 1px) rotate(-0.5deg); }
+}
+
+@keyframes bubbleShatter {
+  0% {
+    transform: scale(1);
+    opacity: 1;
+    filter: blur(0);
+  }
+  30% {
+    transform: scale(1.2);
+    opacity: 0.8;
+    filter: blur(2px);
+  }
+  100% {
+    transform: scale(2);
+    opacity: 0;
+    filter: blur(15px);
+  }
 }
 
 .bubble-content {
@@ -1532,6 +1736,62 @@ onMounted(() => {
   display: flex;
   justify-content: space-between;
   align-items: center;
+}
+
+.footer-left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.tool-btn {
+  background: rgba(255, 255, 255, 0.1);
+  border: none;
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  color: white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.tool-btn:hover {
+  background: rgba(255, 255, 255, 0.2);
+}
+
+.image-preview-container {
+  position: relative;
+  width: fit-content;
+  margin-bottom: 8px;
+}
+
+.image-preview {
+  max-width: 200px;
+  max-height: 150px;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  object-fit: cover;
+}
+
+.remove-image-btn {
+  position: absolute;
+  top: -8px;
+  right: -8px;
+  background: #ff4757;
+  border: none;
+  width: 20px;
+  height: 20px;
+  border-radius: 10px;
+  color: white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  font-size: 10px;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.2);
 }
 
 .hint {

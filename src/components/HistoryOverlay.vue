@@ -16,23 +16,42 @@
             <el-icon size="48" color="#94a3b8"><MessageBox /></el-icon>
             <p>暂无对话记录</p>
           </div>
-          <div v-for="(m, i) in messages" :key="i" :class="['row', m.role]">
+          <!-- 默认只显示前 50 条，点击“显示更多”后全部显示 -->
+          <div v-for="(m, i) in (showAll ? messages.slice().reverse() : messages.slice().reverse().slice(0, 50))" :key="messages.length - 1 - i" :class="['row', m.role]">
             <div class="row-header">
               <span class="role-tag">{{ m.role === 'user' ? '我' : 'Pero' }}</span>
               <span class="time">{{ formatTime(m.timestamp) }}</span>
             </div>
-            <div class="content">{{ cleanMessageContent(m.content) }}</div>
+            <div class="content markdown-body">
+              <div v-if="Array.isArray(m.content)" class="multimodal-content">
+                <template v-for="(part, pi) in m.content" :key="pi">
+                  <div v-if="part.type === 'text'" v-html="renderMarkdown(part.text)"></div>
+                  <div v-else-if="part.type === 'image_url'" class="message-image-container">
+                    <img :src="part.image_url.url" class="message-image" @click="previewImage(part.image_url.url)" />
+                  </div>
+                </template>
+              </div>
+              <div v-else v-html="renderMarkdown(m.content)"></div>
+            </div>
             <div class="row-tools">
               <el-tooltip content="复制内容" placement="top" :hide-after="1000">
                 <button class="tool-btn" @click="$emit('copy', m)"><el-icon size="14"><CopyDocument /></el-icon></button>
               </el-tooltip>
               <el-tooltip content="重新生成" placement="top" v-if="m.role === 'assistant'">
-                <button class="tool-btn" @click="$emit('regenerate', i)"><el-icon size="14"><Refresh /></el-icon></button>
+                <button class="tool-btn" @click="$emit('regenerate', messages.length - 1 - i)"><el-icon size="14"><Refresh /></el-icon></button>
               </el-tooltip>
               <el-tooltip content="删除消息" placement="top">
-                <button class="tool-btn delete" @click="$emit('delete', i)"><el-icon size="14"><Delete /></el-icon></button>
+                <button class="tool-btn delete" @click="$emit('delete', messages.length - 1 - i)"><el-icon size="14"><Delete /></el-icon></button>
               </el-tooltip>
             </div>
+          </div>
+          
+          <!-- 显示更多按钮 -->
+          <div v-if="!showAll && messages.length > 50" class="more-area">
+            <button class="more-btn" @click="showAll = true">
+              显示更多 (还有 {{ messages.length - 50 }} 条)
+              <el-icon><ArrowDown /></el-icon>
+            </button>
           </div>
         </div>
       </div>
@@ -41,8 +60,10 @@
 </template>
 
 <script setup>
-import { defineProps, defineEmits } from 'vue'
-import { Delete, Refresh, CopyDocument, Close, MessageBox } from '@element-plus/icons-vue'
+import { ref, defineProps, defineEmits } from 'vue'
+import { Delete, Refresh, CopyDocument, Close, MessageBox, ArrowDown } from '@element-plus/icons-vue'
+import { marked } from 'marked'
+import DOMPurify from 'dompurify'
 
 const props = defineProps({
   messages: {
@@ -52,6 +73,20 @@ const props = defineProps({
 })
 
 const emit = defineEmits(['close', 'delete', 'regenerate', 'copy'])
+const showAll = ref(false)
+
+// 图片预览逻辑
+function previewImage(url) {
+  window.open(url, '_blank')
+}
+
+// Markdown 渲染
+function renderMarkdown(text) {
+  if (!text) return ''
+  const clean = cleanMessageContent(text)
+  const html = marked.parse(clean)
+  return DOMPurify.sanitize(html)
+}
 
 // 格式化时间
 function formatTime(ts) {
@@ -68,6 +103,7 @@ function cleanMessageContent(text) {
   // 移除所有 XML 标签及其内容 (因为现在使用 NIT 协议，XML 仅用于内部逻辑)
   // 同时也移除 NIT 调用块，保持历史记录纯净
   return text
+    .replace(/<(nit(?:-[0-9a-fA-F]{4})?)>[\s\S]*?<\/\1>/gi, '')
     .replace(/<([A-Z_]+)>[\s\S]*?<\/\1>/g, '')
     .replace(/\[\[\[NIT_CALL\]\]\][\s\S]*?\[\[\[NIT_END\]\]\]/g, '')
     .trim()
@@ -167,6 +203,32 @@ function cleanMessageContent(text) {
 .list::-webkit-scrollbar-track { background: transparent; }
 .list::-webkit-scrollbar-thumb { background: rgba(0, 0, 0, 0.1); border-radius: 10px; }
 
+.more-area {
+  padding: 12px 0;
+  display: flex;
+  justify-content: center;
+}
+
+.more-btn {
+  background: rgba(255, 255, 255, 0.5);
+  border: 1px solid rgba(0, 0, 0, 0.05);
+  border-radius: 12px;
+  padding: 8px 16px;
+  font-size: 13px;
+  color: #64748b;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.more-btn:hover {
+  background: white;
+  color: #3b82f6;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+}
+
 .empty-state {
   display: flex;
   flex-direction: column;
@@ -227,6 +289,30 @@ function cleanMessageContent(text) {
   line-height: 1.6;
   color: #334155;
   white-space: pre-wrap;
+}
+
+.multimodal-content {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.message-image-container {
+  margin: 4px 0;
+  max-width: 100%;
+}
+
+.message-image {
+  max-width: 100%;
+  max-height: 300px;
+  border-radius: 12px;
+  cursor: zoom-in;
+  border: 1px solid rgba(0,0,0,0.05);
+  transition: transform 0.2s;
+}
+
+.message-image:hover {
+  transform: scale(1.02);
 }
 
 .row-tools { 

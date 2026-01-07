@@ -13,7 +13,15 @@ export async function chat(messages, model, temperature = 0.7, apiBase, opts = {
 
   const body = {
     model: aModel,
-    messages,
+    messages: messages.map(m => {
+      if (Array.isArray(m.content)) {
+        return m
+      }
+      return {
+        role: m.role,
+        content: m.content
+      }
+    }),
     temperature,
     stream: false,
     ...(opts.topP !== undefined ? { top_p: opts.topP } : {}),
@@ -53,6 +61,11 @@ function getRemoteBaseUrl() {
   return null
 }
 
+// 获取远程服务器的访问令牌
+function getRemoteToken() {
+  return localStorage.getItem('ppc.remoteToken') || 'pero_default_token'
+}
+
 // 通用的远程请求包装器，带超时控制
 async function remoteRequest(method, endpoint, data = {}, timeout = 3000) {
   const baseUrl = getRemoteBaseUrl()
@@ -65,7 +78,8 @@ async function remoteRequest(method, endpoint, data = {}, timeout = 3000) {
       data,
       timeout, // 默认 3 秒超时，快速失败以回退到本地
       headers: {
-        'Content-Type': 'application/json'
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${getRemoteToken()}`
       }
     }
     const res = await axios(config)
@@ -216,7 +230,15 @@ export async function chatStream(messages, model, temperature = 0.7, apiBase, op
     try {
       // 构造发给后端的请求体
       const backendBody = {
-        messages,
+        messages: messages.map(m => {
+      if (Array.isArray(m.content)) {
+        return m
+      }
+      return {
+        role: m.role,
+        content: m.content
+      }
+    }),
         model, // 后端可能会忽略这个，使用它自己的配置
         temperature,
         stream: true,
@@ -229,7 +251,7 @@ export async function chatStream(messages, model, temperature = 0.7, apiBase, op
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          // 如果有简单的鉴权，可以在这里加 'Authorization': ...
+          'Authorization': `Bearer ${getRemoteToken()}`
         },
         body: JSON.stringify(backendBody)
       })
@@ -283,7 +305,15 @@ export async function chatStream(messages, model, temperature = 0.7, apiBase, op
 
   const body = {
     model: aModel,
-    messages,
+    messages: messages.map(m => {
+      if (Array.isArray(m.content)) {
+        return m
+      }
+      return {
+        role: m.role,
+        content: m.content
+      }
+    }),
     temperature,
     stream: true,
     ...(opts.topP !== undefined ? { top_p: opts.topP } : {}),
@@ -387,7 +417,7 @@ Pero是一个超级可爱的AI辅助，喜欢卖萌撒娇。她的主要职责�
  1. **公开回复**: 
     - 语言: 中文
     - 风格: 软萌、生动、富有情感
-    - 要求: 倾向于只说1~2句话，字数控制在15-40字左右，简洁明了，避免啰嗦。
+    - 要求: 倾向于说2~5句话，字数控制在50-150字左右，保持活泼感的同时提供更丰富的内容。
  2. **隐藏元数据**:
     - 必须在回复的最末尾附加状态标签、记忆总结、Live2D 触碰交互消息和挂机消息。
     - 格式 (严禁使用 Markdown 代码块): 

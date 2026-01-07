@@ -1,152 +1,175 @@
 <template>
-  <div class="settings">
-    <div class="settings-header">
-      <div class="header-content">
-        <h2 class="title">设置中心</h2>
-        <p class="subtitle">在这里调整 Pero 的大脑与偏好</p>
+  <div class="settings-container">
+    <!-- 顶部导航 -->
+    <div class="header">
+      <div class="back-btn" @click="goHome">
+        <el-icon><ArrowLeft /></el-icon>
       </div>
-      <button class="exit-btn" @click="goHome">
-        <i class="fas fa-times"></i>
-      </button>
+      <div class="header-title">
+        <h2>设置中心</h2>
+        <span>Settings</span>
+      </div>
+      <div class="placeholder"></div>
     </div>
 
-    <div class="settings-card">
-    <el-tabs v-model="tab">
-      <el-tab-pane label="API设置" name="api">
-        <div class="api-box">
-        <el-form label-width="100px">
-          <el-form-item label="模型名称"><el-input v-model="modelName" placeholder="请先获取模型" /></el-form-item>
-          <el-form-item label="API地址"><el-input v-model="apiBase" placeholder="https://api.openai.com" /></el-form-item>
-          <el-form-item label="API秘钥"><el-input v-model="apiKey" type="password" placeholder="sk-..." show-password /></el-form-item>
-          <el-form-item>
-            <el-button @click="fetchModels">获取模型</el-button>
-            <el-input v-model="modelSearch" placeholder="搜索模型ID" clearable style="width:220px;margin-left:8px" />
-          </el-form-item>
-          <el-table :data="filteredModels" height="260" @row-click="row => modelName = row.id">
-            <el-table-column width="50">
-              <template #default="{ row }"><el-radio v-model="modelName" :label="row.id"><i></i></el-radio></template>
-            </el-table-column>
-            <el-table-column prop="id" label="模型ID" />
-          </el-table>
-        </el-form>
-        <div class="api-actions"><el-button type="primary" @click="applySettings">确定</el-button></div>
+    <!-- 设置主体 -->
+    <div class="settings-body">
+      <!-- 快捷菜单卡片 -->
+      <div class="menu-grid">
+        <div 
+          v-for="item in menuItems" 
+          :key="item.id" 
+          :class="['menu-item', { active: tab === item.id }]"
+          @click="tab = item.id"
+        >
+          <div class="menu-icon">
+            <el-icon><component :is="item.icon" /></el-icon>
+          </div>
+          <span class="menu-label">{{ item.label }}</span>
         </div>
-      </el-tab-pane>
-      <el-tab-pane label="远程连接" name="remote">
-        <div class="api-box">
-          <div class="tip-box">
-            <el-icon><Connection /></el-icon>
-            <p>连接到 PC 集成版或私有云服务器，实现多端记忆共享和更强大的 AI 能力。</p>
-          </div>
-          <el-form label-width="120px" style="margin-top: 20px">
-            <el-form-item label="启用远程模式">
-              <el-switch v-model="remoteEnabled" active-text="开启" inactive-text="关闭" />
-            </el-form-item>
-            <el-form-item label="服务器地址">
-              <el-input v-model="remoteUrl" placeholder="例如: http://192.168.1.5:3000" :disabled="!remoteEnabled" />
-              <div class="sub-tip">请输入 PeroDesktop 或 PeroServer 的地址</div>
-            </el-form-item>
-            <el-form-item>
-              <el-button type="primary" @click="applyRemoteSettings" :disabled="!remoteEnabled">保存并连接</el-button>
-            </el-form-item>
-          </el-form>
-        </div>
-      </el-tab-pane>
-      <el-tab-pane label="模型设置" name="model">
-        <el-form label-width="160px">
-          <el-form-item label="Temperature"><el-input-number v-model="temperature" :min="0" :max="2" :step="0.01" /></el-form-item>
-          <el-form-item label="Top P"><el-input-number v-model="topP" :min="0" :max="1" :step="0.01" /></el-form-item>
-          <el-form-item label="FP"><el-input-number v-model="frequencyPenalty" :min="-2" :max="2" :step="0.01" /></el-form-item>
-          <el-form-item label="PP"><el-input-number v-model="presencePenalty" :min="-2" :max="2" :step="0.01" /></el-form-item>
-          <el-form-item label="流式传输"><el-switch v-model="stream" /></el-form-item>
-          <el-form-item label="记忆轮次">
-            <el-input-number v-model="memoryRounds" :min="1" :max="500" :step="1" />
-            <div class="tip" style="font-size: 12px; color: #666; margin-top: 4px;">设置发送给 AI 的历史对话轮数（1轮=1提问+1回答）</div>
-          </el-form-item>
-          <el-form-item><el-button type="primary" @click="applyModelSettings">确定</el-button></el-form-item>
-        </el-form>
-      </el-tab-pane>
-      <el-tab-pane label="用户设定" name="user">
-        <el-form label-width="120px">
-          <el-form-item label="我的名字"><el-input v-model="userName" placeholder="填写你的名字" /></el-form-item>
-          <el-form-item label="我的人设"><el-input v-model="userPersonaText" type="textarea" :rows="6" placeholder="个人设定" /></el-form-item>
-          <el-form-item><el-button type="primary" @click="applyUserSettings">确定</el-button></el-form-item>
-        </el-form>
-      </el-tab-pane>
-      <el-tab-pane label="系统提示词" name="prompt">
-        <el-form label-width="120px">
-          <div class="readonly-tip">
-            <el-icon style="margin-right: 4px;"><InfoFilled /></el-icon>
-            系统提示词是 Pero 的核心逻辑，目前仅供查阅。
-          </div>
-          <el-form-item label="前置提示词">
-            <el-input v-model="systemPrompt" type="textarea" :rows="6" readonly placeholder="核心系统逻辑..." />
-          </el-form-item>
-          <el-form-item label="人设提示词">
-            <el-input v-model="personaText" type="textarea" :rows="6" readonly placeholder="核心性格设定..." />
-          </el-form-item>
-          <el-form-item label="后置提示词">
-            <el-input v-model="postSystemPrompt" type="textarea" :rows="4" readonly placeholder="核心行为规范..." />
-          </el-form-item>
-          <el-form-item>
-            <el-button @click="resetPromptsToDefault">查看默认配置</el-button>
-          </el-form-item>
-        </el-form>
-      </el-tab-pane>
-      <el-tab-pane label="记忆管理" name="memory">
-        <div class="memory-management">
-          <div class="memory-header">
-            <el-input v-model="memorySearch" placeholder="搜索记忆内容或标签..." clearable style="width: 300px; margin-bottom: 16px;">
-              <template #prefix><el-icon><Search /></el-icon></template>
-            </el-input>
-            <el-button type="primary" @click="loadMemories" style="margin-left: 8px;">刷新</el-button>
-          </div>
-          
-          <el-table :data="filteredMemories" style="width: 100%" height="450">
-            <el-table-column type="expand">
-              <template #default="props">
-                <div style="padding: 12px; background: #f8fafc; border-radius: 8px;">
-                  <p><strong>完整内容:</strong> {{ props.row.content }}</p>
-                  <p><strong>标签:</strong> 
-                    <el-tag v-for="tag in props.row.tags" :key="tag" size="small" style="margin-right: 4px;">{{ tag }}</el-tag>
-                  </p>
-                  <p><strong>记录时间:</strong> {{ props.row.realTime }} ({{ new Date(props.row.timestamp).toLocaleString() }})</p>
+      </div>
+
+      <!-- 设置内容区 -->
+      <div class="content-area">
+        <Transition name="fade-slide" mode="out-in">
+          <div :key="tab" class="content-card">
+            
+            <!-- API 设置 -->
+            <div v-if="tab === 'api'" class="section">
+              <div class="section-header">
+                <el-icon><Cpu /></el-icon>
+                <h3>API 配置</h3>
+              </div>
+              <el-form label-position="top">
+                <el-form-item label="模型名称">
+                  <el-input v-model="modelName" placeholder="请先获取模型" />
+                </el-form-item>
+                <el-form-item label="API 地址">
+                  <el-input v-model="apiBase" placeholder="https://api.openai.com" />
+                </el-form-item>
+                <el-form-item label="API 秘钥">
+                  <el-input v-model="apiKey" type="password" placeholder="sk-..." show-password />
+                </el-form-item>
+                <div class="api-tools">
+                  <el-button type="primary" plain @click="fetchModels">获取模型</el-button>
+                  <el-input v-model="modelSearch" placeholder="搜索模型..." clearable />
                 </div>
-              </template>
-            </el-table-column>
-            <el-table-column prop="content" label="记忆片段" show-overflow-tooltip />
-            <el-table-column prop="importance" label="重要性" width="80" align="center">
-              <template #default="{ row }">
-                <el-tag :type="row.importance > 7 ? 'danger' : row.importance > 4 ? 'warning' : 'info'">
-                  {{ row.importance }}
-                </el-tag>
-              </template>
-            </el-table-column>
-            <el-table-column label="操作" width="100" align="center">
-              <template #default="{ row }">
-                <el-button type="danger" size="small" circle @click="deleteMemory(row.id)">
-                  <el-icon><Delete /></el-icon>
-                </el-button>
-              </template>
-            </el-table-column>
-          </el-table>
-        </div>
-      </el-tab-pane>
-      <el-tab-pane label="危险区域" name="danger">
-        <div class="danger-zone">
-          <h3>数据重置</h3>
-          <p>此操作将永久删除以下内容：</p>
-          <ul>
-            <li>所有对话历史记录</li>
-            <li>所有存储的记忆条目</li>
-            <li>所有 API 设置和用户人设</li>
-            <li>所有模型偏好设置</li>
-          </ul>
-          <p class="warning-text">警告：此操作不可撤销，请谨慎操作！</p>
-          <el-button type="danger" @click="handleResetAll">重置所有数据</el-button>
-        </div>
-      </el-tab-pane>
-    </el-tabs>
+                <el-table :data="filteredModels" height="200" @row-click="row => modelName = row.id" class="mini-table">
+                  <el-table-column width="40">
+                    <template #default="{ row }">
+                      <el-radio v-model="modelName" :label="row.id"><span></span></el-radio>
+                    </template>
+                  </el-table-column>
+                  <el-table-column prop="id" label="可用模型列表" />
+                </el-table>
+                <el-button type="primary" class="full-btn" @click="applySettings">保存 API 设置</el-button>
+              </el-form>
+            </div>
+
+            <!-- 远程连接 -->
+            <div v-if="tab === 'remote'" class="section">
+              <div class="section-header">
+                <el-icon><Connection /></el-icon>
+                <h3>远程连接</h3>
+              </div>
+              <div class="info-banner">
+                <p>连接到 PC 集成版或私有服务器，共享记忆与更强 AI 能力。</p>
+              </div>
+              <el-form label-position="top">
+                <el-form-item label="启用远程模式">
+                  <el-switch v-model="remoteEnabled" active-text="开启" inactive-text="关闭" />
+                </el-form-item>
+                <el-form-item label="服务器地址">
+                  <el-input v-model="remoteUrl" placeholder="http://192.168.x.x:3000" :disabled="!remoteEnabled" />
+                </el-form-item>
+                <el-form-item label="访问令牌 (Handshake Token)">
+                  <el-input v-model="remoteToken" type="password" placeholder="pero_default_token" show-password :disabled="!remoteEnabled" />
+                </el-form-item>
+                <el-button type="primary" class="full-btn" @click="applyRemoteSettings" :disabled="!remoteEnabled">保存并连接</el-button>
+              </el-form>
+            </div>
+
+            <!-- 模型偏好 -->
+            <div v-if="tab === 'model'" class="section">
+              <div class="section-header">
+                <el-icon><Operation /></el-icon>
+                <h3>模型参数</h3>
+              </div>
+              <el-form label-position="top">
+                <div class="slider-group">
+                  <div class="slider-item">
+                    <span>Temperature: {{ temperature }}</span>
+                    <el-slider v-model="temperature" :min="0" :max="2" :step="0.01" />
+                  </div>
+                  <div class="slider-item">
+                    <span>Top P: {{ topP }}</span>
+                    <el-slider v-model="topP" :min="0" :max="1" :step="0.01" />
+                  </div>
+                </div>
+                <el-form-item label="记忆轮次 (1轮=1对对话)">
+                  <el-input-number v-model="memoryRounds" :min="1" :max="500" style="width: 100%" />
+                </el-form-item>
+                <el-form-item label="流式传输">
+                  <el-switch v-model="stream" />
+                </el-form-item>
+                <el-button type="primary" class="full-btn" @click="applyModelSettings">确定</el-button>
+              </el-form>
+            </div>
+
+            <!-- 用户设定 -->
+            <div v-if="tab === 'user'" class="section">
+              <div class="section-header">
+                <el-icon><User /></el-icon>
+                <h3>用户设定</h3>
+              </div>
+              <el-form label-position="top">
+                <el-form-item label="我的名字">
+                  <el-input v-model="userName" placeholder="填写你的名字" />
+                </el-form-item>
+                <el-form-item label="我的人设 (让 Pero 更好的理解你)">
+                  <el-input v-model="userPersonaText" type="textarea" :rows="8" placeholder="例如：性格温柔、喜欢吃甜食..." />
+                </el-form-item>
+                <el-button type="primary" class="full-btn" @click="applyUserSettings">确定</el-button>
+              </el-form>
+            </div>
+
+            <!-- 记忆管理 -->
+            <div v-if="tab === 'memory'" class="section">
+              <div class="section-header">
+                <el-icon><Collection /></el-icon>
+                <h3>记忆管理</h3>
+              </div>
+              <el-input v-model="memorySearch" placeholder="搜索记忆..." clearable class="search-input">
+                <template #prefix><el-icon><Search /></el-icon></template>
+              </el-input>
+              <div class="memory-list">
+                <div v-if="filteredMemories.length === 0" class="empty">暂无相关记忆</div>
+                <div v-for="m in filteredMemories" :key="m.id" class="memory-item">
+                  <div class="memory-content markdown-body" v-html="renderMarkdown(m.content)"></div>
+                  <div class="memory-footer">
+                    <span class="m-time">{{ m.realTime || '未知时间' }}</span>
+                    <el-button type="danger" size="small" link @click="deleteMemory(m.id)">删除</el-button>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- 危险区域 -->
+            <div v-if="tab === 'danger'" class="section">
+              <div class="section-header danger">
+                <el-icon><Warning /></el-icon>
+                <h3>危险区域</h3>
+              </div>
+              <div class="danger-card">
+                <h4>数据重置</h4>
+                <p>将删除所有对话、记忆及偏好设置。</p>
+                <el-button type="danger" @click="handleResetAll">重置所有数据</el-button>
+              </div>
+            </div>
+
+          </div>
+        </Transition>
+      </div>
     </div>
   </div>
 </template>
@@ -158,9 +181,44 @@ import axios from 'axios'
 import { ElMessageBox, ElMessage } from 'element-plus'
 import { getDefaultPrompts, resetAll } from '../api'
 import { db } from '../db'
-import { Search, Delete, InfoFilled, Connection } from '@element-plus/icons-vue'
+import { marked } from 'marked'
+import DOMPurify from 'dompurify'
+import { 
+  Search, Delete, InfoFilled, Connection, ArrowLeft, 
+  Cpu, Operation, User, Collection, Warning, Cpu as ApiIcon 
+} from '@element-plus/icons-vue'
 
 const tab = ref('api')
+
+// Markdown 渲染
+function renderMarkdown(text) {
+  if (!text) return ''
+  const clean = cleanMessageContent(text)
+  const html = marked.parse(clean)
+  return DOMPurify.sanitize(html)
+}
+
+// 清理消息中的隐藏标签
+function cleanMessageContent(text) {
+  if (!text) return ''
+  if (text === '__loading__') return '正在思考...'
+  
+  // 移除所有 XML 标签及其内容
+  return text
+    .replace(/<([A-Z_]+)>[\s\S]*?<\/\1>/g, '')
+    .replace(/\[\[\[NIT_CALL\]\]\][\s\S]*?\[\[\[NIT_END\]\]\]/g, '')
+    .trim()
+}
+
+const menuItems = [
+  { id: 'api', label: 'API', icon: Cpu },
+  { id: 'remote', label: '远程', icon: Connection },
+  { id: 'model', label: '参数', icon: Operation },
+  { id: 'user', label: '设定', icon: User },
+  { id: 'memory', label: '记忆', icon: Collection },
+  { id: 'danger', label: '危险', icon: Warning },
+]
+
 const modelName = ref('请先获取模型')
 const apiBase = ref('https://api.openai.com')
 const apiKey = ref('')
@@ -183,19 +241,16 @@ const allMemories = ref([])
 
 const remoteEnabled = ref(false)
 const remoteUrl = ref('')
+const remoteToken = ref('')
 
 const router = useRouter()
 function goHome() { router.push('/') }
 
-const owners = computed(() => Array.from(new Set((availableModels.value || []).map(m => m.owned_by).filter(Boolean))))
 const filteredModels = computed(() => {
   const kw = modelSearch.value.trim().toLowerCase()
-  const owner = ownerFilter.value
-  return (availableModels.value || []).filter(m => {
-    const okKw = kw ? String(m.id).toLowerCase().includes(kw) : true
-    const okOwner = owner ? m.owned_by === owner : true
-    return okKw && okOwner
-  })
+  return (availableModels.value || []).filter(m => 
+    String(m.id).toLowerCase().includes(kw)
+  )
 })
 
 const filteredMemories = computed(() => {
@@ -211,14 +266,16 @@ async function loadMemories() {
   try {
     allMemories.value = await db.memories.orderBy('timestamp').reverse().toArray()
   } catch (e) {
-    console.error('Failed to load memories:', e)
     ElMessage.error('加载记忆失败')
   }
 }
 
 async function deleteMemory(id) {
   try {
-    await ElMessageBox.confirm('确定要删除这条记忆吗？', '提示', { type: 'warning' })
+    await ElMessageBox.confirm('确定要删除这条记忆吗？', '提示', { 
+      type: 'warning',
+      confirmButtonClass: 'el-button--danger'
+    })
     await db.memories.delete(id)
     await loadMemories()
     ElMessage.success('已删除')
@@ -226,19 +283,17 @@ async function deleteMemory(id) {
 }
 
 watch(tab, (newTab) => {
-  if (newTab === 'memory') {
-    loadMemories()
-  }
+  if (newTab === 'memory') loadMemories()
 })
 
-// localStorage 辅助函数
+// localStorage 辅助
 function lsGet(k, def) {
   const v = localStorage.getItem(k)
-  return v === null ? def : v
+  if (v === null) return def
+  try { return JSON.parse(v) } catch(_) { return v }
 }
 function lsSet(k, v) {
-  if (typeof v === 'object') v = JSON.stringify(v)
-  localStorage.setItem(k, v)
+  localStorage.setItem(k, typeof v === 'object' ? JSON.stringify(v) : v)
 }
 
 function applySettings() {
@@ -249,8 +304,9 @@ function applySettings() {
 }
 
 function applyRemoteSettings() {
-  localStorage.setItem('ppc.remoteEnabled', String(remoteEnabled.value))
-  localStorage.setItem('ppc.remoteUrl', remoteUrl.value.trim())
+  lsSet('ppc.remoteEnabled', remoteEnabled.value)
+  lsSet('ppc.remoteUrl', remoteUrl.value.trim())
+  lsSet('ppc.remoteToken', remoteToken.value.trim())
   ElMessage.success('远程连接设置已保存')
 }
 
@@ -266,30 +322,34 @@ function applyModelSettings() {
   ElMessage.success('已保存')
 }
 
-function applySystemPrompt() { 
-  lsSet('ppc.systemPrompt', String(systemPrompt.value || ''))
-  lsSet('ppc.personaText', String(personaText.value || ''))
-  lsSet('ppc.postSystemPrompt', String(postSystemPrompt.value || ''))
-  ElMessage.success('已保存')
+function applyUserSettings() { 
+  lsSet('ppc.userPersonaText', String(userPersonaText.value || ''))
+  lsSet('ppc.userName', String(userName.value || ''))
+  ElMessage.success('已保存') 
 }
-function applyUserSettings() { lsSet('ppc.userPersonaText', String(userPersonaText.value || '')); lsSet('ppc.userName', String(userName.value || '')); ElMessage.success('已保存') }
 
-async function resetPromptsToDefault() {
+async function fetchModels() {
+  if (!apiKey.value) return ElMessage.warning('请先输入API秘钥')
+  const loading = ElMessage({ message: '正在获取模型列表...', duration: 0 })
   try {
-    const r = await getDefaultPrompts()
-    systemPrompt.value = String(r?.system_prompt_default || '').trim()
-    personaText.value = String(r?.persona_prompt_default || '').trim()
-    postSystemPrompt.value = String(r?.post_prompt_default || '').trim()
-    ElMessage.info('已显示默认配置内容')
-  } catch (_) {}
+    const res = await axios.get(`${apiBase.value}/v1/models`, {
+      headers: { 'Authorization': `Bearer ${apiKey.value}` }
+    })
+    availableModels.value = res.data.data
+    ElMessage.success(`成功获取 ${availableModels.value.length} 个模型`)
+  } catch (e) {
+    ElMessage.error('获取失败，请检查API地址或密钥')
+  } finally {
+    loading.close()
+  }
 }
 
 async function handleResetAll() {
   try {
     const { value, action } = await ElMessageBox.prompt(
-      '<div class="danger-main-text">主人，真的要让 Pero 忘掉你吗？o(╥﹏╥)o</div>' +
+      '<div class="danger-main-text">主人，真的要让Pero酱忘掉你吗？o(╥﹏╥)o</div>' +
       '<div class="danger-sub-text">（此操作将清空所有数据，如需继续，请在文本框中输入“我们还会再见的...”）</div>',
-      '极其危险的操作',
+      '危险操作确认',
       {
         inputValue: '',
         inputPlaceholder: '请输入：我们还会再见的...',
@@ -301,355 +361,309 @@ async function handleResetAll() {
         dangerouslyUseHTMLString: true,
       }
     )
-    
     if (action === 'confirm') {
       if (String(value || '').trim() !== '我们还会再见的...') {
         ElMessage.error('输入不匹配，已取消')
         return
       }
-      
-      await resetAll()
-      ElMessage.success('所有数据已清除，正在重新加载...')
-      setTimeout(() => {
-        window.location.href = '/'
-      }, 1500)
+      const r = await resetAll()
+      if (r) {
+        ElMessage.success('已重置全部数据')
+        setTimeout(() => location.reload(), 1000)
+      } else {
+        ElMessage.error('重置失败')
+      }
     }
-  } catch (_) {
-    // 用户取消操作
-  }
-}
-
-async function fetchModels() {
-  try {
-    const base = (apiBase.value || 'https://api.openai.com').trim().replace(/\/$/, '')
-    const headers = apiKey.value ? { Authorization: `Bearer ${apiKey.value}` } : {}
-    const url = base.endsWith('/v1') ? `${base}/models` : `${base}/v1/models`
-    const r = await axios.get(url, { headers })
-    availableModels.value = Array.isArray(r.data?.data) ? r.data.data : []
-  } catch (e) {
-    availableModels.value = []
-    const msg = e?.response?.data?.error?.message || e?.message || '获取模型失败'
-    ElMessageBox.alert(String(msg), '获取模型失败', { type: 'error' })
-  }
+  } catch (_) {}
 }
 
 onMounted(async () => {
-  const base = String(lsGet('ppc.apiBase', apiBase.value) || '').trim()
-  const key = String(lsGet('ppc.apiKey', '') || '')
+  modelName.value = lsGet('ppc.modelName', '')
+  apiBase.value = lsGet('ppc.apiBase', 'https://api.openai.com')
+  apiKey.value = lsGet('ppc.apiKey', '')
+  
+  const mSet = lsGet('ppc.modelSettings', {})
+  temperature.value = mSet.temperature ?? 0.7
+  topP.value = mSet.topP ?? 1
+  frequencyPenalty.value = mSet.frequencyPenalty ?? 0
+  presencePenalty.value = mSet.presencePenalty ?? 0
+  stream.value = !!mSet.stream
+  memoryRounds.value = mSet.memoryRounds ?? 40
 
-  remoteEnabled.value = !!lsGet('ppc.remoteEnabled', false)
-  remoteUrl.value = String(lsGet('ppc.remoteUrl', '') || '')
-  const model = String(lsGet('ppc.modelName', modelName.value) || '')
-  const ms = lsGet('ppc.modelSettings', null)
-  if (base) apiBase.value = base
-  if (model) modelName.value = model
-  if (key) { apiKey.value = key }
-  if (ms && typeof ms === 'object') {
-    if (ms.temperature !== undefined) temperature.value = Number(ms.temperature)
-    if (ms.topP !== undefined) topP.value = Number(ms.topP)
-    if (ms.frequencyPenalty !== undefined) frequencyPenalty.value = Number(ms.frequencyPenalty)
-    if (ms.presencePenalty !== undefined) presencePenalty.value = Number(ms.presencePenalty)
-    if (ms.stream !== undefined) stream.value = !!ms.stream
-    if (ms.memoryRounds !== undefined) memoryRounds.value = Number(ms.memoryRounds)
-  }
+  remoteEnabled.value = lsGet('ppc.remoteEnabled', false)
+  remoteUrl.value = lsGet('ppc.remoteUrl', '')
+  remoteToken.value = lsGet('ppc.remoteToken', '')
+
+  userPersonaText.value = lsGet('ppc.userPersonaText', '')
+  userName.value = lsGet('ppc.userName', '')
+
   const r = await getDefaultPrompts()
-  const sp = String(r?.system_prompt_default || '').trim()
-  const pp = String(r?.persona_prompt_default || '').trim()
-  const tp = String(r?.post_prompt_default || '').trim()
-  
-  // 从localStorage加载已保存的提示词，如果没有则使用默认值
-  const savedSystemPrompt = String(lsGet('ppc.systemPrompt', '') || '').trim()
-  const savedPersonaText = String(lsGet('ppc.personaText', '') || '').trim()
-  const savedPostSystemPrompt = String(lsGet('ppc.postSystemPrompt', '') || '').trim()
-  
-  if (savedSystemPrompt) systemPrompt.value = savedSystemPrompt
-  else if (sp) systemPrompt.value = sp
-  
-  if (savedPersonaText) personaText.value = savedPersonaText
-  else if (pp) personaText.value = pp
-  
-  if (savedPostSystemPrompt) postSystemPrompt.value = savedPostSystemPrompt
-  else if (tp) postSystemPrompt.value = tp
+  systemPrompt.value = lsGet('ppc.systemPrompt', r.system_prompt_default)
+  personaText.value = lsGet('ppc.personaText', r.persona_prompt_default)
+  postSystemPrompt.value = lsGet('ppc.postSystemPrompt', r.post_prompt_default)
 })
 </script>
 
-<style>
-.settings { 
-  min-height: 100vh; 
-  background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%); 
-  color: #111; 
-  padding: 20px; 
-  --el-color-primary: #3b82f6;
-  --el-text-color-primary: #1e293b; 
-  --el-text-color-regular: #334155; 
-  --el-text-color-secondary: #64748b; 
-  --el-text-color-placeholder: #94a3b8;
-}
-
-.settings-header {
+<style scoped>
+.settings-container {
+  min-height: 100vh;
+  background: linear-gradient(135deg, #fdf2f8 0%, #f0f9ff 100%);
   display: flex;
-  justify-content: space-between;
+  flex-direction: column;
+  padding-bottom: env(safe-area-inset-bottom);
+}
+
+/* 头部样式 */
+.header {
+  height: 60px;
+  display: flex;
   align-items: center;
-  margin-bottom: 24px;
-  max-width: 880px;
-  margin-left: auto;
-  margin-right: auto;
+  justify-content: space-between;
+  padding: 0 16px;
+  background: rgba(255, 255, 255, 0.7);
+  backdrop-filter: blur(10px);
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.05);
 }
 
-.settings-header .title {
-  font-size: 24px;
-  font-weight: 700;
-  color: #1e293b;
-  margin: 0;
-}
-
-.settings-header .subtitle {
-  font-size: 14px;
-  color: #64748b;
-  margin: 4px 0 0 0;
-}
-
-.exit-btn {
+.back-btn {
   width: 40px;
   height: 40px;
-  border-radius: 20px;
-  border: none;
-  background: white;
-  color: #64748b;
   display: flex;
   align-items: center;
   justify-content: center;
+  border-radius: 12px;
+  background: white;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.05);
   cursor: pointer;
-  box-shadow: 0 4px 12px rgba(0,0,0,0.05);
-  transition: all 0.2s ease;
 }
 
-.exit-btn:hover {
-  background: #f1f5f9;
+.header-title {
+  text-align: center;
+}
+
+.header-title h2 {
+  font-size: 16px;
+  margin: 0;
   color: #1e293b;
-  transform: scale(1.05);
 }
 
-.settings-card { 
-  max-width: 880px; 
-  margin: 0 auto; 
-  padding: 24px; 
-  border-radius: 24px; 
-  border: 1px solid rgba(255, 255, 255, 0.5); 
-  background: rgba(255, 255, 255, 0.7); 
-  backdrop-filter: blur(20px); 
-  -webkit-backdrop-filter: blur(20px);
-  box-shadow: 0 20px 40px rgba(0,0,0,0.06); 
-  height: calc(100vh - 120px); 
-  overflow: hidden;
+.header-title span {
+  font-size: 10px;
+  color: #94a3b8;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+
+.placeholder { width: 40px; }
+
+/* 设置主体 */
+.settings-body {
+  padding: 16px;
   display: flex;
   flex-direction: column;
+  gap: 16px;
 }
 
-.settings-card .el-tabs {
-  height: 100%;
+/* 菜单网格 */
+.menu-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+}
+
+.menu-item {
+  background: rgba(255, 255, 255, 0.6);
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.8);
+  border-radius: 16px;
+  padding: 12px;
   display: flex;
   flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  transition: all 0.3s;
+  cursor: pointer;
 }
 
-.settings-card .el-tabs__content {
-  flex: 1;
-  overflow-y: auto;
-  padding: 10px 4px;
+.menu-item.active {
+  background: #3b82f6;
+  border-color: #3b82f6;
+  box-shadow: 0 8px 16px rgba(59, 130, 246, 0.2);
 }
 
-/* 隐藏 Tab 底部边框 */
-.settings .el-tabs__nav-wrap::after {
-  display: none;
+.menu-icon {
+  font-size: 20px;
+  color: #64748b;
 }
 
-.settings .el-tabs__item {
-  font-size: 15px;
+.active .menu-icon, .active .menu-label {
+  color: white;
+}
+
+.menu-label {
+  font-size: 12px;
+  color: #475569;
   font-weight: 500;
-  padding: 0 20px;
-  transition: all 0.3s ease;
 }
 
-.settings .el-tabs__item.is-active {
-  font-weight: 700;
+/* 内容区域 */
+.content-area {
+  flex: 1;
+}
+
+.content-card {
+  background: rgba(255, 255, 255, 0.8);
+  backdrop-filter: blur(20px);
+  border-radius: 24px;
+  border: 1px solid rgba(255, 255, 255, 0.5);
+  padding: 20px;
+  min-height: 400px;
+  box-shadow: 0 10px 25px rgba(0,0,0,0.03);
+}
+
+.section-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 20px;
+}
+
+.section-header .el-icon {
+  font-size: 20px;
   color: #3b82f6;
 }
 
-.settings .el-tabs__active-bar {
-  height: 3px;
-  border-radius: 3px;
-  background-color: #3b82f6;
+.section-header h3 {
+  font-size: 18px;
+  margin: 0;
+  color: #1e293b;
 }
 
-/* 表单美化 */
-.settings .el-form-item {
+.section-header.danger .el-icon { color: #ef4444; }
+
+/* 小组件样式 */
+.api-tools {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.mini-table {
+  border-radius: 12px;
+  margin-bottom: 20px;
+  font-size: 13px;
+}
+
+.full-btn {
+  width: 100%;
+  height: 44px;
+  border-radius: 12px;
+  font-weight: 600;
+}
+
+.info-banner {
+  background: #eff6ff;
+  border-radius: 12px;
+  padding: 12px;
+  margin-bottom: 20px;
+  font-size: 13px;
+  color: #1e40af;
+  line-height: 1.5;
+}
+
+.slider-group {
   margin-bottom: 24px;
 }
 
-.settings .el-form-item__label {
-  font-weight: 600;
+.slider-item {
+  margin-bottom: 16px;
+}
+
+.slider-item span {
+  font-size: 13px;
+  color: #64748b;
+}
+
+/* 记忆列表 */
+.search-input {
+  margin-bottom: 16px;
+}
+
+.memory-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  max-height: 500px;
+  overflow-y: auto;
+}
+
+.memory-item {
+  background: white;
+  padding: 12px;
+  border-radius: 12px;
+  border: 1px solid #f1f5f9;
+}
+
+.memory-content {
+  font-size: 14px;
   color: #334155;
   margin-bottom: 8px;
+  line-height: 1.5;
+}
+
+.memory-footer {
   display: flex;
+  justify-content: space-between;
   align-items: center;
 }
 
-.settings .el-input__wrapper, 
-.settings .el-textarea__inner {
-  background: rgba(255, 255, 255, 0.5);
-  border: 1px solid rgba(0, 0, 0, 0.05);
-  box-shadow: none !important;
-  border-radius: 12px;
-  transition: all 0.2s ease;
+.m-time {
+  font-size: 11px;
+  color: #94a3b8;
 }
 
-.settings .el-input__wrapper:hover,
-.settings .el-textarea__inner:hover {
-  border-color: rgba(59, 130, 246, 0.3);
+.danger-card {
+  background: #fef2f2;
+  border: 1px solid #fee2e2;
+  border-radius: 16px;
+  padding: 16px;
+  text-align: center;
 }
 
-.settings .el-input__wrapper.is-focus,
-.settings .el-textarea__inner:focus {
-  background: white;
-  border-color: #3b82f6;
-  box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.1) !important;
+.danger-card h4 {
+  margin: 0 0 8px;
+  color: #991b1b;
 }
 
-.readonly-tip {
-  display: flex;
-  align-items: center;
-  padding: 12px 16px;
-  background: rgba(59, 130, 246, 0.05);
-  border-radius: 12px;
-  color: #3b82f6;
+.danger-card p {
   font-size: 13px;
-  margin-bottom: 20px;
-  border: 1px solid rgba(59, 130, 246, 0.1);
+  color: #b91c1c;
+  margin-bottom: 16px;
 }
 
-.settings .el-textarea__inner[readonly] {
-  background: rgba(0, 0, 0, 0.02);
-  cursor: default;
-  color: #64748b;
+.empty {
+  text-align: center;
+  padding: 40px 0;
+  color: #94a3b8;
+  font-size: 14px;
 }
 
-.settings .el-textarea__inner[readonly]:hover {
-  border-color: rgba(0, 0, 0, 0.05);
+/* 动画 */
+.fade-slide-enter-active,
+.fade-slide-leave-active {
+  transition: all 0.3s ease;
 }
 
-.settings .el-button--primary {
-  background: #3b82f6;
-  border: none;
-  padding: 12px 24px;
-  border-radius: 12px;
-  font-weight: 600;
-  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.2);
-  transition: all 0.2s ease;
+.fade-slide-enter-from {
+  opacity: 0;
+  transform: translateY(10px);
 }
 
-.settings .el-button--primary:hover {
-  transform: translateY(-1px);
-  box-shadow: 0 6px 16px rgba(59, 130, 246, 0.3);
+.fade-slide-leave-to {
+  opacity: 0;
+  transform: translateY(-10px);
 }
-
-/* 记忆管理表格美化 */
-.settings .el-table {
-  background: transparent !important;
-  --el-table-border-color: rgba(0, 0, 0, 0.05);
-}
-
-.settings .el-table tr {
-  background: transparent !important;
-}
-
-.settings .el-table th.el-table__cell {
-  background: rgba(0, 0, 0, 0.02) !important;
-  color: #64748b;
-  font-weight: 600;
-}
-
-.settings .el-table__row:hover td {
-  background: rgba(255, 255, 255, 0.5) !important;
-}
-
-/* 危险区域美化 */
-.danger-zone { 
-  padding: 24px; 
-  background: rgba(239, 68, 68, 0.03);
-  border: 1px solid rgba(239, 68, 68, 0.15); 
-  border-radius: 16px; 
-  margin-top: 10px; 
-}
-
-.danger-zone h3 { color: #ef4444; font-weight: 700; }
-.warning-text { color: #ef4444; background: rgba(239, 68, 68, 0.1); padding: 12px; border-radius: 8px; }
-
-@media (max-width: 768px) { 
-  .settings { padding: 16px } 
-  .settings-card { padding: 16px; border-radius: 20px; height: calc(100vh - 100px); }
-  .settings-header .title { font-size: 20px; }
-}
-/* 记忆重置弹窗美化 */
-:deep(.danger-reset-box) {
-  animation: dangerShake 0.6s cubic-bezier(.175,.885,.32,1.275) 2 both;
-  border-radius: 20px !important;
-  border: 1px solid rgba(248,113,113,0.3) !important;
-  box-shadow: 0 20px 50px rgba(244,63,94,0.15) !important;
-  background: white !important;
-}
-
-:deep(.danger-reset-box .el-message-box__header) {
-  padding-top: 24px;
-}
-
-:deep(.danger-reset-box .el-message-box__title) {
-  color: #ef4444;
-  font-weight: 700;
-  font-size: 18px;
-}
-
-:deep(.danger-reset-box .danger-main-text) {
-  font-weight: 600;
-  font-size: 16px;
-  color: #1e293b;
-  margin-bottom: 8px;
-}
-
-:deep(.danger-reset-box .danger-sub-text) {
-  font-size: 13px;
-  color: #64748b;
-  line-height: 1.6;
-}
-
-:deep(.danger-reset-box .el-message-box__input) {
-  padding-top: 15px;
-}
-
-:deep(.danger-reset-box .el-input__wrapper) {
-  border-radius: 12px;
-  background: #f8fafc;
-  box-shadow: none !important;
-  border: 1px solid #e2e8f0;
-}
-
-:deep(.danger-reset-box .el-button--primary) {
-  background: #ef4444;
-  border-color: #ef4444;
-  border-radius: 10px;
-  padding: 10px 20px;
-}
-
-:deep(.danger-reset-box .el-button:not(.el-button--primary)) {
-  border-radius: 10px;
-  padding: 10px 20px;
-}
-
-@keyframes dangerShake {
-  0%, 100% { transform: translate3d(0,0,0) }
-  20% { transform: translate3d(-4px, 0, 0) }
-  40% { transform: translate3d(4px, 0, 0) }
-  60% { transform: translate3d(-3px, 0, 0) }
-  80% { transform: translate3d(3px, 0, 0) }
-}
-
 </style>

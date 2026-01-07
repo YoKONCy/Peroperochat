@@ -46,8 +46,7 @@
 
   <div id="l2d-panel" class="l2d-panel" v-bind="$attrs">
     <div v-if="chatVisible" class="chat-bubble-container">
-      <div class="chat-bubble">
-        {{ chatText }}
+      <div class="chat-bubble markdown-body" v-html="renderMarkdown(chatText)">
       </div>
     </div>
     <div class="l2d-fabs">
@@ -66,10 +65,32 @@
 </template>
 
 <script setup>
-import { onMounted, onBeforeUnmount } from 'vue'
-import { ref, computed } from 'vue'
+import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
 import axios from 'axios'
 import { db } from '../db'
+import { marked } from 'marked'
+import DOMPurify from 'dompurify'
+
+// Markdown 渲染
+function renderMarkdown(text) {
+  if (!text) return ''
+  const clean = cleanMessageContent(text)
+  const html = marked.parse(clean)
+  return DOMPurify.sanitize(html)
+}
+
+// 清理消息中的隐藏标签
+function cleanMessageContent(text) {
+  if (!text) return ''
+  if (text === '__loading__') return '正在思考...'
+  
+  // 移除所有 XML 标签及其内容
+  return text
+    .replace(/<(nit(?:-[0-9a-fA-F]{4})?)>[\s\S]*?<\/\1>/gi, '')
+    .replace(/<([A-Z_]+)>[\s\S]*?<\/\1>/g, '')
+    .replace(/\[\[\[NIT_CALL\]\]\][\s\S]*?\[\[\[NIT_END\]\]\]/g, '')
+    .trim()
+}
 
 function ensureFontAwesome() {
   const exists = Array.from(document.querySelectorAll('link[rel="stylesheet"]')).some(l => String(l.href || '').includes('fontawesome'))

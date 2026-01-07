@@ -32,7 +32,7 @@
               <el-icon class="spin" size="18"><Loading /></el-icon>
               <span class="loading-text">正在生成...</span>
             </div>
-            <div v-else class="content" v-html="formatContent(m.content)"></div>
+            <div v-else class="content markdown-body" v-html="formatContent(m.content)"></div>
             <div class="actions">
               <el-tooltip content="复制" placement="top" :offset="6" popper-class="cute-tip">
                 <button class="mini-btn" @click="onCopy(i)" aria-label="复制">
@@ -93,9 +93,23 @@ function escapeHtml(s) {
 function formatContent(t) {
   marked.setOptions({ gfm: true, breaks: true })
   const raw = String(t ?? '')
-  const html = marked.parse(raw)
-  const clean = DOMPurify.sanitize(html, { USE_PROFILES: { html: true } })
-  return clean || escapeHtml(raw)
+  const clean = cleanMessageContent(raw)
+  const html = marked.parse(clean)
+  const sanitized = DOMPurify.sanitize(html, { USE_PROFILES: { html: true } })
+  return sanitized || escapeHtml(clean)
+}
+
+// 清理消息中的隐藏标签
+function cleanMessageContent(text) {
+  if (!text) return ''
+  if (text === '__loading__') return '正在思考...'
+  
+  // 移除所有 XML 标签及其内容 (包括 NIT 2.0 的小写标签)
+  return text
+    .replace(/<(nit(?:-[0-9a-fA-F]{4})?)>[\s\S]*?<\/\1>/gi, '')
+    .replace(/<([A-Z_]+)>[\s\S]*?<\/\1>/g, '')
+    .replace(/\[\[\[NIT_CALL\]\]\][\s\S]*?\[\[\[NIT_END\]\]\]/g, '')
+    .trim()
 }
 function onKeydownEnter(e) {
   if (e && e.shiftKey) return
