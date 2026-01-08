@@ -156,5 +156,5 @@ Peroperochat/
 
 <div align="center">
   <p>Made with ❤️ by YoKONCy & AI Team</p>
-  <p>© 2025 YoKONCy. Licensed under PolyForm Noncommercial License 1.0.0.</p>
+  <p>© 2025-2026 YoKONCy. Licensed under GNU General Public License v3.0.</p>
 </div>
