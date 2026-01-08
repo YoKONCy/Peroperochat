@@ -11,7 +11,7 @@
   <img alt="Desktop" src="https://img.shields.io/badge/Desktop-PeroCore-7C3AED?logo=github&logoColor=white">
 </a>
 <img alt="FastAPI" src="https://img.shields.io/badge/FastAPI-0.100+-009688?logo=fastapi">
-<img alt="License" src="https://img.shields.io/badge/License-MIT-green">
+<img alt="License" src="https://img.shields.io/badge/License-GPL--3.0-blue">
 
 <p>
   <b>“不仅仅是聊天机器人，更是能感知时间、拥有持久记忆并跨设备同步的虚拟伙伴。”</b>
@@ -156,5 +156,5 @@ Peroperochat/
 
 <div align="center">
   <p>Made with ❤️ by YoKONCy & AI Team</p>
-  <p>© 2025 YoKONCy. Licensed under MIT.</p>
+  <p>© 2025 YoKONCy. Licensed under PolyForm Noncommercial License 1.0.0.</p>
 </div>
