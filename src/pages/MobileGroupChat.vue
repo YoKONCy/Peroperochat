@@ -51,7 +51,15 @@
 
     <!-- 消息列表 -->
     <div class="chat-list" ref="chatListRef">
-      <div v-for="(msg, index) in messages" :key="index" :class="[
+      <!-- 查看更多按钮 -->
+      <div v-if="hasMoreMessages" class="load-more-container">
+        <div class="load-more-btn" @click="loadMore">
+          <el-icon><ArrowUp /></el-icon>
+          <span>查看更多消息</span>
+        </div>
+      </div>
+
+      <div v-for="(msg, index) in displayedMessages" :key="index" :class="[
         'message-row', 
         msg.role === 'user' ? 'user-row' : 'agent-row',
         msg.name ? msg.name.toLowerCase() + '-msg' : ''
@@ -111,9 +119,9 @@
 </template>
 
 <script setup>
-import { ref, onMounted, nextTick, watch } from 'vue'
+import { ref, onMounted, nextTick, watch, computed } from 'vue'
 import { useRouter } from 'vue-router'
-import { ArrowLeft, Promotion, Delete, Operation, Menu } from '@element-plus/icons-vue'
+import { ArrowLeft, Promotion, Delete, Operation, Menu, ArrowUp } from '@element-plus/icons-vue'
 import { marked } from 'marked'
 import DOMPurify from 'dompurify'
 import { ElMessageBox, ElMessage } from 'element-plus'
@@ -121,6 +129,7 @@ import { chat, AGENTS, getDefaultPrompts, getRelevantMemories, saveMemory } from
 
 const router = useRouter()
 const messages = ref([])
+const displayCount = ref(30) // 初始渲染30条
 const input = ref('')
 const chatListRef = ref(null)
 const textareaRef = ref(null)
@@ -131,6 +140,30 @@ const replySettings = ref([
   { id: 'pero', name: 'Pero', enabled: true },
   { id: 'nana', name: 'Nana', enabled: true }
 ])
+
+// 计算属性：当前显示的消息
+const displayedMessages = computed(() => {
+  return messages.value.slice(-displayCount.value)
+})
+
+// 计算属性：是否还有更多消息
+const hasMoreMessages = computed(() => {
+  return messages.value.length > displayCount.value
+})
+
+// 加载更多
+function loadMore() {
+  const scrollHeightBefore = chatListRef.value?.scrollHeight || 0
+  displayCount.value += 30
+  
+  // 保持滚动位置
+  nextTick(() => {
+    if (chatListRef.value) {
+      const scrollHeightAfter = chatListRef.value.scrollHeight
+      chatListRef.value.scrollTop = scrollHeightAfter - scrollHeightBefore
+    }
+  })
+}
 
 let draggedIndex = null
 
@@ -689,18 +722,54 @@ async function generateResponse(agentId) {
 }
 
 /* Pero 专属样式 */
-.agent-row.pero-msg .message-bubble {
-  background: linear-gradient(135deg, #ffffff, #fff1f2);
-  border: 1px solid rgba(236, 72, 153, 0.1);
-}
+  .agent-row.pero-msg .message-bubble {
+    background: linear-gradient(135deg, #ffffff, #fff1f2);
+    border: 1px solid rgba(236, 72, 153, 0.1);
+  }
+  
+  /* Nana 专属样式 */
+  .agent-row.nana-msg .message-bubble {
+    background: linear-gradient(135deg, #ffffff, #f5f3ff);
+    border: 1px solid rgba(139, 92, 246, 0.1);
+  }
 
-/* Nana 专属样式 */
-.agent-row.nana-msg .message-bubble {
-  background: linear-gradient(135deg, #ffffff, #f5f3ff);
-  border: 1px solid rgba(139, 92, 246, 0.1);
-}
+  /* 加载更多样式 */
+  .load-more-container {
+    display: flex;
+    justify-content: center;
+    padding: 10px 0 20px;
+  }
 
-.sender-name {
+  .load-more-btn {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 16px;
+    background: rgba(255, 255, 255, 0.6);
+    backdrop-filter: blur(5px);
+    border-radius: 20px;
+    border: 1px solid rgba(226, 232, 240, 0.8);
+    color: #64748b;
+    font-size: 12px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.03);
+  }
+
+  .load-more-btn:hover {
+    background: white;
+    color: #3b82f6;
+    border-color: #3b82f6;
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(59, 130, 246, 0.1);
+  }
+
+  .load-more-btn:active {
+    transform: translateY(0);
+  }
+  
+  .sender-name {
   font-size: 11px;
   font-weight: 700;
   margin-bottom: 4px;
