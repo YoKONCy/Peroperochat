@@ -294,9 +294,9 @@ async function generateResponse(agentId) {
 <Output_Constraint>
 回复要求:
 1. 你的名字是 ${config.name}。
-2. 你正在大家庭的群聊中，成员包括你、其他AI和主人。
+2. 你正在大家庭的群聊中，成员包括你、Pero和主人。
 3. 请根据上下文回复用户或其他人的话。
-4. 最好控制在三句话以内，保持简短。
+4. 最好控制在3句话，30字以内，保持简短。
 </Output_Constraint>
 `
     // 2. 历史记录转换 (Perspective Shifting)
@@ -565,7 +565,7 @@ async function generateResponse(agentId) {
 .message-row {
   display: flex;
   gap: 12px;
-  max-width: 90%;
+  max-width: 92%;
   animation: message-in 0.3s ease-out;
 }
 
@@ -619,6 +619,8 @@ async function generateResponse(agentId) {
   align-items: center;
   gap: 8px;
   max-width: 100%;
+  flex: 1; /* 让容器占据剩余空间，允许气泡变宽 */
+  min-width: 0; /* 防止 flex 子元素溢出 */
 }
 
 .user-row .message-bubble-container {
