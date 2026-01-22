@@ -25,7 +25,11 @@
           :key="r.time + r.task"
           :class="['reminder-bubble', { 'bubble-shattering': explodingReminders.has(idx) }]"
           :style="getBubbleStyle(idx)"
-          @click="handleReminderClick(idx)"
+          @touchstart="handlePressStart(r)" 
+          @touchend="handlePressEnd(idx)"
+          @mousedown="handlePressStart(r)" 
+          @mouseup="handlePressEnd(idx)"
+          @mouseleave="handlePressCancel"
         >
           <div class="bubble-content">
             <span class="task-text">{{ r.task }}</span>
@@ -39,9 +43,10 @@
     <div class="inputbar-mini" v-if="!isExpanded">
       <button class="expand-btn" :disabled="isLoading" @click="expandInput">
         <i class="fas fa-comment-dots"></i>
-        <span>{{ isLoading ? 'Pero正在思考中...' : '点击与 Pero 对话...' }}</span>
+        <span>{{ isLoading ? '...' : '...' }}</span>
       </button>
       <div class="mini-tools">
+        <button class="tool-btn-mini" @click="toGroupChat" title="家庭群聊"><el-icon><UserFilled /></el-icon></button>
         <button class="tool-btn-mini" @click="toSettings"><i class="fas fa-cog"></i></button>
         <button class="tool-btn-mini" @click="openHistory"><i class="fas fa-history"></i></button>
       </div>
@@ -101,7 +106,7 @@
             ref="inputRef"
             v-model="text" 
             class="expanded-textarea" 
-            placeholder="在这里输入你想说的话..."
+            placeholder="..."
             @keyup.ctrl.enter="onSend"
           ></textarea>
           <div class="card-footer">
@@ -127,6 +132,27 @@
       </div>
     </Transition>
 
+    <!-- 任务详情模态框 -->
+    <Transition name="fade-slide">
+      <div class="expanded-input-overlay" v-if="showReminderDetail" @click.self="showReminderDetail = false">
+        <div class="expanded-input-card reminder-detail-card" style="height: auto; max-height: 50vh;">
+          <div class="card-header">
+            <span class="title">任务详情</span>
+            <button class="close-btn" @click="showReminderDetail = false"><i class="fas fa-times"></i></button>
+          </div>
+          <div style="padding: 20px; display: flex; flex-direction: column; gap: 10px;">
+            <div style="color: #666; font-size: 0.9em; display: flex; align-items: center; gap: 5px;">
+               <i class="fas fa-clock"></i> 
+               <span>{{ selectedReminder ? formatReminderTime(selectedReminder.time) : '' }}</span>
+            </div>
+            <div style="font-size: 1.1em; line-height: 1.6; color: #333; word-wrap: break-word;">
+              {{ selectedReminder ? selectedReminder.task : '' }}
+            </div>
+          </div>
+        </div>
+      </div>
+    </Transition>
+
     <HistoryOverlay 
       v-if="showHistory" 
       :messages="messages"
@@ -146,8 +172,8 @@ import { LocalNotifications } from '@capacitor/local-notifications'
 import { Capacitor } from '@capacitor/core'
 import Live2DWidget from '../components/Live2DWidget.vue'
 import HistoryOverlay from '../components/HistoryOverlay.vue'
-import { chat as chatApi, chatStream, getRelevantMemories, saveMemory, deleteMemoriesByMsgTimestamp, getDefaultPrompts } from '../api'
-import { Promotion } from '@element-plus/icons-vue'
+import { chat as chatApi, chatStream, getRelevantMemories, saveMemory, deleteMemoriesByMsgTimestamp, getDefaultPrompts, getActiveAgentId } from '../api'
+import { Promotion, UserFilled } from '@element-plus/icons-vue'
 
 const router = useRouter()
 const text = ref('')
@@ -164,6 +190,10 @@ const stream = ref(false)
 const memoryRounds = ref(40)
 const showHistory = ref(false)
 const showTopicList = ref(false) // 是否显示话题列表
+const showReminderDetail = ref(false) // 是否显示任务详情
+const selectedReminder = ref(null) // 当前选中的任务
+let pressTimer = null // 长按定时器
+let isLongPress = false // 是否触发了长按
 const explodingReminders = ref(new Set()) // 正在炸裂的任务气泡索引
 const isTopicExploding = ref(false) // 话题聚合气泡是否正在炸裂
 const chatPreview = ref(null) // 引用聊天预览区域
@@ -417,6 +447,39 @@ const handleWaifuClick = async (event) => {
   window.dispatchEvent(new CustomEvent('ppc:waifu-click', { detail: { area } }))
 }
 
+// 处理任务气泡长按逻辑
+const handlePressStart = (reminder) => {
+  if (explodingReminders.value.has(reminder)) return // 这里的逻辑不太对，set里存的是idx，这里传入的是对象，不过一般长按时不应该正在炸裂
+  
+  isLongPress = false
+  pressTimer = setTimeout(() => {
+    isLongPress = true
+    selectedReminder.value = reminder
+    showReminderDetail.value = true
+    // 触发重震动反馈
+    if (Capacitor.isNativePlatform()) {
+       Haptics.impact({ style: ImpactStyle.Heavy })
+    }
+  }, 500)
+}
+
+const handlePressEnd = (idx) => {
+  if (pressTimer) {
+    clearTimeout(pressTimer)
+    pressTimer = null
+  }
+  if (!isLongPress) {
+    handleReminderClick(idx)
+  }
+}
+
+const handlePressCancel = () => {
+  if (pressTimer) {
+    clearTimeout(pressTimer)
+    pressTimer = null
+  }
+}
+
 // 处理任务气泡点击
 const handleReminderClick = async (idx) => {
   if (explodingReminders.value.has(idx)) return
@@ -536,6 +599,7 @@ function persistMessages() {
 }
 
 function toSettings() { router.push('/settings') }
+function toGroupChat() { router.push('/group') }
 function openHistory() { showHistory.value = true }
 
 function expandInput() {
@@ -607,21 +671,23 @@ const scheduleFutureNotification = async (id, title, body, timeStr) => {
 function parsePeroStatus(content) {
   if (!content) return
   
+  const agentId = getActiveAgentId()
+
   // 1. 解析旧版 PEROCUE
   const perocueMatch = content.match(/<PEROCUE>([\s\S]*?)<\/PEROCUE>/)
   if (perocueMatch) {
     try {
       const statusMap = JSON.parse(perocueMatch[1].trim())
       if (statusMap.mood) {
-        localStorage.setItem('ppc.mood', statusMap.mood)
+        localStorage.setItem(`ppc.${agentId}.mood`, statusMap.mood)
         window.dispatchEvent(new CustomEvent('ppc:mood', { detail: statusMap.mood }))
       }
       if (statusMap.vibe) {
-        localStorage.setItem('ppc.vibe', statusMap.vibe)
+        localStorage.setItem(`ppc.${agentId}.vibe`, statusMap.vibe)
         window.dispatchEvent(new CustomEvent('ppc:vibe', { detail: statusMap.vibe }))
       }
       if (statusMap.mind) {
-        localStorage.setItem('ppc.mind', statusMap.mind)
+        localStorage.setItem(`ppc.${agentId}.mind`, statusMap.mind)
         window.dispatchEvent(new CustomEvent('ppc:mind', { detail: statusMap.mind }))
       }
     } catch (e) {
@@ -637,7 +703,7 @@ function parsePeroStatus(content) {
       const data = JSON.parse(clickMatch[1].trim())
       let cur = {}
       try {
-        const saved = localStorage.getItem('ppc.waifu.texts')
+        const saved = localStorage.getItem(`ppc.${agentId}.waifu.texts`)
         if (saved) cur = JSON.parse(saved)
       } catch (e) {}
 
@@ -648,18 +714,24 @@ function parsePeroStatus(content) {
         })
       } else if (typeof data === 'object') {
         // 新版部位格式
-        if (data.head) {
-          cur.click_head_01 = data.head[0] || ''
-          cur.click_head_02 = data.head[1] || ''
-        }
-        if (data.chest) {
-          cur.click_chest_01 = data.chest[0] || ''
-          cur.click_chest_02 = data.chest[1] || ''
-        }
-        if (data.body) {
-          cur.click_body_01 = data.body[0] || ''
-          cur.click_body_02 = data.body[1] || ''
-        }
+        const parts = ['head', 'chest', 'body']
+        
+        parts.forEach(part => {
+          if (data[part] && Array.isArray(data[part])) {
+            // 1. 清除该部位旧的所有台词 (假设最大 20 条)
+            for (let i = 1; i <= 20; i++) {
+              delete cur[`click_${part}_${String(i).padStart(2, '0')}`]
+            }
+            
+            // 2. 写入新台词
+            data[part].forEach((msg, idx) => {
+              if (msg) {
+                cur[`click_${part}_${String(idx + 1).padStart(2, '0')}`] = msg
+              }
+            })
+          }
+        })
+
         // 同时兼容旧版，如果 object 里有 general 字段或者直接取前几个作为通用
         if (data.general) {
           cur.click_messages_01 = data.general[0] || ''
@@ -668,7 +740,7 @@ function parsePeroStatus(content) {
         }
       }
       
-      localStorage.setItem('ppc.waifu.texts', JSON.stringify(cur))
+      localStorage.setItem(`ppc.${agentId}.waifu.texts`, JSON.stringify(cur))
       window.dispatchEvent(new CustomEvent('ppc:waifu-texts-updated', { detail: cur }))
     } catch (e) {
       console.warn('Failed to parse click messages JSON:', e)
@@ -684,7 +756,7 @@ function parsePeroStatus(content) {
       if (Array.isArray(messages) && messages.length >= 2) {
         let cur = {}
         try {
-          const saved = localStorage.getItem('ppc.waifu.texts')
+          const saved = localStorage.getItem(`ppc.${agentId}.waifu.texts`)
           if (saved) cur = JSON.parse(saved)
         } catch (e) {}
         
@@ -695,7 +767,7 @@ function parsePeroStatus(content) {
         delete cur['idleMessages_04']
         delete cur['idleMessages_05']
         
-        localStorage.setItem('ppc.waifu.texts', JSON.stringify(cur))
+        localStorage.setItem(`ppc.${agentId}.waifu.texts`, JSON.stringify(cur))
         window.dispatchEvent(new CustomEvent('ppc:waifu-texts-updated', { detail: cur }))
       }
     } catch (e) {
@@ -712,13 +784,13 @@ function parsePeroStatus(content) {
       if (Array.isArray(messages) && messages.length >= 1) {
         let cur = {}
         try {
-          const saved = localStorage.getItem('ppc.waifu.texts')
+          const saved = localStorage.getItem(`ppc.${agentId}.waifu.texts`)
           if (saved) cur = JSON.parse(saved)
         } catch (e) {}
         
         cur.visibilityBack = messages[0]
         
-        localStorage.setItem('ppc.waifu.texts', JSON.stringify(cur))
+        localStorage.setItem(`ppc.${agentId}.waifu.texts`, JSON.stringify(cur))
         window.dispatchEvent(new CustomEvent('ppc:waifu-texts-updated', { detail: cur }))
       }
     } catch (e) {

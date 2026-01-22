@@ -44,19 +44,19 @@
     <!-- 原本的卡片已拆散到顶部，这里保留 Live2D 的挂载容器 -->
   </div>
 
-  <div id="l2d-panel" class="l2d-panel" v-bind="$attrs">
+  <div id="l2d-panel" class="l2d-panel" v-bind="$attrs" @click="handleLive2DClick">
     <div v-if="chatVisible" class="chat-bubble-container">
       <div class="chat-bubble markdown-body" v-html="renderMarkdown(chatText)">
       </div>
     </div>
     <div class="l2d-fabs">
       <el-tooltip content="更换模型" placement="left" :offset="8" popper-class="cute-tip">
-        <button class="fab fab-switch" @click="onSwitchModel" aria-label="更换模型">
+        <button class="fab fab-switch" @click.stop="onSwitchModel" aria-label="更换模型">
           <i class="fa-solid fa-shuffle"></i>
         </button>
       </el-tooltip>
       <el-tooltip content="换装" placement="left" :offset="8" popper-class="cute-tip">
-        <button class="fab fab-dress" @click="onRandTextures" aria-label="换装">
+        <button class="fab fab-dress" @click.stop="onRandTextures" aria-label="换装">
           <i class="fa-solid fa-shirt"></i>
         </button>
       </el-tooltip>
@@ -70,6 +70,8 @@ import axios from 'axios'
 import { db } from '../db'
 import { marked } from 'marked'
 import DOMPurify from 'dompurify'
+import { getActiveAgentId } from '../api'
+import { INTERACTION_LINES } from '../constants/interaction'
 
 // Markdown 渲染
 function renderMarkdown(text) {
@@ -163,6 +165,44 @@ const chatText = ref('')
 const chatVisible = ref(false)
 const recentMemories = ref([])
 let chatTimer = null
+
+function handleLive2DClick(e) {
+  const canvas = document.getElementById('live2d')
+  if (!canvas) return
+  
+  const rect = canvas.getBoundingClientRect()
+  
+  if (
+    e.clientX >= rect.left && 
+    e.clientX <= rect.right && 
+    e.clientY >= rect.top && 
+    e.clientY <= rect.bottom
+  ) {
+    const relativeY = (e.clientY - rect.top) / rect.height
+    
+    let area = 'body'
+    if (relativeY < 0.35) {
+      area = 'head'
+    } else if (relativeY < 0.60) {
+      area = 'chest'
+    } else {
+      area = 'body'
+    }
+    
+    // 获取当前角色并触发随机台词
+    const agentId = getActiveAgentId()
+    const lines = INTERACTION_LINES[agentId] || INTERACTION_LINES['pero']
+    const areaLines = lines[area]
+    const randomLine = areaLines[Math.floor(Math.random() * areaLines.length)]
+    
+    showChatBubble(randomLine)
+
+    // 同时触发自定义事件，兼容其他可能的监听
+    window.dispatchEvent(new CustomEvent('ppc:waifu-click', { 
+      detail: { area, line: randomLine, agentId } 
+    }))
+  }
+}
 
 async function loadRecentMemories() {
   try {
@@ -325,15 +365,16 @@ onMounted(async () => {
   updateTime()
   fetchLocationAndWeather()
   try {
+    const agentId = getActiveAgentId()
     const loc = localStorage.getItem('ppc.location')
     if (loc) locationText.value = loc
     const wet = localStorage.getItem('ppc.weather')
     if (wet) weatherText.value = wet
-    const m = String(localStorage.getItem('ppc.mood') || '').trim()
+    const m = String(localStorage.getItem(`ppc.${agentId}.mood`) || '').trim()
     if (m) moodText.value = m
-    const md = String(localStorage.getItem('ppc.mind') || '').trim()
+    const md = String(localStorage.getItem(`ppc.${agentId}.mind`) || '').trim()
     if (md) mindText.value = md
-    const vb = String(localStorage.getItem('ppc.vibe') || '').trim()
+    const vb = String(localStorage.getItem(`ppc.${agentId}.vibe`) || '').trim()
     if (vb) vibeText.value = vb
   } catch {}
   tick = setInterval(() => { updateTime() }, 1000)
@@ -346,6 +387,30 @@ onMounted(async () => {
   window.addEventListener('ppc:vibe', onVibe)
   window.addEventListener('ppc:chat', onChat)
   window.addEventListener('waifu-message', onWaifuMessage)
+  
+  // 监听并应用台词更新
+  window.addEventListener('ppc:waifu-texts-updated', (e) => {
+    try {
+      const newTexts = e.detail
+      if (newTexts) {
+        window.WAIFU_TEXTS = { ...(window.WAIFU_TEXTS || {}), ...newTexts }
+        console.log('[Live2D] Texts updated dynamically')
+      }
+    } catch (err) {
+      console.warn('Failed to update waifu texts:', err)
+    }
+  })
+
+  // 初始加载本地存储的自定义台词
+  try {
+    const agentId = getActiveAgentId()
+    const savedTexts = localStorage.getItem(`ppc.${agentId}.waifu.texts`)
+    if (savedTexts) {
+      const parsed = JSON.parse(savedTexts)
+      window.WAIFU_TEXTS = { ...(window.WAIFU_TEXTS || {}), ...parsed }
+    }
+  } catch (e) {}
+
   window.addEventListener('ppc:pero-status-updated', (e) => {
     const status = e.detail
     moodText.value = status.mood || '--'

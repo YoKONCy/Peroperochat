@@ -2,10 +2,14 @@ import Dexie from 'dexie'
 
 export const db = new Dexie('PeroperoChatDB')
 
-db.version(3).stores({
+db.version(4).stores({
   conversations: '++id, timestamp, source, session_id',
   settings: 'key',
-  memories: '++id, *tags, importance, timestamp, msgTimestamp, type, source'
+  memories: '++id, *tags, importance, timestamp, msgTimestamp, type, source, agentId'
+}).upgrade(trans => {
+  return trans.table('memories').toCollection().modify(m => {
+    if (!m.agentId) m.agentId = 'pero';
+  });
 })
 
 // Initialize default settings if not exists

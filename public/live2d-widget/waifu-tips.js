@@ -156,7 +156,14 @@ function loadWidget(config) {
         
         // 如果指定了部位，尝试从 WAIFU_TEXTS 中找对应部位的台词
         if (area && T[`click_${area}_01`]) {
-          const areaTexts = [T[`click_${area}_01`], T[`click_${area}_02`]].filter(Boolean)
+          const areaTexts = []
+          // 尝试读取多条台词，直到没有为止（假设最大 10 条）
+          for (let i = 1; i <= 10; i++) {
+            const key = `click_${area}_${String(i).padStart(2, '0')}`
+            if (T[key]) areaTexts.push(T[key])
+            else break
+          }
+          
           if (areaTexts.length > 0) {
             t = randomSelection(areaTexts)
           }

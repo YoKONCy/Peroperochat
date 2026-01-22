@@ -26,7 +26,7 @@
               <div v-if="Array.isArray(m.content)" class="multimodal-content">
                 <template v-for="(part, pi) in m.content" :key="pi">
                   <div v-if="part.type === 'text'" v-html="renderMarkdown(part.text)"></div>
-                  <div v-else-if="part.type === 'image_url'" class="message-image-container">
+                  <div v-else-if="part.type === 'image_url' && part.image_url" class="message-image-container">
                     <img :src="part.image_url.url" class="message-image" @click="previewImage(part.image_url.url)" />
                   </div>
                 </template>

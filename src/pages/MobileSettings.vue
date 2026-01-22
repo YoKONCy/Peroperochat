@@ -34,6 +34,57 @@
         <Transition name="fade-slide" mode="out-in">
           <div :key="tab" class="content-card">
             
+            <!-- 角色选择 -->
+            <div v-if="tab === 'role'" class="section">
+              <div class="section-header">
+                <el-icon><Avatar /></el-icon>
+                <h3>角色选择</h3>
+              </div>
+              <el-form label-position="top">
+                <div class="info-banner">
+                  <p>在此选择当前与你交互的 AI 角色。</p>
+                </div>
+                <el-form-item label="当前交互角色">
+                  <el-radio-group v-model="activeAgentId" size="large" class="role-group">
+                    <el-radio-button label="pero">Pero (软萌AI)</el-radio-button>
+                    <el-radio-button label="nana">Nana (雌小鬼)</el-radio-button>
+                  </el-radio-group>
+                </el-form-item>
+              </el-form>
+            </div>
+
+            <!-- 规则配置 (New) -->
+            <div v-if="tab === 'rules'" class="section">
+              <div class="section-header">
+                <el-icon><Edit /></el-icon>
+                <h3>规则配置</h3>
+              </div>
+              <el-form label-position="top">
+                <div class="info-banner">
+                  <p>分别为不同角色配置专属的规则补充。</p>
+                </div>
+                <el-form-item label="选择要配置的角色">
+                  <el-radio-group v-model="editingRuleAgentId" size="large">
+                    <el-radio-button label="pero">Pero</el-radio-button>
+                    <el-radio-button label="nana">Nana</el-radio-button>
+                  </el-radio-group>
+                </el-form-item>
+                <el-form-item :label="`${AGENTS[editingRuleAgentId]?.name || '角色'} 规则补充 (注入到 <Output_Constraint> 末尾)`">
+                  <el-input 
+                    v-model="ruleSupplement" 
+                    type="textarea" 
+                    :rows="8" 
+                    placeholder="在此输入 <ADD>...</ADD> 规则，例如：
+<ADD>
+- 禁止使用颜文字
+- 必须每句话都带“喵”
+</ADD>" 
+                  />
+                </el-form-item>
+                <el-button type="primary" class="full-btn" @click="saveRuleSettings">保存 {{ AGENTS[editingRuleAgentId]?.name }} 的规则</el-button>
+              </el-form>
+            </div>
+
             <!-- API 设置 -->
             <div v-if="tab === 'api'" class="section">
               <div class="section-header">
@@ -146,6 +197,19 @@
                 <div v-if="filteredMemories.length === 0" class="empty">暂无相关记忆</div>
                 <div v-for="m in filteredMemories" :key="m.id" class="memory-item">
                   <div class="memory-content markdown-body" v-html="renderMarkdown(m.content)"></div>
+                  <div v-if="m.tags && m.tags.length" class="memory-tags">
+                    <el-tag 
+                      v-for="tag in m.tags" 
+                      :key="tag" 
+                      size="small" 
+                      type="info" 
+                      effect="plain" 
+                      round
+                      class="m-tag"
+                    >
+                      {{ tag }}
+                    </el-tag>
+                  </div>
                   <div class="memory-footer">
                     <span class="m-time">{{ m.realTime || '未知时间' }}</span>
                     <el-button type="danger" size="small" link @click="deleteMemory(m.id)">删除</el-button>
@@ -179,16 +243,17 @@ import { ref, computed, onMounted, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import axios from 'axios'
 import { ElMessageBox, ElMessage } from 'element-plus'
-import { getDefaultPrompts, resetAll } from '../api'
+import { getDefaultPrompts, resetAll, AGENTS, getActiveAgentId, setActiveAgentId } from '../api'
 import { db } from '../db'
 import { marked } from 'marked'
 import DOMPurify from 'dompurify'
 import { 
   Search, Delete, InfoFilled, Connection, ArrowLeft, 
-  Cpu, Operation, User, Collection, Warning, Cpu as ApiIcon 
+  Cpu, Operation, User, Collection, Warning, Cpu as ApiIcon, Avatar,
+  Edit
 } from '@element-plus/icons-vue'
 
-const tab = ref('api')
+const tab = ref('role')
 
 // Markdown 渲染
 function renderMarkdown(text) {
@@ -211,13 +276,43 @@ function cleanMessageContent(text) {
 }
 
 const menuItems = [
+  { id: 'role', label: '角色', icon: Avatar },
+  { id: 'rules', label: '规则', icon: Edit },
   { id: 'api', label: 'API', icon: Cpu },
   { id: 'remote', label: '远程', icon: Connection },
-  { id: 'model', label: '参数', icon: Operation },
-  { id: 'user', label: '设定', icon: User },
+  { id: 'model', label: '模型', icon: Operation },
+  { id: 'user', label: '用户', icon: User },
   { id: 'memory', label: '记忆', icon: Collection },
   { id: 'danger', label: '危险', icon: Warning },
 ]
+
+// Role & Rules Settings
+const activeAgentId = ref(getActiveAgentId())
+const editingRuleAgentId = ref('pero') // 当前正在编辑规则的角色ID
+const ruleSupplement = ref('')
+
+// Load rule supplement for the agent currently being edited
+const loadRuleSupplement = () => {
+  const agentId = editingRuleAgentId.value
+  ruleSupplement.value = localStorage.getItem(`ppc.${agentId}.ruleSupplement`) || ''
+}
+
+// Watch active agent change (Global Switch)
+watch(activeAgentId, (newVal) => {
+  setActiveAgentId(newVal)
+  ElMessage.success(`已切换为 ${AGENTS[newVal].name}`)
+})
+
+// Watch editing agent change (Reload Rules)
+watch(editingRuleAgentId, () => {
+  loadRuleSupplement()
+})
+
+const saveRuleSettings = () => {
+  const agentId = editingRuleAgentId.value
+  localStorage.setItem(`ppc.${agentId}.ruleSupplement`, ruleSupplement.value)
+  ElMessage.success(`${AGENTS[agentId].name} 的规则已保存`)
+}
 
 const modelName = ref('请先获取模型')
 const apiBase = ref('https://api.openai.com')
@@ -401,6 +496,10 @@ onMounted(async () => {
   systemPrompt.value = lsGet('ppc.systemPrompt', r.system_prompt_default)
   personaText.value = lsGet('ppc.personaText', r.persona_prompt_default)
   postSystemPrompt.value = lsGet('ppc.postSystemPrompt', r.post_prompt_default)
+
+  // Initialize editing rule agent ID
+  editingRuleAgentId.value = activeAgentId.value
+  loadRuleSupplement()
 })
 </script>
 
@@ -587,83 +686,8 @@ onMounted(async () => {
   color: #64748b;
 }
 
-/* 记忆列表 */
-.search-input {
-  margin-bottom: 16px;
-}
-
-.memory-list {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  max-height: 500px;
-  overflow-y: auto;
-}
-
-.memory-item {
-  background: white;
-  padding: 12px;
-  border-radius: 12px;
-  border: 1px solid #f1f5f9;
-}
-
-.memory-content {
-  font-size: 14px;
-  color: #334155;
-  margin-bottom: 8px;
-  line-height: 1.5;
-}
-
-.memory-footer {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-}
-
-.m-time {
-  font-size: 11px;
-  color: #94a3b8;
-}
-
-.danger-card {
-  background: #fef2f2;
-  border: 1px solid #fee2e2;
-  border-radius: 16px;
-  padding: 16px;
-  text-align: center;
-}
-
-.danger-card h4 {
-  margin: 0 0 8px;
-  color: #991b1b;
-}
-
-.danger-card p {
-  font-size: 13px;
-  color: #b91c1c;
-  margin-bottom: 16px;
-}
-
-.empty {
-  text-align: center;
-  padding: 40px 0;
-  color: #94a3b8;
-  font-size: 14px;
-}
-
-/* 动画 */
-.fade-slide-enter-active,
-.fade-slide-leave-active {
-  transition: all 0.3s ease;
-}
-
-.fade-slide-enter-from {
-  opacity: 0;
-  transform: translateY(10px);
-}
-
-.fade-slide-leave-to {
-  opacity: 0;
-  transform: translateY(-10px);
+/* New Role Group Styles */
+.role-group {
+  width: 100%;
 }
 </style>
