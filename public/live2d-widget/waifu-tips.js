@@ -93,6 +93,18 @@ function loadWidget(config) {
     messageTimer = setTimeout(() => { sessionStorage.removeItem("waifu-text"); tips.classList.remove("waifu-tips-active") }, timeout)
   }
 
+  // 监听角色切换事件并同步台词
+  window.addEventListener("ppc:agent-switched", (e) => {
+    const agentId = e.detail && e.detail.agentId
+    if (agentId) {
+        console.log(`[WaifuTips] Agent switched to: ${agentId}, updating interaction lines.`)
+        // 实际上台词逻辑是实时从全局获取的，这里可以显示一条欢迎语
+        const T = window.WAIFU_TEXTS || {}
+        const welcome = (agentId === 'nana') ? "哈？杂鱼主人，你怎么又把我换回来了？" : "锵锵！Pero 酱回来啦！"
+        showMessage(welcome, 4000, 10)
+    }
+  })
+
   ;(function initModel() {
     let modelId = localStorage.getItem("modelId"), modelTexturesId = localStorage.getItem("modelTexturesId")
     if (modelId === null) {
@@ -128,6 +140,42 @@ function loadWidget(config) {
       for (let config of (C.click || [])) {
         if (!event.target.matches(config.selector)) continue;
         
+        // --- CUSTOM INTERACTION LOGIC START ---
+        // 拦截 Live2D 点击，使用自定义的部位判定和台词系统
+        if (config.selector === '#live2d' || config.selector === '#waifu #live2d') {
+             try {
+                 const rect = event.target.getBoundingClientRect()
+                 // 针对 1 头身 Live2D 优化后的判定比例
+                   const relativeY = (event.clientY - rect.top) / rect.height
+                   let area = 'body'
+                   if (relativeY < 0.60) area = 'head'       // 头部范围大幅增大 (原 0.45 -> 0.60)
+                   else if (relativeY < 0.80) area = 'chest' // 胸部范围下移 (原 0.65 -> 0.80)
+                   
+                   console.log(`[WaifuTips] Clicked area: ${area} (Y: ${relativeY.toFixed(2)})`)
+
+                 let agentId = 'pero'
+                 if (typeof window.WAIFU_GET_AGENT_ID === 'function') {
+                     agentId = window.WAIFU_GET_AGENT_ID()
+                 } else {
+                     agentId = localStorage.getItem('ppc.activeAgent') || 'pero'
+                 }
+
+                 const allLines = window.WAIFU_INTERACTION_LINES
+                 if (allLines) {
+                     const roleLines = allLines[agentId] || allLines['pero']
+                     const areaLines = roleLines[area] || roleLines['body']
+                     if (areaLines && areaLines.length > 0) {
+                         const text = Array.isArray(areaLines) ? areaLines[Math.floor(Math.random() * areaLines.length)] : areaLines
+                         showMessage(text, 4000, 9)
+                         return // 拦截成功，不再执行后续默认逻辑
+                     }
+                 }
+             } catch (e) {
+                 console.error('[WaifuTips] Interaction error:', e)
+             }
+        }
+        // --- CUSTOM INTERACTION LOGIC END ---
+
         let t;
         if (Array.isArray(config.text)) {
           // Sequential playback

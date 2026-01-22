@@ -44,7 +44,7 @@
     <!-- 原本的卡片已拆散到顶部，这里保留 Live2D 的挂载容器 -->
   </div>
 
-  <div id="l2d-panel" class="l2d-panel" v-bind="$attrs" @click="handleLive2DClick">
+  <div id="l2d-panel" class="l2d-panel" v-bind="$attrs">
     <div v-if="chatVisible" class="chat-bubble-container">
       <div class="chat-bubble markdown-body" v-html="renderMarkdown(chatText)">
       </div>
@@ -115,6 +115,11 @@ function loadAutoload() {
   })
 }
 
+const handleCanvasClick = (e) => {
+  e.stopPropagation()
+  handleLive2DClick(e)
+}
+
 function moveWidgetIntoPanel() {
   const panel = document.getElementById('l2d-panel')
   if (!panel) return // 如果面板不存在，直接返回，避免报错
@@ -165,44 +170,6 @@ const chatText = ref('')
 const chatVisible = ref(false)
 const recentMemories = ref([])
 let chatTimer = null
-
-function handleLive2DClick(e) {
-  const canvas = document.getElementById('live2d')
-  if (!canvas) return
-  
-  const rect = canvas.getBoundingClientRect()
-  
-  if (
-    e.clientX >= rect.left && 
-    e.clientX <= rect.right && 
-    e.clientY >= rect.top && 
-    e.clientY <= rect.bottom
-  ) {
-    const relativeY = (e.clientY - rect.top) / rect.height
-    
-    let area = 'body'
-    if (relativeY < 0.35) {
-      area = 'head'
-    } else if (relativeY < 0.60) {
-      area = 'chest'
-    } else {
-      area = 'body'
-    }
-    
-    // 获取当前角色并触发随机台词
-    const agentId = getActiveAgentId()
-    const lines = INTERACTION_LINES[agentId] || INTERACTION_LINES['pero']
-    const areaLines = lines[area]
-    const randomLine = areaLines[Math.floor(Math.random() * areaLines.length)]
-    
-    showChatBubble(randomLine)
-
-    // 同时触发自定义事件，兼容其他可能的监听
-    window.dispatchEvent(new CustomEvent('ppc:waifu-click', { 
-      detail: { area, line: randomLine, agentId } 
-    }))
-  }
-}
 
 async function loadRecentMemories() {
   try {
@@ -400,6 +367,10 @@ onMounted(async () => {
       console.warn('Failed to update waifu texts:', err)
     }
   })
+
+  // 暴露配置给全局 waifu-tips.js 使用
+  window.WAIFU_INTERACTION_LINES = INTERACTION_LINES
+  window.WAIFU_GET_AGENT_ID = getActiveAgentId
 
   // 初始加载本地存储的自定义台词
   try {

@@ -300,6 +300,12 @@ const loadRuleSupplement = () => {
 // Watch active agent change (Global Switch)
 watch(activeAgentId, (newVal) => {
   setActiveAgentId(newVal)
+  
+  // 触发全局事件通知 Live2D 角色已切换，以便同步更新台词
+  window.dispatchEvent(new CustomEvent('ppc:agent-switched', { 
+    detail: { agentId: newVal } 
+  }))
+  
   ElMessage.success(`已切换为 ${AGENTS[newVal].name}`)
 })
 

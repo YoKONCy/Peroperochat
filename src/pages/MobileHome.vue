@@ -57,7 +57,7 @@
       <div class="expanded-input-overlay" v-if="showTopicList" @click.self="showTopicList = false">
         <div class="expanded-input-card topic-list-card">
           <div class="card-header">
-            <span class="title">Pero 的秘密话题</span>
+            <span class="title">{{ AGENTS[getActiveAgentId()]?.name || 'Pero' }} 的秘密话题</span>
             <button class="close-btn" @click="showTopicList = false"><i class="fas fa-times"></i></button>
           </div>
           
@@ -93,7 +93,7 @@
       <div class="expanded-input-overlay" v-if="isExpanded" @click.self="collapseInput">
         <div class="expanded-input-card">
           <div class="card-header">
-            <span class="title">与 Pero 对话</span>
+            <span class="title">与 {{ AGENTS[getActiveAgentId()]?.name || 'Pero' }} 对话</span>
             <button class="close-btn" @click="collapseInput"><i class="fas fa-times"></i></button>
           </div>
           <div class="image-preview-container" v-if="pendingImage">
@@ -172,7 +172,7 @@ import { LocalNotifications } from '@capacitor/local-notifications'
 import { Capacitor } from '@capacitor/core'
 import Live2DWidget from '../components/Live2DWidget.vue'
 import HistoryOverlay from '../components/HistoryOverlay.vue'
-import { chat as chatApi, chatStream, getRelevantMemories, saveMemory, deleteMemoriesByMsgTimestamp, getDefaultPrompts, getActiveAgentId } from '../api'
+import { chat as chatApi, chatStream, getRelevantMemories, saveMemory, deleteMemoriesByMsgTimestamp, getDefaultPrompts, getActiveAgentId, AGENTS } from '../api'
 import { Promotion, UserFilled } from '@element-plus/icons-vue'
 
 const router = useRouter()
@@ -208,10 +208,48 @@ if (!sessionId.value) {
   lsSet('ppc.sessionId', sessionId.value)
 }
 
-// 定时提醒任务列表
-const reminders = ref(lsGet('ppc.reminders', []))
-// 主动话题列表
-const topics = ref(lsGet('ppc.topics', []))
+// 获取当前 Agent 的存储 Key
+const getAgentStoreKey = (type) => `ppc.${getActiveAgentId()}.${type}`
+
+// 定时提醒任务列表 (响应式，需在切换角色时更新)
+const reminders = ref([])
+// 主动话题列表 (响应式，需在切换角色时更新)
+const topics = ref([])
+
+// 加载当前角色的数据
+const loadAgentData = () => {
+  reminders.value = lsGet(getAgentStoreKey('reminders'), [])
+  topics.value = lsGet(getAgentStoreKey('topics'), [])
+  
+  // 同时也加载当前角色的聊天记录
+  const saved = lsGet(getAgentStoreKey('messages'), [])
+  if (Array.isArray(saved)) {
+    messages.value = saved
+      .filter(m => m && typeof m === 'object' && typeof m.role === 'string')
+      .map(m => ({ 
+        role: String(m.role), 
+        content: String(m.content || ''),
+        timestamp: m.timestamp // 恢复时间戳用于关联记忆
+      }))
+  } else {
+    messages.value = []
+  }
+
+  console.log(`[Storage] Data loaded for ${getActiveAgentId()}`)
+  
+  // 滚动到底部
+  nextTick(() => {
+    scrollToBottom()
+  })
+}
+
+// 监听角色切换事件（来自设置页面的全局事件）
+window.addEventListener('ppc:agent-switched', () => {
+  loadAgentData()
+})
+
+// 初始化加载
+loadAgentData()
 
 // 初始化通知权限
 const initNotifications = async () => {
@@ -277,17 +315,17 @@ function checkReminders() {
   })
   if (expiredReminders.length > 0) {
     reminders.value = reminders.value.filter(r => !expiredReminders.includes(r))
-    lsSet('ppc.reminders', reminders.value)
+    lsSet(getAgentStoreKey('reminders'), reminders.value)
   }
 
   if (toTriggerReminder.length > 0) {
     const task = toTriggerReminder[0]
     reminders.value = reminders.value.filter(r => r.time !== task.time)
-    lsSet('ppc.reminders', reminders.value)
-    onSend(`【管理系统提醒：Pero，你与主人的约定时间已到，请主动提醒主人。约定内容：${task.task}】`)
+    lsSet(getAgentStoreKey('reminders'), reminders.value)
+    onSend(`【管理系统提醒：${AGENTS[getActiveAgentId()]?.name || 'Pero'}，你与主人的约定时间已到，请主动提醒主人。约定内容：${task.task}】`)
     
     // 发送系统级通知 (App环境)
-    sendSystemNotification('Pero 的任务提醒', task.task)
+    sendSystemNotification(`${AGENTS[getActiveAgentId()]?.name || 'Pero'} 的任务提醒`, task.task)
     return // 优先处理任务
   }
 
@@ -315,7 +353,7 @@ function checkReminders() {
     console.log(`[Topic] Cleaning ${staleIndices.length} stale topics (>24h)`)
     // 倒序删除
     staleIndices.sort((a, b) => b - a).forEach(i => topics.value.splice(i, 1))
-    lsSet('ppc.topics', topics.value)
+    lsSet(getAgentStoreKey('topics'), topics.value)
   }
 
   if (dueIndices.length > 0) {
@@ -337,7 +375,8 @@ function checkReminders() {
     if (triggeredTopics.length > 0) {
       const topicListStr = triggeredTopics.map(t => `- ${t.topic} (原定: ${formatReminderTime(t.time)})`).join('\n')
       
-      const prompt = `【管理系统提醒：Pero，以下是你之前想找主人聊的话题（已汇总）：\n${topicListStr}\n\n请将这些话题自然地融合在一起，作为一次主动的聊天开场。不要生硬地列举，要用你可爱的语气把它们串联起来！去和主人聊天吧！】`
+      const agentName = AGENTS[getActiveAgentId()]?.name || 'Pero'
+      const prompt = `【管理系统提醒：${agentName}，以下是你之前想找主人聊的话题（已汇总）：\n${topicListStr}\n\n请将这些话题自然地融合在一起，作为一次主动的聊天开场。不要生硬地列举，要用你可爱的语气把它们串联起来！去和主人聊天吧！】`
       
       onSend(prompt)
       
@@ -352,7 +391,7 @@ function checkReminders() {
         topics.value.splice(i, 1)
       })
       
-      lsSet('ppc.topics', topics.value)
+      lsSet(getAgentStoreKey('topics'), topics.value)
     }
   }
 }
@@ -373,7 +412,7 @@ onMounted(() => {
 // 移除提醒任务
 function removeReminder(idx) {
   reminders.value.splice(idx, 1)
-  lsSet('ppc.reminders', reminders.value)
+  lsSet(getAgentStoreKey('reminders'), reminders.value)
 }
 
 // 图片处理
@@ -416,13 +455,13 @@ const deleteTopic = async (idx) => {
     }
   }
   topics.value.splice(idx, 1)
-  lsSet('ppc.topics', topics.value)
+  lsSet(getAgentStoreKey('topics'), topics.value)
 }
 
 // 切换话题揭晓状态
 function toggleTopicReveal(idx) {
   topics.value[idx].revealed = !topics.value[idx].revealed
-  lsSet('ppc.topics', topics.value)
+  lsSet(getAgentStoreKey('topics'), topics.value)
 }
 
 // 处理角色点击事件（增加部位判断）
@@ -531,7 +570,7 @@ const deleteReminder = async (idx) => {
     }
   }
   reminders.value.splice(idx, 1)
-  lsSet('ppc.reminders', reminders.value)
+  lsSet(getAgentStoreKey('reminders'), reminders.value)
 }
 
 // 格式化时间显示
@@ -594,7 +633,7 @@ function persistMessages() {
       content: m.content, 
       timestamp: m.timestamp 
     })); 
-    lsSet('ppc.messages', arr) 
+    lsSet(getAgentStoreKey('messages'), arr) 
   } catch(_) {}
 }
 
@@ -811,7 +850,7 @@ function parsePeroStatus(content) {
           const rId = Date.now() + Math.floor(Math.random() * 1000)
           data.id = rId
           reminders.value.push(data)
-          lsSet('ppc.reminders', reminders.value)
+          lsSet(getAgentStoreKey('reminders'), reminders.value)
           console.log('新提醒已添加:', data)
           // 立即向系统预设未来通知
           scheduleFutureNotification(rId, 'Pero 的任务提醒', data.task, data.time)
@@ -837,7 +876,7 @@ function parsePeroStatus(content) {
           // 初始设为不显示（秘密）
           data.revealed = false
           topics.value.push(data)
-          lsSet('ppc.topics', topics.value)
+          lsSet(getAgentStoreKey('topics'), topics.value)
           console.log('新主动话题已添加:', data)
           // 立即向系统预设未来通知
           scheduleFutureNotification(tId, 'Pero 想找你聊天', data.topic, data.time)
@@ -1137,11 +1176,12 @@ async function deleteMessageAt(idx) {
 
 // 重置 Pero 状态
 function resetPeroState() {
-  localStorage.removeItem('ppc.waifu.texts')
-  localStorage.removeItem('ppc.mood')
-  localStorage.removeItem('ppc.energy')
-  localStorage.removeItem('ppc.vibe')
-  localStorage.removeItem('ppc.mind')
+  const agentId = getActiveAgentId()
+  localStorage.removeItem(`ppc.${agentId}.waifu.texts`)
+  localStorage.removeItem(`ppc.${agentId}.mood`)
+  localStorage.removeItem(`ppc.${agentId}.energy`)
+  localStorage.removeItem(`ppc.${agentId}.vibe`)
+  localStorage.removeItem(`ppc.${agentId}.mind`)
   window.dispatchEvent(new CustomEvent('ppc:waifu-texts-updated', { detail: {} }))
   window.dispatchEvent(new CustomEvent('ppc:mood', { detail: '' }))
   window.dispatchEvent(new CustomEvent('ppc:vibe', { detail: '' }))
@@ -1323,16 +1363,6 @@ onMounted(() => {
     lsSet('ppc.postSystemPrompt', savedPostPrompt.replace(oldLimit, newLimit))
   }
 
-  const saved = lsGet('ppc.messages', [])
-  if (Array.isArray(saved)) {
-    messages.value = saved
-      .filter(m => m && typeof m === 'object' && typeof m.role === 'string')
-      .map(m => ({ 
-        role: String(m.role), 
-        content: String(m.content || ''),
-        timestamp: m.timestamp // 恢复时间戳用于关联记忆
-      }))
-  }
   const base = String(lsGet('ppc.apiBase', apiBase.value) || '').trim()
   const model = String(lsGet('ppc.modelName', modelName.value) || '').trim()
   const ms = lsGet('ppc.modelSettings', null)
