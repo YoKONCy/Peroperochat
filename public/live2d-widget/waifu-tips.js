@@ -132,7 +132,12 @@ function loadWidget(config) {
         
         // 1. 从本地存储重新加载该角色的自定义台词，实现真正的动态切换
         try {
-          const saved = localStorage.getItem(`ppc.${agentId}.waifu.texts`)
+          let saved = localStorage.getItem(`ppc.${agentId}.waifu.texts`)
+          // 兼容性回退：如果是 pero 且没有新版数据，尝试读取旧版全局数据
+          if (!saved && agentId === 'pero') {
+              saved = localStorage.getItem('ppc.waifu.texts')
+          }
+
           if (saved) {
             window.WAIFU_TEXTS = JSON.parse(saved)
           } else {

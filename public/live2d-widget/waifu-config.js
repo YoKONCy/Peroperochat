@@ -35,7 +35,9 @@
     try {
       let v = newData
       if (!v) {
-        const saved = localStorage.getItem('ppc.waifu.texts')
+        // [Modified] Support Multi-Agent Storage
+        const agentId = localStorage.getItem('ppc.activeAgent') || 'pero'
+        const saved = localStorage.getItem(`ppc.${agentId}.waifu.texts`) || localStorage.getItem('ppc.waifu.texts')
         if (saved) v = JSON.parse(saved)
         else {
           const r = await fetch('/live2d-widget/waifu-texts.json')
