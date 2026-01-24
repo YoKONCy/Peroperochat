@@ -820,15 +820,21 @@ function parsePeroStatus(content) {
         // 新版部位格式
         const parts = ['head', 'chest', 'body']
         
+        // 预处理 data keys，支持大小写不敏感
+        const lowerData = {}
+        Object.keys(data).forEach(k => {
+          lowerData[k.toLowerCase()] = data[k]
+        })
+
         parts.forEach(part => {
-          if (data[part] && Array.isArray(data[part])) {
+          if (lowerData[part] && Array.isArray(lowerData[part])) {
             // 1. 清除该部位旧的所有台词 (假设最大 20 条)
             for (let i = 1; i <= 20; i++) {
               delete cur[`click_${part}_${String(i).padStart(2, '0')}`]
             }
             
             // 2. 写入新台词
-            data[part].forEach((msg, idx) => {
+            lowerData[part].forEach((msg, idx) => {
               if (msg) {
                 cur[`click_${part}_${String(idx + 1).padStart(2, '0')}`] = msg
               }
@@ -837,10 +843,10 @@ function parsePeroStatus(content) {
         })
 
         // 同时兼容旧版，如果 object 里有 general 字段或者直接取前几个作为通用
-        if (data.general) {
-          cur.click_messages_01 = data.general[0] || ''
-          cur.click_messages_02 = data.general[1] || ''
-          cur.click_messages_03 = data.general[2] || ''
+        if (lowerData.general) {
+          cur.click_messages_01 = lowerData.general[0] || ''
+          cur.click_messages_02 = lowerData.general[1] || ''
+          cur.click_messages_03 = lowerData.general[2] || ''
         }
       }
       

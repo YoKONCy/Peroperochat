@@ -21,6 +21,27 @@ function loadWidget(config) {
     </div>`)
   setTimeout(() => { document.getElementById("waifu").style.bottom = 0 }, 0)
 
+  // 初始化加载当前角色的自定义台词
+  ;(function initWaifuTexts() {
+    const agentId = localStorage.getItem('ppc.activeAgent') || 'pero'
+    try {
+      let saved = localStorage.getItem(`ppc.${agentId}.waifu.texts`)
+      // 兼容性回退
+      if (!saved && agentId === 'pero') {
+          saved = localStorage.getItem('ppc.waifu.texts')
+      }
+      if (saved) {
+        window.WAIFU_TEXTS = JSON.parse(saved)
+        console.log(`[WaifuTips] Initialized texts for ${agentId}`)
+      } else {
+        window.WAIFU_TEXTS = {}
+      }
+    } catch (err) {
+      console.error('[WaifuTips] Failed to init texts:', err)
+      window.WAIFU_TEXTS = {}
+    }
+  })()
+
   function randomSelection(obj) { return Array.isArray(obj) ? obj[Math.floor(Math.random() * obj.length)] : obj }
   let userAction = false, userActionTimer, messageTimer
   window.addEventListener("mousemove", () => userAction = true)
