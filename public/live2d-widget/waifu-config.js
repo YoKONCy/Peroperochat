@@ -46,6 +46,7 @@
       }
       const ln = [v.lateNight_01, v.lateNight_02].filter(Boolean)
       window.WAIFU_TEXTS = {
+        ...v, // [Fix] 保留所有原始键值，防止 waifu-tips.js 找不到 idleMessages_xx 或 click_messages_xx
         idleMessages: [v.idleMessages_01, v.idleMessages_02].filter(Boolean),
         visibilityBack: v.visibilityBack || fallback.WAIFU_TEXTS.visibilityBack,
         welcome: {
@@ -62,7 +63,7 @@
         },
         randTexturesNoClothes: v.randTexturesNoClothes || fallback.WAIFU_TEXTS.randTexturesNoClothes,
         randTexturesSuccess: v.randTexturesSuccess || fallback.WAIFU_TEXTS.randTexturesSuccess,
-        // 保存部位点击台词
+        // 下面的显式映射保留作为兼容，但 ...v 已经涵盖了它们
         click_head_01: v.click_head_01,
         click_head_02: v.click_head_02,
         click_chest_01: v.click_chest_01,
