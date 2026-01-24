@@ -70,7 +70,7 @@ import axios from 'axios'
 import { db } from '../db'
 import { marked } from 'marked'
 import DOMPurify from 'dompurify'
-import { getActiveAgentId } from '../api'
+import { getActiveAgentId, AGENTS } from '../api'
 import { INTERACTION_LINES } from '../constants/interaction'
 
 // Markdown 渲染
@@ -164,7 +164,7 @@ const currentDate = ref('')
 const locationText = ref('')
 const weatherText = ref('')
 const moodText = ref('软萌中')
-const mindText = ref('"Pero要永远跟主人在一起！"')
+const mindText = ref(`"${AGENTS[getActiveAgentId()]?.name || 'Pero'}要永远跟主人在一起！"`)
 const vibeText = ref('--')
 const chatText = ref('')
 const chatVisible = ref(false)
@@ -203,7 +203,9 @@ async function loadRecentMemories() {
 
 function showChatBubble(text) {
   if (!text) return
-  const displayText = text === '__loading__' ? 'Pero正在思考中...' : text
+  const agentId = getActiveAgentId()
+  const agentName = AGENTS[agentId]?.name || 'Pero'
+  const displayText = text === '__loading__' ? `${agentName}正在思考中...` : text
   
   // 先隐藏再显示，确保动画重置
   chatVisible.value = false
@@ -230,7 +232,7 @@ function onRandTextures() {
 }
 
 const onMood = e => { try { moodText.value = String(e.detail || '').trim() || '软萌中' } catch {} }
-const onMind = e => { try { mindText.value = String(e.detail || '').trim() || '"Pero要永远跟主人在一起！"' } catch {} }
+const onMind = e => { try { mindText.value = String(e.detail || '').trim() || `"${AGENTS[getActiveAgentId()]?.name || 'Pero'}要永远跟主人在一起！"` } catch {} }
 const onVibe = e => { try { vibeText.value = String(e.detail || '').trim() || '--' } catch {} }
 const onChat = e => { try { showChatBubble(String(e.detail || '').trim()) } catch {} }
 const onWaifuMessage = e => { try { showChatBubble(String(e.detail.text || '').trim()) } catch {} }

@@ -177,7 +177,7 @@
                 <el-form-item label="我的名字">
                   <el-input v-model="userName" placeholder="填写你的名字" />
                 </el-form-item>
-                <el-form-item label="我的人设 (让 Pero 更好的理解你)">
+                <el-form-item :label="`我的人设 (让 ${AGENTS[getActiveAgentId()]?.name || 'Pero'} 更好的理解你)`">
                   <el-input v-model="userPersonaText" type="textarea" :rows="8" placeholder="例如：性格温柔、喜欢吃甜食..." />
                 </el-form-item>
                 <el-button type="primary" class="full-btn" @click="applyUserSettings">确定</el-button>
@@ -257,22 +257,47 @@ const tab = ref('role')
 
 // Markdown 渲染
 function renderMarkdown(text) {
-  if (!text) return ''
-  const clean = cleanMessageContent(text)
-  const html = marked.parse(clean)
-  return DOMPurify.sanitize(html)
+  try {
+    if (!text) return ''
+    const clean = cleanMessageContent(text)
+    
+    // 更加防御性的 marked 调用
+    let html = ''
+    if (typeof marked === 'function') {
+      html = marked(clean)
+    } else if (marked && typeof marked.parse === 'function') {
+      html = marked.parse(clean)
+    } else {
+      html = String(clean)
+    }
+    
+    return DOMPurify && typeof DOMPurify.sanitize === 'function' 
+      ? DOMPurify.sanitize(html) 
+      : String(html)
+  } catch (e) {
+    console.error('Markdown render error:', e)
+    return String(text || '')
+  }
 }
 
 // 清理消息中的隐藏标签
 function cleanMessageContent(text) {
-  if (!text) return ''
-  if (text === '__loading__') return '正在思考...'
-  
-  // 移除所有 XML 标签及其内容
-  return text
-    .replace(/<([A-Z_]+)>[\s\S]*?<\/\1>/g, '')
-    .replace(/\[\[\[NIT_CALL\]\]\][\s\S]*?\[\[\[NIT_END\]\]\]/g, '')
-    .trim()
+  try {
+    if (typeof text !== 'string') return String(text || '')
+    if (text === '__loading__') {
+      const agentId = getActiveAgentId()
+      const agentName = AGENTS[agentId]?.name || 'Pero'
+      return `${agentName}正在思考...`
+    }
+    
+    // 移除所有 XML 标签及其内容
+    return text
+      .replace(/<([A-Z_]+)>[\s\S]*?<\/\1>/g, '')
+      .replace(/\[\[\[NIT_CALL\]\]\][\s\S]*?\[\[\[NIT_END\]\]\]/g, '')
+      .trim()
+  } catch (e) {
+    return String(text || '')
+  }
 }
 
 const menuItems = [
@@ -355,12 +380,18 @@ const filteredModels = computed(() => {
 })
 
 const filteredMemories = computed(() => {
-  const kw = memorySearch.value.trim().toLowerCase()
-  if (!kw) return allMemories.value
-  return allMemories.value.filter(m => 
-    String(m.content).toLowerCase().includes(kw) || 
-    (m.tags || []).some(t => String(t).toLowerCase().includes(kw))
-  )
+  try {
+    const memories = Array.isArray(allMemories.value) ? allMemories.value : []
+    const kw = (memorySearch.value || '').trim().toLowerCase()
+    if (!kw) return memories
+    return memories.filter(m => 
+      String(m.content || '').toLowerCase().includes(kw) || 
+      (Array.isArray(m.tags) ? m.tags : []).some(t => String(t || '').toLowerCase().includes(kw))
+    )
+  } catch (e) {
+    console.error('Filter memories error:', e)
+    return []
+  }
 })
 
 async function loadMemories() {
@@ -447,8 +478,9 @@ async function fetchModels() {
 
 async function handleResetAll() {
   try {
+    const agentName = AGENTS[getActiveAgentId()]?.name || 'Pero'
     const { value, action } = await ElMessageBox.prompt(
-      '<div class="danger-main-text">主人，真的要让Pero酱忘掉你吗？o(╥﹏╥)o</div>' +
+      `<div class="danger-main-text">主人，真的要让${agentName}忘掉你吗？o(╥﹏╥)o</div>` +
       '<div class="danger-sub-text">（此操作将清空所有数据，如需继续，请在文本框中输入“我们还会再见的...”）</div>',
       '危险操作确认',
       {
@@ -695,5 +727,66 @@ onMounted(async () => {
 /* New Role Group Styles */
 .role-group {
   width: 100%;
+}
+
+/* 记忆管理样式 */
+.search-input {
+  margin-bottom: 16px;
+}
+
+.memory-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  max-height: 500px;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+
+.memory-item {
+  background: white;
+  border-radius: 12px;
+  padding: 12px;
+  border: 1px solid rgba(0, 0, 0, 0.05);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.02);
+}
+
+.memory-content {
+  font-size: 14px;
+  color: #334155;
+  line-height: 1.6;
+  word-break: break-all;
+}
+
+.memory-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 10px 0;
+}
+
+.m-tag {
+  font-size: 11px;
+}
+
+.memory-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-top: 1px solid #f1f5f9;
+  padding-top: 8px;
+  margin-top: 8px;
+}
+
+.m-time {
+  font-size: 11px;
+  color: #94a3b8;
+}
+
+.empty {
+  text-align: center;
+  padding: 40px 0;
+  color: #94a3b8;
+  font-size: 14px;
 }
 </style>

@@ -19,7 +19,7 @@
           <!-- 默认只显示前 50 条，点击“显示更多”后全部显示 -->
           <div v-for="(m, i) in (showAll ? messages.slice().reverse() : messages.slice().reverse().slice(0, 50))" :key="messages.length - 1 - i" :class="['row', m.role]">
             <div class="row-header">
-              <span class="role-tag">{{ m.role === 'user' ? '我' : 'Pero' }}</span>
+              <span class="role-tag">{{ m.role === 'user' ? '我' : (AGENTS[getActiveAgentId()]?.name || 'Pero') }}</span>
               <span class="time">{{ formatTime(m.timestamp) }}</span>
             </div>
             <div class="content markdown-body">
@@ -64,6 +64,7 @@ import { ref, defineProps, defineEmits } from 'vue'
 import { Delete, Refresh, CopyDocument, Close, MessageBox, ArrowDown } from '@element-plus/icons-vue'
 import { marked } from 'marked'
 import DOMPurify from 'dompurify'
+import { getActiveAgentId, AGENTS } from '../api'
 
 const props = defineProps({
   messages: {
@@ -98,7 +99,11 @@ function formatTime(ts) {
 // 清理消息中的隐藏标签
 function cleanMessageContent(text) {
   if (!text) return ''
-  if (text === '__loading__') return '正在思考...'
+  if (text === '__loading__') {
+    const agentId = getActiveAgentId()
+    const agentName = AGENTS[agentId]?.name || 'Pero'
+    return `${agentName}正在思考...`
+  }
   
   // 移除所有 XML 标签及其内容 (因为现在使用 NIT 协议，XML 仅用于内部逻辑)
   // 同时也移除 NIT 调用块，保持历史记录纯净

@@ -7,7 +7,7 @@
       </div>
       <div class="header-title">
         <h2>家庭群聊</h2>
-        <span>Pero & Nana</span>
+        <span>{{ replySettings.map(a => a.name).join(' & ') }}</span>
       </div>
       <div class="header-actions">
         <div class="action-trigger" @click="showSettings = !showSettings" :class="{ active: showSettings }">
@@ -28,11 +28,17 @@
             v-for="(agent, index) in replySettings" 
             :key="agent.id"
             class="agent-control-item"
-            :class="{ disabled: !agent.enabled }"
+            :class="{ 
+              disabled: !agent.enabled,
+              dragging: touchStartIndex === index 
+            }"
             draggable="true"
             @dragstart="handleDragStart(index)"
             @dragover.prevent
             @drop="handleDrop(index)"
+            @touchstart="handleTouchStart(index, $event)"
+            @touchmove.prevent
+            @touchend="handleTouchEnd($event)"
           >
             <div class="drag-handle">
               <el-icon><Menu /></el-icon>
@@ -94,7 +100,7 @@
         <div class="typing-dot"></div>
         <div class="typing-dot"></div>
         <div class="typing-dot"></div>
-        <span>{{ processingAgent }} 正在思考...</span>
+        <span>{{ processingAgent }}正在思考中...</span>
       </div>
     </div>
 
@@ -172,9 +178,40 @@ function handleDragStart(index) {
 }
 
 function handleDrop(index) {
+  if (draggedIndex === null) return
   const item = replySettings.value.splice(draggedIndex, 1)[0]
   replySettings.value.splice(index, 0, item)
   localStorage.setItem('ppc.group.replySettings', JSON.stringify(replySettings.value))
+}
+
+// 移动端触摸支持
+let touchStartY = 0
+const touchStartIndex = ref(null)
+
+function handleTouchStart(index, e) {
+  touchStartY = e.touches[0].clientY
+  touchStartIndex.value = index
+}
+
+function handleTouchEnd(e) {
+  if (touchStartIndex.value === null) return
+  
+  const touchEndY = e.changedTouches[0].clientY
+  const deltaY = touchEndY - touchStartY
+  
+  // 估算移动了多少个位置 (每个 item 高度约 50px)
+  const moveSteps = Math.round(deltaY / 50)
+  if (moveSteps !== 0) {
+    let targetIndex = touchStartIndex.value + moveSteps
+    targetIndex = Math.max(0, Math.min(targetIndex, replySettings.value.length - 1))
+    
+    if (touchStartIndex.value !== targetIndex) {
+      draggedIndex = touchStartIndex.value
+      handleDrop(targetIndex)
+    }
+  }
+  
+  touchStartIndex.value = null
 }
 
 watch(replySettings, (newVal) => {
@@ -323,11 +360,15 @@ async function generateResponse(agentId) {
     }
 
     // 1. 系统提示词
+    const otherAgents = Object.values(AGENTS)
+      .filter(a => a.name !== config.name)
+      .map(a => a.name)
+      .join('、')
     const systemPrompt = config.system_prompt + '\n' + config.persona_prompt + memoryContext + '\n' + `
 <Output_Constraint>
 回复要求:
 1. 你的名字是 ${config.name}。
-2. 你正在大家庭的群聊中，成员包括你、Pero和主人。
+2. 你正在大家庭的群聊中，成员包括你、${otherAgents}和主人。
 3. 请根据上下文回复用户或其他人的话。
 4. 最好控制在3句话，30字以内，保持简短。
 </Output_Constraint>
@@ -519,11 +560,20 @@ async function generateResponse(agentId) {
   border: 1px solid #f1f5f9;
   transition: all 0.2s;
   user-select: none;
+  touch-action: none;
 }
 
 .agent-control-item.disabled {
   opacity: 0.6;
   background: #f8fafc;
+}
+
+.agent-control-item.dragging {
+  background: #f1f5f9;
+  border-color: #cbd5e1;
+  transform: scale(1.02);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+  z-index: 10;
 }
 
 .drag-handle {
@@ -598,6 +648,7 @@ async function generateResponse(agentId) {
 .message-row {
   display: flex;
   gap: 12px;
+  width: 100%;
   max-width: 92%;
   animation: message-in 0.3s ease-out;
 }
@@ -661,6 +712,8 @@ async function generateResponse(agentId) {
 }
 
 .message-bubble {
+  flex: 1;
+  min-width: 0;
   max-width: 100%;
   padding: 12px 16px;
   border-radius: 20px;

@@ -739,7 +739,17 @@ function parsePeroStatus(content) {
   const clickMatch = content.match(clickRegex)
   if (clickMatch) {
     try {
-      const data = JSON.parse(clickMatch[1].trim())
+      const rawData = clickMatch[1].trim()
+      
+      // 支持快捷重置指令
+      if (rawData === 'DEFAULT' || rawData === 'RESET') {
+        localStorage.removeItem(`ppc.${agentId}.waifu.texts`)
+        window.dispatchEvent(new CustomEvent('ppc:waifu-texts-updated', { detail: {} }))
+        console.log(`[Waifu] Click messages reset to default for ${agentId}`)
+        return
+      }
+
+      const data = JSON.parse(rawData)
       let cur = {}
       try {
         const saved = localStorage.getItem(`ppc.${agentId}.waifu.texts`)
@@ -791,20 +801,45 @@ function parsePeroStatus(content) {
   const idleMatch = content.match(idleRegex)
   if (idleMatch) {
     try {
-      const messages = JSON.parse(idleMatch[1].trim())
-      if (Array.isArray(messages) && messages.length >= 2) {
+      const rawData = idleMatch[1].trim()
+
+      // 支持快捷重置指令
+      if (rawData === 'DEFAULT' || rawData === 'RESET') {
         let cur = {}
         try {
           const saved = localStorage.getItem(`ppc.${agentId}.waifu.texts`)
           if (saved) cur = JSON.parse(saved)
         } catch (e) {}
         
-        cur.idleMessages_01 = messages[0]
-        cur.idleMessages_02 = messages[1]
-        // 移除多余的旧挂机字段
-        delete cur['idleMessages_03']
-        delete cur['idleMessages_04']
-        delete cur['idleMessages_05']
+        // 仅清除挂机相关的台词
+        for (let i = 1; i <= 20; i++) {
+          delete cur[`idleMessages_${String(i).padStart(2, '0')}`]
+        }
+        
+        localStorage.setItem(`ppc.${agentId}.waifu.texts`, JSON.stringify(cur))
+        window.dispatchEvent(new CustomEvent('ppc:waifu-texts-updated', { detail: cur }))
+        return
+      }
+
+      const messages = JSON.parse(rawData)
+      if (Array.isArray(messages) && messages.length > 0) {
+        let cur = {}
+        try {
+          const saved = localStorage.getItem(`ppc.${agentId}.waifu.texts`)
+          if (saved) cur = JSON.parse(saved)
+        } catch (e) {}
+        
+        // 1. 清除旧的挂机台词
+        for (let i = 1; i <= 20; i++) {
+          delete cur[`idleMessages_${String(i).padStart(2, '0')}`]
+        }
+
+        // 2. 写入新台词
+        messages.forEach((msg, idx) => {
+          if (msg) {
+            cur[`idleMessages_${String(idx + 1).padStart(2, '0')}`] = msg
+          }
+        })
         
         localStorage.setItem(`ppc.${agentId}.waifu.texts`, JSON.stringify(cur))
         window.dispatchEvent(new CustomEvent('ppc:waifu-texts-updated', { detail: cur }))
@@ -853,7 +888,8 @@ function parsePeroStatus(content) {
           lsSet(getAgentStoreKey('reminders'), reminders.value)
           console.log('新提醒已添加:', data)
           // 立即向系统预设未来通知
-          scheduleFutureNotification(rId, 'Pero 的任务提醒', data.task, data.time)
+          const agentNameRemind = AGENTS[getActiveAgentId()]?.name || 'Pero'
+          scheduleFutureNotification(rId, `${agentNameRemind} 的任务提醒`, data.task, data.time)
         }
       }
     } catch (e) {
@@ -879,7 +915,8 @@ function parsePeroStatus(content) {
           lsSet(getAgentStoreKey('topics'), topics.value)
           console.log('新主动话题已添加:', data)
           // 立即向系统预设未来通知
-          scheduleFutureNotification(tId, 'Pero 想找你聊天', data.topic, data.time)
+          const agentName = AGENTS[getActiveAgentId()]?.name || 'Pero'
+          scheduleFutureNotification(tId, `${agentName} 想找你聊天`, data.topic, data.time)
         }
       }
     } catch (e) {
@@ -969,7 +1006,8 @@ async function onSend(systemMsg = null) {
   isExpanded.value = false
   
   // 发送“正在思考”状态到 Live2D 气泡
-  window.dispatchEvent(new CustomEvent('ppc:chat', { detail: 'Pero正在思考中...' }))
+  const agentName = AGENTS[getActiveAgentId()]?.name || 'Pero'
+  window.dispatchEvent(new CustomEvent('ppc:chat', { detail: `${agentName}正在思考中...` }))
   
   const idx = messages.value.length - 1
   persistMessages()
@@ -1063,6 +1101,9 @@ async function onSend(systemMsg = null) {
       const final = await chatStream(baseReq, modelName.value, temperature.value, apiBase.value, chatOpts, (_, full) => {
         messages.value.splice(idx, 1, { role: 'assistant', content: String(full || '') })
         scrollToBottom() // 流式更新时持续滚动到底部
+        
+        // [Add] 实时解析状态标签
+        parsePeroStatus(String(full || ''))
       })
       messages.value.splice(idx, 1, { role: 'assistant', content: String(final || '') || '（暂无内容）', timestamp: messages.value[idx].timestamp })
       parsePeroStatus(String(final || ''))
@@ -1227,7 +1268,8 @@ async function regenerateAt(idx) {
     messages.value.splice(idx, 1, { role: 'assistant', content: '__loading__', timestamp: originalTimestamp })
     
     // 发送“正在思考”状态到 Live2D 气泡
-    window.dispatchEvent(new CustomEvent('ppc:chat', { detail: 'Pero正在思考中...' }))
+    const agentNameRegen = AGENTS[getActiveAgentId()]?.name || 'Pero'
+    window.dispatchEvent(new CustomEvent('ppc:chat', { detail: `${agentNameRegen}正在思考中...` }))
     
     scrollToBottom() // 滚动到底部显示加载状态
     
@@ -1318,6 +1360,9 @@ async function regenerateAt(idx) {
         const final = await chatStream(baseReq, modelName.value, temperature.value, apiBase.value, chatOpts, (_, full) => {
           messages.value.splice(idx, 1, { role: 'assistant', content: String(full || ''), timestamp: originalTimestamp })
           scrollToBottom() // 流式更新时持续滚动到底部
+          
+          // [Add] 实时解析状态标签
+          parsePeroStatus(String(full || ''))
         })
         messages.value.splice(idx, 1, { role: 'assistant', content: String(final || '') || '（暂无内容）', timestamp: originalTimestamp })
         parsePeroStatus(String(final || ''))
