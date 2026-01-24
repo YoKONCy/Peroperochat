@@ -785,25 +785,32 @@ function parsePeroStatus(content) {
       } catch (e) {}
 
       if (Array.isArray(data)) {
+        console.log('[Waifu] Parsing CLICK_MESSAGES as Array:', data)
         if (data.length >= 6) {
           // 新版 2x3 模式：[头1, 头2, 身1, 身2, 特1, 特2]
-          const targets = ['head', 'head', 'chest', 'chest', 'body', 'body']
-          
+          // 显式映射表，防止逻辑混淆
+          const mapping = [
+            { part: 'head', slot: '01' },
+            { part: 'head', slot: '02' },
+            { part: 'chest', slot: '01' },
+            { part: 'chest', slot: '02' },
+            { part: 'body', slot: '01' }, // 对应 Prompt 中的“身体”/“特殊”映射
+            { part: 'body', slot: '02' }
+          ]
+
           // 清理旧数据
           ['head', 'chest', 'body'].forEach(part => {
              for (let i = 1; i <= 20; i++) delete cur[`click_${part}_${String(i).padStart(2, '0')}`]
           })
 
           data.forEach((msg, i) => {
-            // 写入通用字段
+            // 写入通用字段 (兼容)
             cur[`click_messages_${String(i + 1).padStart(2, '0')}`] = msg
             
             // 写入部位字段
             if (i < 6) {
-              const part = targets[i]
-              // 0->1, 1->2, 2->1, 3->2...
-              const slot = (i % 2) + 1 
-              cur[`click_${part}_${String(slot).padStart(2, '0')}`] = msg
+              const m = mapping[i]
+              cur[`click_${m.part}_${m.slot}`] = msg
             }
           })
         } else {
