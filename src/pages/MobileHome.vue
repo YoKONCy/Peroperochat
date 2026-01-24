@@ -823,7 +823,7 @@ function parsePeroStatus(content) {
             if (i === 2) cur['click_body_01'] = msg
           })
         }
-      } else if (typeof data === 'object') {
+      } else if (data && typeof data === 'object') {
         // 新版部位格式
         const parts = ['head', 'chest', 'body']
         
@@ -837,6 +837,7 @@ function parsePeroStatus(content) {
         }
         
         Object.keys(data).forEach(k => {
+          if (!k) return
           let normalizedKey = k.toLowerCase()
           // 尝试中文映射
           if (cnMap[k]) normalizedKey = cnMap[k]
@@ -865,7 +866,7 @@ function parsePeroStatus(content) {
         })
 
         // 同时兼容旧版，如果 object 里有 general 字段或者直接取前几个作为通用
-        if (lowerData.general) {
+        if (lowerData.general && Array.isArray(lowerData.general)) {
           cur.click_messages_01 = lowerData.general[0] || ''
           cur.click_messages_02 = lowerData.general[1] || ''
           cur.click_messages_03 = lowerData.general[2] || ''
