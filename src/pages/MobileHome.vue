@@ -716,8 +716,15 @@ function parsePeroStatus(content) {
   const perocueMatch = content.match(/<PEROCUE>([\s\S]*?)<\/PEROCUE>/)
   if (perocueMatch) {
     try {
-      const statusMap = JSON.parse(perocueMatch[1].trim())
-      if (statusMap.mood) {
+      const rawData = perocueMatch[1].trim()
+      let statusMap
+      try {
+        statusMap = JSON.parse(rawData)
+      } catch (e) {
+         try { statusMap = new Function('return ' + rawData)() } catch (e2) {}
+      }
+
+      if (statusMap && statusMap.mood) {
         localStorage.setItem(`ppc.${agentId}.mood`, statusMap.mood)
         window.dispatchEvent(new CustomEvent('ppc:mood', { detail: statusMap.mood }))
       }
@@ -749,7 +756,20 @@ function parsePeroStatus(content) {
         return
       }
 
-      const data = JSON.parse(rawData)
+      let data
+      try {
+        data = JSON.parse(rawData)
+      } catch (e) {
+        // Fallback: 尝试解析 JS 对象格式 (例如单引号)
+        try {
+           // eslint-disable-next-line no-new-func
+           data = new Function('return ' + rawData)()
+        } catch (e2) {
+           console.warn('Failed to parse click messages (JSON & Eval):', e, e2)
+           return
+        }
+      }
+
       let cur = {}
       try {
         const saved = localStorage.getItem(`ppc.${agentId}.waifu.texts`)
@@ -881,7 +901,14 @@ function parsePeroStatus(content) {
   const backMatch = content.match(backRegex)
   if (backMatch) {
     try {
-      const messages = JSON.parse(backMatch[1].trim())
+      const rawData = backMatch[1].trim()
+      let messages
+      try {
+        messages = JSON.parse(rawData)
+      } catch (e) {
+         try { messages = new Function('return ' + rawData)() } catch (e2) {}
+      }
+
       if (Array.isArray(messages) && messages.length >= 1) {
         let cur = {}
         try {
