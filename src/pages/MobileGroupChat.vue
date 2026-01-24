@@ -712,7 +712,7 @@ async function generateResponse(agentId) {
 }
 
 .message-bubble {
-  flex: 1;
+  /* flex: 1; */
   min-width: 0;
   max-width: 100%;
   padding: 12px 16px;
@@ -729,6 +729,7 @@ async function generateResponse(agentId) {
   display: flex;
   gap: 4px;
   transform: translateX(5px);
+  flex-shrink: 0;
 }
 
 .user-row .message-actions {

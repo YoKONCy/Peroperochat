@@ -757,10 +757,37 @@ function parsePeroStatus(content) {
       } catch (e) {}
 
       if (Array.isArray(data)) {
-        // 兼容旧版数组格式
-        data.forEach((msg, i) => {
-          cur[`click_messages_0${i + 1}`] = msg
-        })
+        if (data.length >= 6) {
+          // 新版 2x3 模式：[头1, 头2, 身1, 身2, 特1, 特2]
+          const targets = ['head', 'head', 'chest', 'chest', 'body', 'body']
+          
+          // 清理旧数据
+          ['head', 'chest', 'body'].forEach(part => {
+             for (let i = 1; i <= 20; i++) delete cur[`click_${part}_${String(i).padStart(2, '0')}`]
+          })
+
+          data.forEach((msg, i) => {
+            // 写入通用字段
+            cur[`click_messages_${String(i + 1).padStart(2, '0')}`] = msg
+            
+            // 写入部位字段
+            if (i < 6) {
+              const part = targets[i]
+              // 0->1, 1->2, 2->1, 3->2...
+              const slot = (i % 2) + 1 
+              cur[`click_${part}_${String(slot).padStart(2, '0')}`] = msg
+            }
+          })
+        } else {
+          // 兼容旧版数组格式
+          data.forEach((msg, i) => {
+            cur[`click_messages_0${i + 1}`] = msg
+            // 简单的 fallback
+            if (i === 0) cur['click_head_01'] = msg
+            if (i === 1) cur['click_chest_01'] = msg
+            if (i === 2) cur['click_body_01'] = msg
+          })
+        }
       } else if (typeof data === 'object') {
         // 新版部位格式
         const parts = ['head', 'chest', 'body']

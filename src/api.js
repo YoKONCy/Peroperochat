@@ -40,6 +40,14 @@ export async function chat(messages, model, temperature = 0.7, apiBase, opts = {
     // Increment local conversation count
     await incrementConversationCount()
     
+    if (!res.data || !res.data.choices || res.data.choices.length === 0) {
+      // 检查是否是错误对象 (e.g. { error: { message: "..." } })
+      if (res.data && res.data.error) {
+        throw new Error(`API Error: ${res.data.error.message || JSON.stringify(res.data.error)}`)
+      }
+      throw new Error('Invalid API response: choices array is missing or empty')
+    }
+
     return res.data.choices[0].message
   } catch (e) {
     console.error('Chat error:', e)
@@ -503,12 +511,14 @@ export async function getDefaultPrompts() {
       <PEROCUE>{"mood":"心情","vibe":"状态","mind":"心理活动"}</PEROCUE>
       <MEMORY>{"content":"本次对话的客观总结文本","tags":["二字标签1","二字标签2"],"importance":重要性数值0-10,"type":"event/fact/preference"}</MEMORY>
       <IDLE_MESSAGES>["挂机发呆消息1", "挂机发呆消息2"]</IDLE_MESSAGES>
+      <CLICK_MESSAGES>["头部反应1", "头部反应2", "身体反应1", "身体反应2", "下身反应1", "下身反应2"]</CLICK_MESSAGES>
       <BACK_MESSAGES>["欢迎主人回来的短句"]</BACK_MESSAGES>
       <REMINDER>{"time": "YYYY-MM-DD HH:mm:ss", "task": "约定内容"}</REMINDER>
       <TOPIC>{"time": "YYYY-MM-DD HH:mm:ss", "topic": "想聊的话题简述"}</TOPIC>
     - **要求**: 
       - MEMORY: tags 必须是**二字词语**（如：约会、天气、心情、礼物），严禁使用长句子或四字词语。每个标签应代表一个独立的核心概念，便于检索。
       - IDLE_MESSAGES: 2 条极短（20字内）、表现出在发呆、自言自语或期待关注的可爱短句。
+      - CLICK_MESSAGES: 6 条极短（15字内）的触摸反应台词，顺序必须为：[头部1, 头部2, 身体1, 身体2, 特殊1, 特殊2]。必须符合当前心情。
       - BACK_MESSAGES: 1 条极短（20字内）、欢迎主人切回 App 时的可爱短句。
       - REMINDER: 只有当与主人有明确的约定或定时提醒需求时才输出。time 必须是标准的 YYYY-MM-DD HH:mm:ss 格式。
       - TOPIC: **极少使用**（触发概率 < 10%）。
