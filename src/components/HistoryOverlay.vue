@@ -31,11 +31,17 @@
                   </div>
                 </template>
               </div>
-              <div v-else v-html="renderMarkdown(m.content)"></div>
+              <div v-else>
+                 <div v-if="!m.showRaw" v-html="renderMarkdown(m.content)"></div>
+                 <pre v-else class="raw-text-view">{{ m.content }}</pre>
+              </div>
             </div>
             <div class="row-tools">
               <el-tooltip content="复制内容" placement="top" :hide-after="1000">
                 <button class="tool-btn" @click="$emit('copy', m)"><el-icon size="14"><CopyDocument /></el-icon></button>
+              </el-tooltip>
+              <el-tooltip content="查看原始文本" placement="top" :hide-after="1000" v-if="m.role === 'assistant'">
+                <button :class="['tool-btn', { active: m.showRaw }]" @click="m.showRaw = !m.showRaw"><el-icon size="14"><Document /></el-icon></button>
               </el-tooltip>
               <el-tooltip content="重新生成" placement="top" v-if="m.role === 'assistant'">
                 <button class="tool-btn" @click="$emit('regenerate', messages.length - 1 - i)"><el-icon size="14"><Refresh /></el-icon></button>
@@ -61,7 +67,7 @@
 
 <script setup>
 import { ref, defineProps, defineEmits } from 'vue'
-import { Delete, Refresh, CopyDocument, Close, MessageBox, ArrowDown } from '@element-plus/icons-vue'
+import { Delete, Refresh, CopyDocument, Close, MessageBox, ArrowDown, Document } from '@element-plus/icons-vue'
 import { marked } from 'marked'
 import DOMPurify from 'dompurify'
 import { getActiveAgentId, AGENTS } from '../api'
@@ -336,7 +342,66 @@ function cleanMessageContent(text) {
   justify-content: center; 
   border-radius: 10px; 
   border: 1px solid rgba(0, 0, 0, 0.05); 
-  background: #f8fafc; 
+  background: #f8fafc;
+  color: #64748b;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.tool-btn:hover {
+  background: #f1f5f9;
+  color: #3b82f6;
+}
+
+.tool-btn.active {
+  background: #e0f2fe;
+  color: #3b82f6;
+  border-color: #3b82f6;
+}
+
+.tool-btn.delete:hover {
+  background: #fef2f2;
+  color: #ef4444;
+}
+
+.more-area {
+  display: flex;
+  justify-content: center;
+  margin-top: 10px;
+}
+
+.more-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 16px;
+  border: 1px solid rgba(0,0,0,0.1);
+  background: white;
+  border-radius: 20px;
+  color: #64748b;
+  font-size: 13px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.more-btn:hover {
+  background: #f8fafc;
+  color: #334155;
+}
+
+.raw-text-view {
+  background: #1e293b;
+  color: #e2e8f0;
+  padding: 10px;
+  border-radius: 8px;
+  font-family: 'Fira Code', monospace;
+  font-size: 12px;
+  white-space: pre-wrap;
+  word-break: break-all;
+  max-height: 300px;
+  overflow-y: auto;
+  margin-top: 8px;
+} 
   color: #64748b; 
   cursor: pointer; 
   transition: all 0.2s; 

@@ -620,6 +620,14 @@ function regenerateAndClose(idx) {
   regenerateAt(idx)
 }
 
+function toggleRaw(idx) {
+  if (expandedRawIndices.value.has(idx)) {
+    expandedRawIndices.value.delete(idx)
+  } else {
+    expandedRawIndices.value.add(idx)
+  }
+}
+
 function lsGet(key, fallback) {
   try { const v = localStorage.getItem(key); if (v===null||v===undefined) return fallback; try { return JSON.parse(v) } catch(_) { return v } } catch(_) { return fallback }
 }
