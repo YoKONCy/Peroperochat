@@ -799,7 +799,7 @@ function parsePeroStatus(content) {
           ]
 
           // 清理旧数据
-          ['head', 'chest', 'body'].forEach(part => {
+          ;['head', 'chest', 'body'].forEach(part => {
              for (let i = 1; i <= 20; i++) delete cur[`click_${part}_${String(i).padStart(2, '0')}`]
           })
 
