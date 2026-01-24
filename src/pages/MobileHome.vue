@@ -820,10 +820,25 @@ function parsePeroStatus(content) {
         // 新版部位格式
         const parts = ['head', 'chest', 'body']
         
-        // 预处理 data keys，支持大小写不敏感
+        // 预处理 data keys，支持大小写不敏感及中文映射
         const lowerData = {}
+        const cnMap = {
+            '头部': 'head',
+            '胸部': 'chest',
+            '身体': 'body',
+            '通用': 'general'
+        }
+        
         Object.keys(data).forEach(k => {
-          lowerData[k.toLowerCase()] = data[k]
+          let normalizedKey = k.toLowerCase()
+          // 尝试中文映射
+          if (cnMap[k]) normalizedKey = cnMap[k]
+          // 尝试模糊匹配 (e.g. "头部反应" -> "head")
+          else if (k.includes('头')) normalizedKey = 'head'
+          else if (k.includes('胸')) normalizedKey = 'chest'
+          else if (k.includes('身')) normalizedKey = 'body'
+          
+          lowerData[normalizedKey] = data[k]
         })
 
         parts.forEach(part => {

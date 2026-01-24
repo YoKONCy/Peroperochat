@@ -239,9 +239,23 @@ function loadWidget(config) {
                      agentId = localStorage.getItem('ppc.activeAgent') || 'pero'
                  }
 
+                 // [Fix] 强制同步一次最新数据，防止缓存不一致
+                 try {
+                    const saved = localStorage.getItem(`ppc.${agentId}.waifu.texts`)
+                    // 兼容性回退
+                    if (!saved && agentId === 'pero') {
+                        const fallback = localStorage.getItem('ppc.waifu.texts')
+                        if (fallback) window.WAIFU_TEXTS = JSON.parse(fallback)
+                    } else if (saved) {
+                        window.WAIFU_TEXTS = JSON.parse(saved)
+                    }
+                 } catch (e) { console.warn('[WaifuTips] Sync texts failed', e) }
+
                  const allLines = window.WAIFU_INTERACTION_LINES
                  const T = window.WAIFU_TEXTS || {}
                  
+                 console.log(`[WaifuTips] Agent: ${agentId}, Has Custom Texts: ${Object.keys(T).length > 0}`)
+
                  // 1. 优先尝试从动态解析的 WAIFU_TEXTS 中获取该部位台词
                  if (area && T[`click_${area}_01`]) {
                      const areaTexts = []
