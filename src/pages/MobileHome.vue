@@ -824,6 +824,7 @@ function parsePeroStatus(content) {
           })
         }
       } else if (data && typeof data === 'object') {
+        console.log('[Waifu] Parsing CLICK_MESSAGES as Object:', data)
         // 新版部位格式
         const parts = ['head', 'chest', 'body']
         
@@ -850,6 +851,7 @@ function parsePeroStatus(content) {
         })
 
         parts.forEach(part => {
+          // 安全检查：确保 lowerData[part] 存在且是数组
           if (lowerData[part] && Array.isArray(lowerData[part])) {
             // 1. 清除该部位旧的所有台词 (假设最大 20 条)
             for (let i = 1; i <= 20; i++) {
