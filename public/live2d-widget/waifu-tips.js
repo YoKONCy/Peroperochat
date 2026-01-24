@@ -154,6 +154,15 @@ function loadWidget(config) {
     }
   })
 
+  // 监听台词实时更新事件
+  window.addEventListener("ppc:waifu-texts-updated", (e) => {
+    if (e.detail) {
+      console.log("[WaifuTips] Texts updated dynamically via event.")
+      window.WAIFU_TEXTS = e.detail
+      showMessage("台词已更新！快来试试吧～", 3000, 10)
+    }
+  })
+
   ;(function initModel() {
     let modelId = localStorage.getItem("modelId"), modelTexturesId = localStorage.getItem("modelTexturesId")
     if (modelId === null) {

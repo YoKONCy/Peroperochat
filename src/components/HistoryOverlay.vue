@@ -401,23 +401,6 @@ function cleanMessageContent(text) {
   max-height: 300px;
   overflow-y: auto;
   margin-top: 8px;
-} 
-  color: #64748b; 
-  cursor: pointer; 
-  transition: all 0.2s; 
-}
-
-.tool-btn:hover { 
-  background: #eff6ff; 
-  border-color: #3b82f6; 
-  color: #3b82f6; 
-  transform: scale(1.1);
-}
-
-.tool-btn.delete:hover {
-  background: #fef2f2;
-  border-color: #ef4444;
-  color: #ef4444;
 }
 
 /* 消息淡入动画 */
