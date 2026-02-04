@@ -56,12 +56,34 @@
         </button>
       </el-tooltip>
       <el-tooltip content="换装" placement="left" :offset="8" popper-class="cute-tip">
-        <button class="fab fab-dress" @click.stop="onRandTextures" aria-label="换装">
+        <button class="fab fab-dress" @click.stop="openOutfitDrawer" aria-label="换装">
           <i class="fa-solid fa-shirt"></i>
         </button>
       </el-tooltip>
     </div>
   </div>
+
+  <el-drawer
+    v-model="outfitDrawerVisible"
+    title="衣柜"
+    direction="rtl"
+    size="320px"
+    :with-header="true"
+    custom-class="outfit-drawer"
+    :append-to-body="true"
+  >
+    <div class="outfit-list">
+      <div 
+        v-for="outfit in outfitList" 
+        :key="outfit.id" 
+        class="outfit-item"
+        @click="changeOutfit(outfit)"
+      >
+        <div class="outfit-name">{{ outfit.name }}</div>
+        <div class="outfit-id">{{ outfit.id }}</div>
+      </div>
+    </div>
+  </el-drawer>
 </template>
 
 <script setup>
@@ -172,6 +194,43 @@ const chatText = ref('')
 const chatVisible = ref(false)
 const recentMemories = ref([])
 let chatTimer = null
+
+// 换装相关
+const outfitDrawerVisible = ref(false)
+const outfitList = ref([])
+
+async function loadOutfits() {
+  try {
+    const res = await fetch('/live2d-widget/model/potion-Maker-Pio/outfits.json')
+    if (res.ok) {
+      outfitList.value = await res.json()
+    }
+  } catch (e) {
+    console.error('Failed to load outfits:', e)
+  }
+}
+
+function openOutfitDrawer() {
+  outfitDrawerVisible.value = true
+  if (outfitList.value.length === 0) {
+    loadOutfits()
+  }
+}
+
+function changeOutfit(outfit) {
+  const match = outfit.id.match(/index_(\d+)\.json/)
+  if (match) {
+    const textureId = parseInt(match[1])
+    try {
+      if (window.WaifuWidget && typeof window.WaifuWidget.loadModel === 'function') {
+        window.WaifuWidget.loadModel(0, textureId, `换上新衣服啦：${outfit.name}`)
+        outfitDrawerVisible.value = false
+      }
+    } catch (e) {
+      console.error('Failed to change outfit:', e)
+    }
+  }
+}
 
 async function loadRecentMemories() {
   try {
@@ -647,6 +706,38 @@ onBeforeUnmount(() => {
   scrollbar-width: thin;
   scrollbar-color: rgba(219, 39, 119, 0.2) transparent;
   animation: bubblePop 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+.outfit-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px;
+}
+
+.outfit-item {
+  padding: 12px;
+  background: rgba(255, 255, 255, 0.5);
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s;
+  border: 1px solid transparent;
+}
+
+.outfit-item:hover {
+  background: rgba(236, 72, 153, 0.1);
+  border-color: rgba(236, 72, 153, 0.3);
+}
+
+.outfit-name {
+  font-weight: 500;
+  color: #333;
+}
+
+.outfit-id {
+  font-size: 12px;
+  color: #999;
+  margin-top: 2px;
 }
 
 .chat-bubble::-webkit-scrollbar {

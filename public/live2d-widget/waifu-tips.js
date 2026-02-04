@@ -420,7 +420,7 @@ function loadWidget(config) {
     }
     else { fetch(`${apiPath}switch/?id=${modelId}`).then(response => response.json()).then(result => { loadModel(result.model.id, 0, result.model.message) }) }
   }
-  window.WaifuWidget = { loadOtherModel, loadRandModel }
+  window.WaifuWidget = { loadOtherModel, loadRandModel, loadModel }
 }
 
 function initWidget(config, apiPath) {

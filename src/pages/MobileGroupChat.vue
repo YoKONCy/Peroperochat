@@ -251,8 +251,8 @@ function goHome() {
 
 function renderMarkdown(text) {
   if (!text) return ''
-  // 移除元数据标签
-  const clean = text.replace(/<[A-Z_]+>[\s\S]*?<\/[A-Z_]+>/g, '').trim()
+  // 移除元数据标签 (改为白名单模式，防止误伤)
+  const clean = text.replace(/<(PEROCUE|MEMORY|IDLE_MESSAGES|CLICK_MESSAGES|BACK_MESSAGES|REMINDER|TOPIC)>[\s\S]*?<\/\1>/g, '').trim()
   return DOMPurify.sanitize(marked.parse(clean))
 }
 

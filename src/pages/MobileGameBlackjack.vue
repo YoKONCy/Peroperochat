@@ -189,48 +189,27 @@ async function endGame(result, reason = '') {
   
   if (result === 'bust') {
     statusMessage.value = '你爆牌了！(>_<)'
-    prompt = `[System]: 用户在21点游戏中爆牌输了（点数 ${playerScore.value}）。请用${agentName.value}的语气嘲讽或安慰用户。`
+    prompt = `用户爆牌输了`
   } else if (result === 'win') {
     statusMessage.value = reason || '你赢了！🎉'
-    prompt = `[System]: 用户在21点游戏中赢了（用户 ${playerScore.value} vs 你 ${dealerScore.value}）。请用${agentName.value}的语气表示不甘心或夸奖用户。`
+    prompt = `用户赢了`
   } else if (result === 'lose') {
     statusMessage.value = '你输了...'
-    prompt = `[System]: 用户在21点游戏中输了（用户 ${playerScore.value} vs 你 ${dealerScore.value}）。请用${agentName.value}的语气通过这次胜利来调侃用户。`
+    prompt = `用户输了（你赢了）`
   } else {
     statusMessage.value = '平局'
-    prompt = `[System]: 21点游戏平局（${playerScore.value}）。请用${agentName.value}的语气评价这场势均力敌的对决。`
+    prompt = `平局`
   }
 
   // 触发 AI 点评
   try {
     const agentNameVal = agentName.value
-    const lsGet = (key, fallback) => {
-      try { const v = localStorage.getItem(key); if (v===null||v===undefined) return fallback; try { return JSON.parse(v) } catch(_) { return v } } catch(_) { return fallback }
-    }
-    const lsSet = (key, value) => {
-      try { const v = typeof value === 'string' ? value : JSON.stringify(value); localStorage.setItem(key, v) } catch(_) {}
-    }
-    const getAgentStoreKey = (type) => `ppc.${activeAgentId.value}.${type}`
-
-    // 模拟用户输入，触发主对话逻辑
-    const gameResultMsg = `【管理系统提醒：${agentNameVal}，用户刚刚和你玩了一局21点。结果是：${statusMessage.value}（用户点数：${playerScore.value}，你的点数：${dealerScore.value}）。请以此为契机，用你一贯的语气和用户聊两句。】`
     
-    // 获取当前消息列表
-    const savedMessages = lsGet(getAgentStoreKey('messages'), [])
-    const now = Date.now()
-    
-    // 检查最后一条消息是否已经是这个提醒，避免重复触发
-    const lastMsg = savedMessages[savedMessages.length - 1]
-    if (lastMsg && lastMsg.content === gameResultMsg) return
-
-    const userMsg = { role: 'user', content: gameResultMsg, timestamp: now }
-    
-    // 我们不需要在这里等待回复，因为主对话逻辑是在 MobileHome 中处理的
-    // 但为了让用户在回到主页时能看到回复，我们需要更新存储并触发事件
-    const newMessages = [...savedMessages, userMsg]
-    lsSet(getAgentStoreKey('messages'), newMessages)
+    // 构造更明确的管理系统提醒
+    const gameResultMsg = `【管理系统提醒：${agentNameVal}，用户刚刚和你玩了一局21点。结果是：${prompt}。具体点数：用户 ${playerScore.value} 点，你（${agentNameVal}） ${dealerScore.value} 点。请以此为契机，用你一贯的语气和用户聊两句。】`
     
     // 发送全局事件，通知 MobileHome 有新消息需要处理
+    // MobileHome 的 onSend 会负责将此消息存入 messages 并触发 AI 回复
     window.dispatchEvent(new CustomEvent('ppc:trigger-chat', { 
       detail: { 
         systemMsg: gameResultMsg,

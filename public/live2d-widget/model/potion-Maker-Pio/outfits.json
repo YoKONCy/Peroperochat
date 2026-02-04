@@ -1,0 +1,437 @@
+[
+  {
+    "id": "index_1.json",
+    "name": "校服",
+    "texturePath": "textures/school-costume.png"
+  },
+  {
+    "id": "index_2.json",
+    "name": "蓝色夏日连衣裙",
+    "texturePath": "textures/summer-dress-costume-blue.png"
+  },
+  {
+    "id": "index_3.json",
+    "name": "白色冬装",
+    "texturePath": "textures/winter-costume-white.png"
+  },
+  {
+    "id": "index_4.json",
+    "name": "冬装",
+    "texturePath": "textures/winter-costume.png"
+  },
+  {
+    "id": "index_5.json",
+    "name": "白色女巫服",
+    "texturePath": "textures/witch-costume-white.png"
+  },
+  {
+    "id": "index_6.json",
+    "name": "女巫服",
+    "texturePath": "textures/witch-costume.png"
+  },
+  {
+    "id": "index_7.json",
+    "name": "女仆装",
+    "texturePath": "textures/maid-costume.png"
+  },
+  {
+    "id": "index_8.json",
+    "name": "兔女郎服",
+    "texturePath": "textures/bunny-girl-costume.png"
+  },
+  {
+    "id": "index_9.json",
+    "name": "红色旗袍",
+    "texturePath": "textures/qipao-costume-red.png"
+  },
+  {
+    "id": "index_10.json",
+    "name": "睡衣",
+    "texturePath": "textures/pajamas-costume.png"
+  },
+  {
+    "id": "index_11.json",
+    "name": "浣熊动物装",
+    "texturePath": "textures/animal-costume-racoon.png"
+  },
+  {
+    "id": "index_12.json",
+    "name": "动物装",
+    "texturePath": "textures/animal-costume.png"
+  },
+  {
+    "id": "index_13.json",
+    "name": "红色兔女郎服",
+    "texturePath": "textures/bunny-girl-costume-red.png"
+  },
+  {
+    "id": "index_14.json",
+    "name": "巧克力蛋糕裙",
+    "texturePath": "textures/cake-costume-choco.png"
+  },
+  {
+    "id": "index_15.json",
+    "name": "奶油蛋糕裙",
+    "texturePath": "textures/cake-costume-cream.png"
+  },
+  {
+    "id": "index_16.json",
+    "name": "棕色连衣裙",
+    "texturePath": "textures/dress-costume-brown.png"
+  },
+  {
+    "id": "index_17.json",
+    "name": "连衣裙",
+    "texturePath": "textures/dress-costume.png"
+  },
+  {
+    "id": "index_18.json",
+    "name": "海军蓝小学生校服",
+    "texturePath": "textures/elementary-school-costume-navy.png"
+  },
+  {
+    "id": "index_19.json",
+    "name": "小学生校服",
+    "texturePath": "textures/elementary-school-costume.png"
+  },
+  {
+    "id": "index_20.json",
+    "name": "米色秋季连衣裙",
+    "texturePath": "textures/fall-dress-costume-beige.png"
+  },
+  {
+    "id": "index_21.json",
+    "name": "棕色秋季连衣裙",
+    "texturePath": "textures/fall-dress-costume-brown.png"
+  },
+  {
+    "id": "index_22.json",
+    "name": "绿色荷叶边比基尼",
+    "texturePath": "textures/frill-bikini-costume-green.png"
+  },
+  {
+    "id": "index_23.json",
+    "name": "紫色荷叶边比基尼",
+    "texturePath": "textures/frill-bikini-costume-purple.png"
+  },
+  {
+    "id": "index_24.json",
+    "name": "绿色荷叶边衬衫",
+    "texturePath": "textures/frill-blouse-costume-green.png"
+  },
+  {
+    "id": "index_25.json",
+    "name": "红色荷叶边衬衫",
+    "texturePath": "textures/frill-blouse-costume-red.png"
+  },
+  {
+    "id": "index_26.json",
+    "name": "振袖和服",
+    "texturePath": "textures/furisode-costume.png"
+  },
+  {
+    "id": "index_27.json",
+    "name": "万圣节服装",
+    "texturePath": "textures/halloween-costume.png"
+  },
+  {
+    "id": "index_28.json",
+    "name": "粉色韩服",
+    "texturePath": "textures/hanbok-costume-pink.png"
+  },
+  {
+    "id": "index_29.json",
+    "name": "红色韩服",
+    "texturePath": "textures/hanbok-costume-red.png"
+  },
+  {
+    "id": "index_30.json",
+    "name": "天蓝色韩服",
+    "texturePath": "textures/hanbok-costume-skyblue.png"
+  },
+  {
+    "id": "index_31.json",
+    "name": "黄色韩服",
+    "texturePath": "textures/hanbok-costume-yellow.png"
+  },
+  {
+    "id": "index_32.json",
+    "name": "韩服",
+    "texturePath": "textures/hanbok-costume.png"
+  },
+  {
+    "id": "index_33.json",
+    "name": "治疗师服装",
+    "texturePath": "textures/healer-costume.png"
+  },
+  {
+    "id": "index_34.json",
+    "name": "海军蓝童装",
+    "texturePath": "textures/kids-costume-navy.png"
+  },
+  {
+    "id": "index_35.json",
+    "name": "童装",
+    "texturePath": "textures/kids-costume.png"
+  },
+  {
+    "id": "index_36.json",
+    "name": "红色女仆装",
+    "texturePath": "textures/maid-costume-red.png"
+  },
+  {
+    "id": "index_37.json",
+    "name": "2015新款睡衣",
+    "texturePath": "textures/new2015-costume-pajamas.png"
+  },
+  {
+    "id": "index_38.json",
+    "name": "2015新款",
+    "texturePath": "textures/new2015-costume.png"
+  },
+  {
+    "id": "index_39.json",
+    "name": "黑色暗夜女巫服",
+    "texturePath": "textures/night-witch-costume-black.png"
+  },
+  {
+    "id": "index_40.json",
+    "name": "灰色暗夜女巫服",
+    "texturePath": "textures/night-witch-costume-gray.png"
+  },
+  {
+    "id": "index_41.json",
+    "name": "星空装",
+    "texturePath": "textures/nightsky-costume.png"
+  },
+  {
+    "id": "index_42.json",
+    "name": "白色背带裤",
+    "texturePath": "textures/overalls-costume-white.png"
+  },
+  {
+    "id": "index_43.json",
+    "name": "背带裤",
+    "texturePath": "textures/overalls-costume.png"
+  },
+  {
+    "id": "index_44.json",
+    "name": "粉色睡衣",
+    "texturePath": "textures/pajamas-costume-pink.png"
+  },
+  {
+    "id": "index_45.json",
+    "name": "棕色晚礼服",
+    "texturePath": "textures/party-dress-costume-brown.png"
+  },
+  {
+    "id": "index_46.json",
+    "name": "紫色晚礼服",
+    "texturePath": "textures/party-dress-costume-purple.png"
+  },
+  {
+    "id": "index_47.json",
+    "name": "粉色旗袍",
+    "texturePath": "textures/qipao-costume-pink.png"
+  },
+  {
+    "id": "index_48.json",
+    "name": "红色蝴蝶结连衣裙",
+    "texturePath": "textures/ribbon-dress-costume-red.png"
+  },
+  {
+    "id": "index_49.json",
+    "name": "黄色蝴蝶结连衣裙",
+    "texturePath": "textures/ribbon-dress-costume-yellow.png"
+  },
+  {
+    "id": "index_50.json",
+    "name": "黑色水手服",
+    "texturePath": "textures/sailor-costume-black.png"
+  },
+  {
+    "id": "index_51.json",
+    "name": "水手服",
+    "texturePath": "textures/sailor-costume.png"
+  },
+  {
+    "id": "index_52.json",
+    "name": "海军蓝樱花装",
+    "texturePath": "textures/sakura-costume-navy.png"
+  },
+  {
+    "id": "index_53.json",
+    "name": "樱花装",
+    "texturePath": "textures/sakura-costume.png"
+  },
+  {
+    "id": "index_54.json",
+    "name": "绿色圣诞装",
+    "texturePath": "textures/santa-costume-green.png"
+  },
+  {
+    "id": "index_55.json",
+    "name": "圣诞装",
+    "texturePath": "textures/santa-costume.png"
+  },
+  {
+    "id": "index_56.json",
+    "name": "萨洛里装",
+    "texturePath": "textures/sarori-costume.png"
+  },
+  {
+    "id": "index_57.json",
+    "name": "2017款灰色校服",
+    "texturePath": "textures/school-2017-costume-gray.png"
+  },
+  {
+    "id": "index_58.json",
+    "name": "2017款黄色校服",
+    "texturePath": "textures/school-2017-costume-yellow.png"
+  },
+  {
+    "id": "index_59.json",
+    "name": "红色校服",
+    "texturePath": "textures/school-costume-red.png"
+  },
+  {
+    "id": "index_60.json",
+    "name": "SFC红色制服",
+    "texturePath": "textures/sfc-uniform-costume-red.png"
+  },
+  {
+    "id": "index_61.json",
+    "name": "SFC黄色制服",
+    "texturePath": "textures/sfc-uniform-costume-yellow.png"
+  },
+  {
+    "id": "index_62.json",
+    "name": "黑色萨满服",
+    "texturePath": "textures/shaman-costume-black.png"
+  },
+  {
+    "id": "index_63.json",
+    "name": "蓝色萨满服",
+    "texturePath": "textures/shaman-costume-blue.png"
+  },
+  {
+    "id": "index_64.json",
+    "name": "Sinsiroad店员服(初级)",
+    "texturePath": "textures/sinsiroad-shop-costume-junior.png"
+  },
+  {
+    "id": "index_65.json",
+    "name": "Sinsiroad店员服(高级)",
+    "texturePath": "textures/sinsiroad-shop-costume-senior.png"
+  },
+  {
+    "id": "index_66.json",
+    "name": "女巫师装",
+    "texturePath": "textures/sorceress-costume.png"
+  },
+  {
+    "id": "index_67.json",
+    "name": "黑色运动连帽衫",
+    "texturePath": "textures/sporty-hood-costume-black.png"
+  },
+  {
+    "id": "index_68.json",
+    "name": "蓝色运动连帽衫",
+    "texturePath": "textures/sporty-hood-costume-blue.png"
+  },
+  {
+    "id": "index_69.json",
+    "name": "棕色星辰女巫服",
+    "texturePath": "textures/star-witch-costume-brown.png"
+  },
+  {
+    "id": "index_70.json",
+    "name": "星辰女巫服",
+    "texturePath": "textures/star-witch-costume.png"
+  },
+  {
+    "id": "index_71.json",
+    "name": "黑色魅魔服",
+    "texturePath": "textures/succubus-costume-black.png"
+  },
+  {
+    "id": "index_72.json",
+    "name": "红色魅魔服",
+    "texturePath": "textures/succubus-costume-red.png"
+  },
+  {
+    "id": "index_73.json",
+    "name": "白色死库水",
+    "texturePath": "textures/sukumizu-costume-white.png"
+  },
+  {
+    "id": "index_74.json",
+    "name": "死库水",
+    "texturePath": "textures/sukumizu-costume.png"
+  },
+  {
+    "id": "index_75.json",
+    "name": "白色夏日连衣裙",
+    "texturePath": "textures/summer-dress-costume-white.png"
+  },
+  {
+    "id": "index_76.json",
+    "name": "2017款海军蓝泳装",
+    "texturePath": "textures/swimsuit-2017-costume-navy.png"
+  },
+  {
+    "id": "index_77.json",
+    "name": "2017款红色泳装",
+    "texturePath": "textures/swimsuit-2017-costume-red.png"
+  },
+  {
+    "id": "index_78.json",
+    "name": "提拉米1号装",
+    "texturePath": "textures/tirami1-costume.png"
+  },
+  {
+    "id": "index_79.json",
+    "name": "红色高领毛衣",
+    "texturePath": "textures/turtleneck-costume-red.png"
+  },
+  {
+    "id": "index_80.json",
+    "name": "高领毛衣",
+    "texturePath": "textures/turtleneck-costume.png"
+  },
+  {
+    "id": "index_81.json",
+    "name": "棕色情人节装",
+    "texturePath": "textures/valentine-costume-brown.png"
+  },
+  {
+    "id": "index_82.json",
+    "name": "粉色情人节装",
+    "texturePath": "textures/valentine-costume-pink.png"
+  },
+  {
+    "id": "index_83.json",
+    "name": "2017款棕色冬装大衣",
+    "texturePath": "textures/winter-coat-2017-costume-brown.png"
+  },
+  {
+    "id": "index_84.json",
+    "name": "2017款白色冬装大衣",
+    "texturePath": "textures/winter-coat-2017-costume-white.png"
+  },
+  {
+    "id": "index_85.json",
+    "name": "粉色冬装大衣",
+    "texturePath": "textures/winter-coat-costume-pink.png"
+  },
+  {
+    "id": "index_86.json",
+    "name": "白色冬装大衣",
+    "texturePath": "textures/winter-coat-costume-white.png"
+  },
+  {
+    "id": "index_87.json",
+    "name": "白色冬装",
+    "texturePath": "textures/winter-costume-white.png"
+  }
+]
