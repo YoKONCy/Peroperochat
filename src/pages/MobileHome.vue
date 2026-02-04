@@ -22,13 +22,13 @@
       <div class="reminder-bubbles-container" v-if="reminders.length > 0">
         <div 
           v-for="(r, idx) in reminders" 
-          :key="r.time + r.task"
-          :class="['reminder-bubble', { 'bubble-shattering': explodingReminders.has(idx) }]"
+          :key="r.id || (r.time + r.task)"
+          :class="['reminder-bubble', { 'bubble-shattering': explodingReminders.has(r.id) }]"
           :style="getBubbleStyle(idx)"
           @touchstart="handlePressStart(r)" 
-          @touchend="handlePressEnd(idx)"
+          @touchend="handlePressEnd(r.id)"
           @mousedown="handlePressStart(r)" 
-          @mouseup="handlePressEnd(idx)"
+          @mouseup="handlePressEnd(r.id)"
           @mouseleave="handlePressCancel"
         >
           <div class="bubble-content">
@@ -46,11 +46,38 @@
         <span>{{ isLoading ? '...' : '...' }}</span>
       </button>
       <div class="mini-tools">
-        <button class="tool-btn-mini" @click="toGroupChat" title="家庭群聊"><el-icon><UserFilled /></el-icon></button>
+        <button class="tool-btn-mini" @click="showFeatureDrawer = true" title="更多功能"><i class="fas fa-plus-circle"></i></button>
         <button class="tool-btn-mini" @click="toSettings"><i class="fas fa-cog"></i></button>
         <button class="tool-btn-mini" @click="openHistory"><i class="fas fa-history"></i></button>
       </div>
     </div>
+
+    <!-- 功能抽屉 (更多功能) -->
+    <Transition name="fade-slide">
+      <div class="feature-drawer-overlay" v-if="showFeatureDrawer" @click.self="showFeatureDrawer = false">
+        <div class="feature-drawer-card">
+          <div class="drawer-header">
+            <span class="drawer-title">更多功能</span>
+            <button class="drawer-close" @click="showFeatureDrawer = false"><i class="fas fa-times"></i></button>
+          </div>
+          <div class="feature-grid">
+            <div class="feature-item" @click="toGameAction">
+              <div class="feature-icon game-icon">
+                <i class="fas fa-gamepad"></i>
+              </div>
+              <span class="feature-label">21点小游戏</span>
+            </div>
+            <div class="feature-item" @click="toGroupChatAction">
+              <div class="feature-icon group-icon">
+                <i class="fas fa-users"></i>
+              </div>
+              <span class="feature-label">家庭群聊</span>
+            </div>
+            <!-- 可以预留更多位置 -->
+          </div>
+        </div>
+      </div>
+    </Transition>
 
     <!-- 话题列表子页面 -->
     <Transition name="fade-slide">
@@ -64,16 +91,16 @@
           <div class="topic-list-content">
             <div 
               v-for="(t, idx) in topics" 
-              :key="t.time + t.topic"
+              :key="t.id || (t.time + t.topic)"
               :class="['topic-item', { 'is-revealed': t.revealed }]"
-              @click="toggleTopicReveal(idx)"
+              @click="toggleTopicReveal(t.id)"
             >
               <div class="topic-item-header">
                 <div class="topic-info">
                   <i class="fas fa-user-secret secret-icon" v-if="!t.revealed"></i>
                   <span class="time-tag">{{ formatReminderTime(t.time) }}</span>
                 </div>
-                <button class="delete-btn" @click.stop="deleteTopic(idx)">
+                <button class="delete-btn" @click.stop="deleteTopic(t.id)">
                   <i class="fas fa-trash-alt"></i>
                 </button>
               </div>
@@ -190,6 +217,7 @@ const stream = ref(false)
 const memoryRounds = ref(40)
 const showHistory = ref(false)
 const showTopicList = ref(false) // 是否显示话题列表
+const showFeatureDrawer = ref(false) // 是否显示功能抽屉
 const showReminderDetail = ref(false) // 是否显示任务详情
 const selectedReminder = ref(null) // 当前选中的任务
 let pressTimer = null // 长按定时器
@@ -320,7 +348,7 @@ function checkReminders() {
 
   if (toTriggerReminder.length > 0) {
     const task = toTriggerReminder[0]
-    reminders.value = reminders.value.filter(r => r.time !== task.time)
+    reminders.value = reminders.value.filter(r => r.id !== task.id)
     lsSet(getAgentStoreKey('reminders'), reminders.value)
     onSend(`【管理系统提醒：${AGENTS[getActiveAgentId()]?.name || 'Pero'}，你与主人的约定时间已到，请主动提醒主人。约定内容：${task.task}】`)
     
@@ -402,6 +430,17 @@ onMounted(() => {
   // 每 10 秒检查一次提醒
   setInterval(checkReminders, 10000)
 
+  // 监听来自小游戏或其他组件的对话触发请求
+  window.addEventListener('ppc:trigger-chat', (event) => {
+    const { systemMsg, agentId } = event.detail
+    if (agentId === getActiveAgentId()) {
+      // 重新加载数据以获取最新的 user 消息（由小游戏写入的）
+      loadAgentData()
+      // 触发对话请求
+      onSend(systemMsg)
+    }
+  })
+
   // 状态恢复：根据最后一条 AI 消息恢复 Pero 的状态
   const lastAssistantMsg = [...messages.value].reverse().find(m => m.role === 'assistant')
   if (lastAssistantMsg) {
@@ -443,7 +482,10 @@ function removeImage() {
 }
 
 // 删除话题并取消通知
-const deleteTopic = async (idx) => {
+const deleteTopic = async (id) => {
+  const idx = topics.value.findIndex(t => t.id === id)
+  if (idx === -1) return
+
   const topic = topics.value[idx]
   if (Capacitor.isNativePlatform() && topic.id) {
     try {
@@ -459,9 +501,12 @@ const deleteTopic = async (idx) => {
 }
 
 // 切换话题揭晓状态
-function toggleTopicReveal(idx) {
-  topics.value[idx].revealed = !topics.value[idx].revealed
-  lsSet(getAgentStoreKey('topics'), topics.value)
+function toggleTopicReveal(id) {
+  const idx = topics.value.findIndex(t => t.id === id)
+  if (idx !== -1) {
+    topics.value[idx].revealed = !topics.value[idx].revealed
+    lsSet(getAgentStoreKey('topics'), topics.value)
+  }
 }
 
 // 处理角色点击事件（增加部位判断）
@@ -488,7 +533,7 @@ const handleWaifuClick = async (event) => {
 
 // 处理任务气泡长按逻辑
 const handlePressStart = (reminder) => {
-  if (explodingReminders.value.has(reminder)) return // 这里的逻辑不太对，set里存的是idx，这里传入的是对象，不过一般长按时不应该正在炸裂
+  if (explodingReminders.value.has(reminder.id)) return
   
   isLongPress = false
   pressTimer = setTimeout(() => {
@@ -502,13 +547,13 @@ const handlePressStart = (reminder) => {
   }, 500)
 }
 
-const handlePressEnd = (idx) => {
+const handlePressEnd = (id) => {
   if (pressTimer) {
     clearTimeout(pressTimer)
     pressTimer = null
   }
   if (!isLongPress) {
-    handleReminderClick(idx)
+    handleReminderClick(id)
   }
 }
 
@@ -520,8 +565,8 @@ const handlePressCancel = () => {
 }
 
 // 处理任务气泡点击
-const handleReminderClick = async (idx) => {
-  if (explodingReminders.value.has(idx)) return
+const handleReminderClick = async (id) => {
+  if (explodingReminders.value.has(id)) return
   
   // 1. 触发震动
   if (Capacitor.isNativePlatform()) {
@@ -529,12 +574,12 @@ const handleReminderClick = async (idx) => {
   }
   
   // 2. 标记正在炸裂
-  explodingReminders.value.add(idx)
+  explodingReminders.value.add(id)
   
   // 3. 等待动画结束 (300ms)
   setTimeout(async () => {
-    await deleteReminder(idx)
-    explodingReminders.value.delete(idx)
+    await deleteReminder(id)
+    explodingReminders.value.delete(id)
   }, 300)
 }
 
@@ -558,7 +603,10 @@ const handleTopicClick = async () => {
 }
 
 // 删除任务并取消通知
-const deleteReminder = async (idx) => {
+const deleteReminder = async (id) => {
+  const idx = reminders.value.findIndex(r => r.id === id)
+  if (idx === -1) return
+
   const reminder = reminders.value[idx]
   if (Capacitor.isNativePlatform() && reminder.id) {
     try {
@@ -647,6 +695,18 @@ function persistMessages() {
 
 function toSettings() { router.push('/settings') }
 function toGroupChat() { router.push('/group') }
+function toGame() { router.push('/game/blackjack') }
+
+function toGameAction() {
+  showFeatureDrawer.value = false
+  toGame()
+}
+
+function toGroupChatAction() {
+  showFeatureDrawer.value = false
+  toGroupChat()
+}
+
 function openHistory() { showHistory.value = true }
 
 function expandInput() {
@@ -2164,5 +2224,105 @@ onMounted(() => {
 .btn-secondary:hover { background: rgba(255, 255, 255, 0.8); border-color: rgba(0,0,0,0.15) }
 @media (max-width: 768px) { 
   .hero { min-height: 400px }
+}
+
+/* 功能抽屉样式 */
+.feature-drawer-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.4);
+  backdrop-filter: blur(5px);
+  z-index: 2000;
+  display: flex;
+  align-items: flex-end;
+}
+
+.feature-drawer-card {
+  width: 100%;
+  background: rgba(28, 28, 30, 0.95);
+  backdrop-filter: blur(20px);
+  border-radius: 24px 24px 0 0;
+  padding: 20px;
+  padding-bottom: calc(20px + env(safe-area-inset-bottom));
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  box-shadow: 0 -10px 40px rgba(0, 0, 0, 0.3);
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.drawer-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.drawer-title {
+  color: #fff;
+  font-weight: 600;
+  font-size: 17px;
+}
+
+.drawer-close {
+  background: rgba(255, 255, 255, 0.1);
+  border: none;
+  width: 32px;
+  height: 32px;
+  border-radius: 16px;
+  color: white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+
+.feature-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 16px;
+  padding: 10px 0;
+}
+
+.feature-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+}
+
+.feature-icon {
+  width: 56px;
+  height: 56px;
+  border-radius: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 24px;
+  color: #fff;
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  transition: all 0.2s ease;
+}
+
+.feature-item:active .feature-icon {
+  transform: scale(0.9);
+  background: rgba(255, 255, 255, 0.2);
+}
+
+.game-icon {
+  background: linear-gradient(135deg, rgba(59, 130, 246, 0.5), rgba(37, 99, 235, 0.5));
+}
+
+.group-icon {
+  background: linear-gradient(135deg, rgba(16, 185, 129, 0.5), rgba(5, 150, 105, 0.5));
+}
+
+.feature-label {
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.8);
 }
 </style>

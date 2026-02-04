@@ -370,7 +370,7 @@ async function generateResponse(agentId) {
 1. 你的名字是 ${config.name}。
 2. 你正在大家庭的群聊中，成员包括你、${otherAgents}和主人。
 3. 请根据上下文回复用户或其他人的话。
-4. 最好控制在3句话，30字以内，保持简短。
+4. 最好控制在3句话，30字以内，保持简短；将行为动作用括号“（）”包裹来表示。
 </Output_Constraint>
 `
     // 2. 历史记录转换 (Perspective Shifting)
@@ -649,7 +649,6 @@ async function generateResponse(agentId) {
   display: flex;
   gap: 12px;
   width: 100%;
-  max-width: 92%;
   animation: message-in 0.3s ease-out;
 }
 
@@ -659,12 +658,11 @@ async function generateResponse(agentId) {
 }
 
 .user-row {
-  align-self: flex-end;
-  flex-direction: row-reverse;
+  justify-content: flex-end;
 }
 
 .agent-row {
-  align-self: flex-start;
+  justify-content: flex-start;
 }
 
 .avatar {
@@ -700,11 +698,10 @@ async function generateResponse(agentId) {
 .message-bubble-container {
   position: relative;
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: 8px;
-  max-width: 100%;
-  flex: 1; /* 让容器占据剩余空间，允许气泡变宽 */
-  min-width: 0; /* 防止 flex 子元素溢出 */
+  max-width: 85%;
+  min-width: 0;
 }
 
 .user-row .message-bubble-container {
@@ -712,15 +709,19 @@ async function generateResponse(agentId) {
 }
 
 .message-bubble {
-  /* flex: 1; */
-  min-width: 0;
+  display: inline-block;
+  vertical-align: top;
+  width: auto;
   max-width: 100%;
+  min-width: 0;
   padding: 12px 16px;
   border-radius: 20px;
   box-shadow: 0 4px 15px rgba(0, 0, 0, 0.05);
   position: relative;
   transition: transform 0.2s;
   z-index: 2;
+  word-wrap: break-word;
+  overflow-wrap: break-word;
 }
 
 .message-actions {
@@ -836,7 +837,13 @@ async function generateResponse(agentId) {
 .bubble-content {
   font-size: 15px;
   line-height: 1.6;
-  word-break: break-word;
+  word-wrap: break-word;
+  overflow-wrap: break-word;
+  display: block;
+}
+
+.bubble-content :deep(p) {
+  margin: 0;
 }
 
 .user-row .bubble-content {

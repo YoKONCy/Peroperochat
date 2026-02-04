@@ -152,6 +152,8 @@ function moveWidgetIntoPanel() {
       canvas.style.width = '300px'
       canvas.style.height = '300px'
       canvas.style.display = 'block'
+      canvas.style.willChange = 'transform, opacity'
+      canvas.style.transform = 'translateZ(0)' // 强制开启 GPU 加速
     } catch (e) { console.warn('Failed to style canvas:', e) }
   }
 }

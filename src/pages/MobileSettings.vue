@@ -31,7 +31,7 @@
 
       <!-- 设置内容区 -->
       <div class="content-area">
-        <Transition name="fade-slide" mode="out-in">
+        <Transition name="fade" mode="out-in">
           <div :key="tab" class="content-card">
             
             <!-- 角色选择 -->
@@ -677,9 +677,41 @@ onMounted(async () => {
   font-size: 18px;
   margin: 0;
   color: #1e293b;
+  font-weight: 700;
+}
+
+.section h4 {
+  margin: 0 0 8px 0;
+  color: #334155;
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.section p {
+  margin: 0 0 16px 0;
+  color: #64748b;
+  font-size: 14px;
+  line-height: 1.6;
 }
 
 .section-header.danger .el-icon { color: #ef4444; }
+
+.danger-card {
+  background: rgba(254, 242, 242, 0.8);
+  border: 1px dashed rgba(239, 68, 68, 0.3);
+  border-radius: 16px;
+  padding: 16px;
+  margin-top: 8px;
+}
+
+.danger-card h4 {
+  color: #991b1b;
+}
+
+.danger-card p {
+  color: #b91c1c;
+  opacity: 0.8;
+}
 
 /* 小组件样式 */
 .api-tools {
@@ -692,6 +724,17 @@ onMounted(async () => {
   border-radius: 12px;
   margin-bottom: 20px;
   font-size: 13px;
+}
+
+:deep(.el-form-item__label) {
+  color: #475569 !important;
+  font-weight: 600 !important;
+  padding-bottom: 8px !important;
+}
+
+:deep(.el-input__wrapper), :deep(.el-textarea__inner) {
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04) !important;
+  border-radius: 12px !important;
 }
 
 .full-btn {
@@ -709,6 +752,13 @@ onMounted(async () => {
   font-size: 13px;
   color: #1e40af;
   line-height: 1.5;
+  border: 1px solid rgba(59, 130, 246, 0.1);
+}
+
+.info-banner p {
+  margin: 0;
+  color: inherit;
+  font-size: inherit;
 }
 
 .slider-group {
@@ -788,5 +838,16 @@ onMounted(async () => {
   padding: 40px 0;
   color: #94a3b8;
   font-size: 14px;
+}
+
+/* 淡入淡出动画 */
+.fade-enter-active,
+.fade-leave-active {
+  transition: opacity 0.3s ease;
+}
+
+.fade-enter-from,
+.fade-leave-to {
+  opacity: 0;
 }
 </style>
