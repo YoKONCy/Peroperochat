@@ -243,7 +243,7 @@ import { ref, computed, onMounted, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import axios from 'axios'
 import { ElMessageBox, ElMessage } from 'element-plus'
-import { getDefaultPrompts, resetAll, AGENTS, getActiveAgentId, setActiveAgentId } from '../api'
+import { resetAll, AGENTS, getActiveAgentId, setActiveAgentId } from '../api'
 import { db } from '../db'
 import { marked } from 'marked'
 import DOMPurify from 'dompurify'
@@ -295,7 +295,7 @@ function cleanMessageContent(text) {
       .replace(/<([A-Z_]+)>[\s\S]*?<\/\1>/g, '')
       .replace(/\[\[\[NIT_CALL\]\]\][\s\S]*?\[\[\[NIT_END\]\]\]/g, '')
       .trim()
-  } catch (e) {
+  } catch {
     return String(text || '')
   }
 }
@@ -391,7 +391,7 @@ const filteredMemories = computed(() => {
 async function loadMemories() {
   try {
     allMemories.value = await db.memories.orderBy('timestamp').reverse().toArray()
-  } catch (e) {
+  } catch {
     ElMessage.error('加载记忆失败')
   }
 }
@@ -405,7 +405,7 @@ async function deleteMemory(id) {
     await db.memories.delete(id)
     await loadMemories()
     ElMessage.success('已删除')
-  } catch (_) {}
+  } catch { /* ignore */ }
 }
 
 watch(tab, (newTab) => {
@@ -416,7 +416,7 @@ watch(tab, (newTab) => {
 function lsGet(k, def) {
   const v = localStorage.getItem(k)
   if (v === null) return def
-  try { return JSON.parse(v) } catch(_) { return v }
+  try { return JSON.parse(v) } catch { return v }
 }
 function lsSet(k, v) {
   localStorage.setItem(k, typeof v === 'object' ? JSON.stringify(v) : v)
@@ -461,7 +461,7 @@ async function fetchModels() {
     })
     availableModels.value = res.data.data
     ElMessage.success(`成功获取 ${availableModels.value.length} 个模型`)
-  } catch (e) {
+  } catch {
     ElMessage.error('获取失败，请检查API地址或密钥')
   } finally {
     loading.close()
@@ -499,7 +499,7 @@ async function handleResetAll() {
         ElMessage.error('重置失败')
       }
     }
-  } catch (_) {}
+  } catch { /* ignore */ }
 }
 
 onMounted(async () => {

@@ -118,7 +118,7 @@ function cleanMessageContent(text) {
 }
 function onKeydownEnter(e) {
   if (e && e.shiftKey) return
-  e && e.preventDefault()
+  if (e) e.preventDefault()
   submit()
 }
 function submit() {
@@ -136,7 +136,7 @@ async function onCopy(index) {
     const text = String(m?.content || '')
     await navigator.clipboard.writeText(text)
     ElMessage.success('已复制到剪贴板')
-  } catch (_) {
+  } catch {
     try {
       const m = props.messages[index]
       const text = String(m?.content || '')
@@ -149,7 +149,7 @@ async function onCopy(index) {
       document.execCommand('copy')
       document.body.removeChild(ta)
       ElMessage.success('已复制到剪贴板')
-    } catch (e) {
+    } catch {
       ElMessage.error('复制失败')
     }
   }

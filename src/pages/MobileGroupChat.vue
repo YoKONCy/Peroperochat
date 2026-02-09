@@ -131,7 +131,7 @@ import { ArrowLeft, Promotion, Delete, Operation, Menu, ArrowUp } from '@element
 import { marked } from 'marked'
 import DOMPurify from 'dompurify'
 import { ElMessageBox, ElMessage } from 'element-plus'
-import { chat, AGENTS, getDefaultPrompts, getRelevantMemories, saveMemory } from '../api'
+import { chat, AGENTS, getRelevantMemories, saveMemory } from '../api'
 
 const router = useRouter()
 const messages = ref([])
@@ -289,14 +289,14 @@ onMounted(() => {
     try {
       messages.value = JSON.parse(saved)
       scrollToBottom()
-    } catch (e) {}
+    } catch { /* ignore */ }
   }
 
   const savedSettings = localStorage.getItem('ppc.group.replySettings')
   if (savedSettings) {
     try {
       replySettings.value = JSON.parse(savedSettings)
-    } catch (e) {}
+    } catch { /* ignore */ }
   }
 })
 
@@ -341,7 +341,7 @@ function getCurrentBodyLines(agentId) {
   try {
     const saved = localStorage.getItem(`ppc.${agentId}.waifu.texts`)
     if (saved) cur = JSON.parse(saved)
-  } catch (e) {}
+  } catch { /* ignore */ }
 
   const lines = {
     head: [],

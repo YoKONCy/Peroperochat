@@ -82,7 +82,7 @@
 <script setup>
 import { ref, computed } from 'vue'
 import { useRouter } from 'vue-router'
-import { AGENTS, getActiveAgentId, chat } from '../api'
+import { AGENTS, getActiveAgentId } from '../api'
 
 const router = useRouter()
 const activeAgentId = ref(getActiveAgentId())

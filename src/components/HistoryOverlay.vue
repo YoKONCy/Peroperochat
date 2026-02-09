@@ -1,6 +1,6 @@
 <template>
   <Transition name="fade">
-    <div class="overlay" @click.self="$emit('close')">
+    <div v-show="true" class="overlay" @click.self="$emit('close')">
       <div class="panel">
         <div class="head">
           <div class="title-area">
@@ -72,14 +72,14 @@ import { marked } from 'marked'
 import DOMPurify from 'dompurify'
 import { getActiveAgentId, AGENTS } from '../api'
 
-const props = defineProps({
+defineProps({
   messages: {
     type: Array,
     default: () => []
   }
 })
 
-const emit = defineEmits(['close', 'delete', 'regenerate', 'copy'])
+defineEmits(['close', 'delete', 'regenerate', 'copy'])
 const showAll = ref(false)
 
 // 图片预览逻辑

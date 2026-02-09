@@ -87,7 +87,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
+import { ref, onMounted, onBeforeUnmount } from 'vue'
 import axios from 'axios'
 import { db } from '../db'
 import { marked } from 'marked'
@@ -135,11 +135,6 @@ function loadAutoload() {
     s.onerror = () => reject(new Error('autoload.js failed'))
     document.body.appendChild(s)
   })
-}
-
-const handleCanvasClick = (e) => {
-  e.stopPropagation()
-  handleLive2DClick(e)
 }
 
 function moveWidgetIntoPanel() {
@@ -286,17 +281,14 @@ function updateTime() {
   currentDate.value = now.toLocaleDateString('zh-CN', { month: 'long', day: 'numeric', weekday: 'long' })
 }
 function onSwitchModel() {
-  try { if (window.WaifuWidget && typeof window.WaifuWidget.loadOtherModel === 'function') window.WaifuWidget.loadOtherModel() } catch {}
-}
-function onRandTextures() {
-  try { if (window.WaifuWidget && typeof window.WaifuWidget.loadRandModel === 'function') window.WaifuWidget.loadRandModel() } catch {}
+  try { if (window.WaifuWidget && typeof window.WaifuWidget.loadOtherModel === 'function') window.WaifuWidget.loadOtherModel() } catch { /* ignore */ }
 }
 
-const onMood = e => { try { moodText.value = String(e.detail || '').trim() || '软萌中' } catch {} }
-const onMind = e => { try { mindText.value = String(e.detail || '').trim() || `"${AGENTS[getActiveAgentId()]?.name || 'Pero'}要永远跟主人在一起！"` } catch {} }
-const onVibe = e => { try { vibeText.value = String(e.detail || '').trim() || '--' } catch {} }
-const onChat = e => { try { showChatBubble(String(e.detail || '').trim()) } catch {} }
-const onWaifuMessage = e => { try { showChatBubble(String(e.detail.text || '').trim()) } catch {} }
+const onMood = e => { try { moodText.value = String(e.detail || '').trim() || '软萌中' } catch { /* ignore */ } }
+const onMind = e => { try { mindText.value = String(e.detail || '').trim() || `"${AGENTS[getActiveAgentId()]?.name || 'Pero'}要永远跟主人在一起！"` } catch { /* ignore */ } }
+const onVibe = e => { try { vibeText.value = String(e.detail || '').trim() || '--' } catch { /* ignore */ } }
+const onChat = e => { try { showChatBubble(String(e.detail || '').trim()) } catch { /* ignore */ } }
+const onWaifuMessage = e => { try { showChatBubble(String(e.detail.text || '').trim()) } catch { /* ignore */ } }
 
 async function fetchLocationAndWeather(force = false) {
   try {
@@ -324,7 +316,7 @@ async function fetchLocationAndWeather(force = false) {
         lat = locRes.data.latitude
         lon = locRes.data.longitude
       }
-    } catch (err1) {
+    } catch {
       try {
         // 备用方案: ipwho.is
         const locRes2 = await axios.get('https://ipwho.is/')
@@ -333,7 +325,7 @@ async function fetchLocationAndWeather(force = false) {
           lat = locRes2.data.latitude
           lon = locRes2.data.longitude
         }
-      } catch (err2) {
+      } catch {
         console.warn('All location APIs failed')
       }
     }
@@ -383,10 +375,10 @@ async function fetchLocationAndWeather(force = false) {
 
 onMounted(async () => {
   ensureFontAwesome()
-  try { await loadAutoload() } catch {}
+  try { await loadAutoload() } catch { /* ignore */ }
   setTimeout(() => {
     if (!document.getElementById('waifu') && typeof window.initWidget === 'function') {
-      try { window.initWidget({ waifuPath: '/live2d-widget/waifu-texts.json', cdnPath: '/live2d-widget/' }) } catch {}
+      try { window.initWidget({ waifuPath: '/live2d-widget/waifu-texts.json', cdnPath: '/live2d-widget/' }) } catch { /* ignore */ }
     }
     moveWidgetIntoPanel()
   }, 50)
@@ -406,7 +398,7 @@ onMounted(async () => {
     if (md) mindText.value = md
     const vb = String(localStorage.getItem(`ppc.${agentId}.vibe`) || '').trim()
     if (vb) vibeText.value = vb
-  } catch {}
+  } catch { /* ignore */ }
   tick = setInterval(() => { updateTime() }, 1000)
   
   // 每 30 分钟尝试刷新一次环境信息 (fetchLocationAndWeather 内部有缓存逻辑)
@@ -443,7 +435,7 @@ onMounted(async () => {
       const parsed = JSON.parse(savedTexts)
       window.WAIFU_TEXTS = { ...(window.WAIFU_TEXTS || {}), ...parsed }
     }
-  } catch (e) {}
+  } catch { /* ignore */ }
 
   window.addEventListener('ppc:pero-status-updated', (e) => {
     const status = e.detail
@@ -457,15 +449,20 @@ onMounted(async () => {
 })
 
 onBeforeUnmount(() => {
-  try { if (observer) observer.disconnect() } catch {}
-  try { if (tick) clearInterval(tick) } catch {}
-  try { if (envRefreshTick) clearInterval(envRefreshTick) } catch {}
-  try { if (chatTimer) clearTimeout(chatTimer) } catch {}
+  try { if (observer) observer.disconnect() } catch { /* ignore */ }
+  try { if (tick) clearInterval(tick) } catch { /* ignore */ }
+  try { if (envRefreshTick) clearInterval(envRefreshTick) } catch { /* ignore */ }
+  try { if (chatTimer) clearTimeout(chatTimer) } catch { /* ignore */ }
   window.removeEventListener('ppc:mood', onMood)
   window.removeEventListener('ppc:mind', onMind)
   window.removeEventListener('ppc:vibe', onVibe)
   window.removeEventListener('ppc:chat', onChat)
   window.removeEventListener('waifu-message', onWaifuMessage)
+
+  try {
+    const waifu = document.getElementById('waifu')
+    if (waifu) waifu.style.display = 'none'
+  } catch { /* ignore */ }
 })
 </script>
 

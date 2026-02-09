@@ -666,7 +666,7 @@ function lsGet(key, fallback) {
   try { const v = localStorage.getItem(key); if (v===null||v===undefined) return fallback; try { return JSON.parse(v) } catch { return v } } catch { return fallback }
 }
 function lsSet(key, value) {
-  try { const v = typeof value === 'string' ? value : JSON.stringify(value); localStorage.setItem(key, v) } catch {}
+  try { const v = typeof value === 'string' ? value : JSON.stringify(value); localStorage.setItem(key, v) } catch { /* ignore */ }
 }
 function persistMessages() {
   try { 
@@ -676,7 +676,7 @@ function persistMessages() {
       timestamp: m.timestamp 
     })); 
     lsSet(getAgentStoreKey('messages'), arr) 
-  } catch {}
+  } catch { /* ignore */ }
 }
 
 function toSettings() { router.push('/settings') }
@@ -774,8 +774,8 @@ function parsePeroStatus(content) {
       let statusMap
       try {
         statusMap = JSON.parse(rawData)
-      } catch (e) {
-         try { statusMap = new Function('return ' + rawData)() } catch (e2) {}
+      } catch {
+         try { statusMap = new Function('return ' + rawData)() } catch { /* ignore */ }
       }
 
       if (statusMap && statusMap.mood) {

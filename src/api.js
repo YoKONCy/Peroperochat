@@ -206,7 +206,6 @@ export function setActiveAgentId(agentId) {
 
 // 保存记忆到数据库 (双写模式)
 export async function saveMemory(memoryData, msgTimestamp = null, explicitAgentId = null) {
-  let localSuccess = false
   const agentId = explicitAgentId || getActiveAgentId()
   
   // 1. 必选：保存到本地 IndexedDB
@@ -235,7 +234,6 @@ export async function saveMemory(memoryData, msgTimestamp = null, explicitAgentI
     }
 
     await db.memories.add(memoryRecord)
-    localSuccess = true
 
     // 2. 可选：尝试同步到远程服务器 (覆盖式策略：不等待结果，后台静默执行)
     const remoteUrl = getRemoteBaseUrl()
@@ -403,7 +401,7 @@ export async function chatStream(messages, model, temperature = 0.7, apiBase, op
               const content = data.choices?.[0]?.delta?.content || ''
               full += content
               if (typeof onChunk === 'function') onChunk(content, full)
-            } catch (e) { }
+            } catch { /* ignore */ }
           }
         }
       }
@@ -476,7 +474,7 @@ export async function chatStream(messages, model, temperature = 0.7, apiBase, op
           const content = data.choices?.[0]?.delta?.content || ''
           full += content
           if (typeof onChunk === 'function') onChunk(content, full)
-        } catch (e) {
+        } catch {
           // Ignore parse errors for partial chunks
         }
       }
@@ -551,7 +549,7 @@ export async function getDefaultPrompts() {
   }
 }
 
-export async function uploadModel(file) {
+export async function uploadModel() {
   // In pure frontend, this would need to store the file in IndexedDB
   // For now, we return error as it's complex to implement pure-frontend 3D model management without a server
   return { ok: false, error: "3D model upload requires a server or complex IndexedDB storage" }
