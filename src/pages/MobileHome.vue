@@ -90,7 +90,7 @@
           
           <div class="topic-list-content">
             <div 
-              v-for="(t, idx) in topics" 
+              v-for="t in topics" 
               :key="t.id || (t.time + t.topic)"
               :class="['topic-item', { 'is-revealed': t.revealed }]"
               @click="toggleTopicReveal(t.id)"
@@ -192,7 +192,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted, onUnmounted, nextTick, watch } from 'vue'
+import { ref, onMounted, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
 import { Haptics, ImpactStyle } from '@capacitor/haptics'
 import { LocalNotifications } from '@capacitor/local-notifications'
@@ -200,7 +200,7 @@ import { Capacitor } from '@capacitor/core'
 import Live2DWidget from '../components/Live2DWidget.vue'
 import HistoryOverlay from '../components/HistoryOverlay.vue'
 import { chat as chatApi, chatStream, getRelevantMemories, saveMemory, deleteMemoriesByMsgTimestamp, getDefaultPrompts, getActiveAgentId, AGENTS } from '../api'
-import { Promotion, UserFilled } from '@element-plus/icons-vue'
+import { Promotion } from '@element-plus/icons-vue'
 
 const router = useRouter()
 const text = ref('')
@@ -448,12 +448,6 @@ onMounted(() => {
   }
 })
 
-// 移除提醒任务
-function removeReminder(idx) {
-  reminders.value.splice(idx, 1)
-  lsSet(getAgentStoreKey('reminders'), reminders.value)
-}
-
 // 图片处理
 function triggerUpload() {
   fileInputRef.value?.click()
@@ -626,7 +620,7 @@ function formatReminderTime(timeStr) {
   try {
     const d = new Date(timeStr)
     return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
-  } catch (e) {
+  } catch {
     return ''
   }
 }
@@ -668,19 +662,11 @@ function regenerateAndClose(idx) {
   regenerateAt(idx)
 }
 
-function toggleRaw(idx) {
-  if (expandedRawIndices.value.has(idx)) {
-    expandedRawIndices.value.delete(idx)
-  } else {
-    expandedRawIndices.value.add(idx)
-  }
-}
-
 function lsGet(key, fallback) {
-  try { const v = localStorage.getItem(key); if (v===null||v===undefined) return fallback; try { return JSON.parse(v) } catch(_) { return v } } catch(_) { return fallback }
+  try { const v = localStorage.getItem(key); if (v===null||v===undefined) return fallback; try { return JSON.parse(v) } catch { return v } } catch { return fallback }
 }
 function lsSet(key, value) {
-  try { const v = typeof value === 'string' ? value : JSON.stringify(value); localStorage.setItem(key, v) } catch(_) {}
+  try { const v = typeof value === 'string' ? value : JSON.stringify(value); localStorage.setItem(key, v) } catch {}
 }
 function persistMessages() {
   try { 
@@ -690,7 +676,7 @@ function persistMessages() {
       timestamp: m.timestamp 
     })); 
     lsSet(getAgentStoreKey('messages'), arr) 
-  } catch(_) {}
+  } catch {}
 }
 
 function toSettings() { router.push('/settings') }
@@ -830,10 +816,9 @@ function parsePeroStatus(content) {
       } catch (e) {
         // Fallback: 尝试解析 JS 对象格式 (例如单引号)
         try {
-           // eslint-disable-next-line no-new-func
            data = new Function('return ' + rawData)()
-        } catch (e2) {
-           console.warn('Failed to parse click messages (JSON & Eval):', e, e2)
+        } catch {
+           console.warn('Failed to parse click messages (JSON & Eval):', e)
            return
         }
       }
@@ -842,7 +827,7 @@ function parsePeroStatus(content) {
       try {
         const saved = localStorage.getItem(`ppc.${agentId}.waifu.texts`)
         if (saved) cur = JSON.parse(saved)
-      } catch (e) {}
+      } catch { /* ignore */ }
 
       if (Array.isArray(data)) {
         console.log('[Waifu] Parsing CLICK_MESSAGES as Array:', data)
@@ -955,7 +940,7 @@ function parsePeroStatus(content) {
         try {
           const saved = localStorage.getItem(`ppc.${agentId}.waifu.texts`)
           if (saved) cur = JSON.parse(saved)
-        } catch (e) {}
+        } catch { /* ignore */ }
         
         // 仅清除挂机相关的台词
         for (let i = 1; i <= 20; i++) {
@@ -973,7 +958,7 @@ function parsePeroStatus(content) {
         try {
           const saved = localStorage.getItem(`ppc.${agentId}.waifu.texts`)
           if (saved) cur = JSON.parse(saved)
-        } catch (e) {}
+        } catch { /* ignore */ }
         
         // 1. 清除旧的挂机台词
         for (let i = 1; i <= 20; i++) {
@@ -1004,8 +989,8 @@ function parsePeroStatus(content) {
       let messages
       try {
         messages = JSON.parse(rawData)
-      } catch (e) {
-         try { messages = new Function('return ' + rawData)() } catch (e2) {}
+      } catch {
+         try { messages = new Function('return ' + rawData)() } catch { /* ignore */ }
       }
 
       if (Array.isArray(messages) && messages.length >= 1) {
@@ -1013,7 +998,7 @@ function parsePeroStatus(content) {
         try {
           const saved = localStorage.getItem(`ppc.${agentId}.waifu.texts`)
           if (saved) cur = JSON.parse(saved)
-        } catch (e) {}
+        } catch { /* ignore */ }
         
         cur.visibilityBack = messages[0]
         
@@ -1045,9 +1030,7 @@ function parsePeroStatus(content) {
           scheduleFutureNotification(rId, `${agentNameRemind} 的任务提醒`, data.task, data.time)
         }
       }
-    } catch (e) {
-      console.warn('Failed to parse reminder JSON:', e)
-    }
+    } catch { /* ignore */ }
   }
 
   // 6. 解析 TOPIC (支持多个标签)
@@ -1072,9 +1055,7 @@ function parsePeroStatus(content) {
           scheduleFutureNotification(tId, `${agentName} 想找你聊天`, data.topic, data.time)
         }
       }
-    } catch (e) {
-      console.warn('Failed to parse topic JSON:', e)
-    }
+    } catch { /* ignore */ }
   }
 }
 
@@ -1128,7 +1109,41 @@ function getEnvPrompt() {
   const location = localStorage.getItem('ppc.location') || '未知地点'
   const weather = localStorage.getItem('ppc.weather') || '未知天气'
   
-  return `[Current Environment]\nTime: ${timeStr}\nLocation: ${location}\nWeather: ${weather}`
+  return `[当前环境信息]\n时间: ${timeStr}\n地点: ${location}\n天气: ${weather}`
+}
+
+// 获取当前部位的对应台词
+function getCurrentBodyLines() {
+  const agentId = getActiveAgentId()
+  let cur = {}
+  try {
+    const saved = localStorage.getItem(`ppc.${agentId}.waifu.texts`)
+    if (saved) cur = JSON.parse(saved)
+  } catch { /* ignore */ }
+
+  const lines = {
+    head: [],
+    chest: [],
+    body: []
+  }
+
+  // 提取部位台词 (click_head_01, click_head_02...)
+  for (let i = 1; i <= 20; i++) {
+    const slot = String(i).padStart(2, '0')
+    if (cur[`click_head_${slot}`]) lines.head.push(cur[`click_head_${slot}`])
+    if (cur[`click_chest_${slot}`]) lines.chest.push(cur[`click_chest_${slot}`])
+    if (cur[`click_body_${slot}`]) lines.body.push(cur[`click_body_${slot}`])
+  }
+
+  // 如果没有台词，返回空
+  if (lines.head.length === 0 && lines.chest.length === 0 && lines.body.length === 0) {
+    return null
+  }
+
+  return `[当前交互台词设定]
+头部: ${lines.head.join(' / ') || '无'}
+胸部: ${lines.chest.join(' / ') || '无'}
+身体: ${lines.body.join(' / ') || '无'}`
 }
 
 async function onSend(systemMsg = null) {
@@ -1185,17 +1200,18 @@ async function onSend(systemMsg = null) {
     // 注入当前环境信息
     reqForApi = [{ role: 'system', content: getEnvPrompt() }, ...reqForApi]
     
+    // 注入当前部位台词
+    const bodyLines = getCurrentBodyLines()
+    if (bodyLines) {
+      reqForApi = [{ role: 'system', content: bodyLines }, ...reqForApi]
+    }
+    
     // 检索并注入长期记忆
     const lastUserText = typeof user.content === 'string' ? user.content : (user.content.find(c => c.type === 'text')?.text || '')
     const relevantMemories = await getRelevantMemories(lastUserText)
     if (relevantMemories.length > 0) {
       const memoryPrompt = `<LONG_TERM_MEMORY>\n${relevantMemories.map(m => `[${m.realTime || '未知时间'}] ${m.content}`).join('\n')}\n</LONG_TERM_MEMORY>`
       reqForApi = [{ role: 'system', content: memoryPrompt }, ...reqForApi]
-    }
-    
-    // 如果有系统提示词，添加到消息开头
-    if (systemPrompt && !reqForApi.some(m => m.role === 'system' && m.content.includes(systemPrompt))) {
-      reqForApi = [{ role: 'system', content: systemPrompt }, ...reqForApi]
     }
     
     // 如果有人设提示词，添加到系统提示词之后或消息开头
@@ -1208,9 +1224,14 @@ async function onSend(systemMsg = null) {
       }
     }
 
+    // 如果有系统提示词，添加到消息开头
+    if (systemPrompt && !reqForApi.some(m => m.role === 'system' && m.content.includes(systemPrompt))) {
+      reqForApi = [{ role: 'system', content: systemPrompt }, ...reqForApi]
+    }
+    
     // 如果有用户设定，添加到系统/人设提示词之后
     if (userName || userPersona) {
-      const userSettingPrompt = `[User Info]\nName: ${userName || 'User'}\nDescription: ${userPersona || 'No description'}`
+      const userSettingPrompt = `[用户信息]\n姓名: ${userName || '主人'}\n描述: ${userPersona || '暂无描述'}`
       if (!reqForApi.some(m => m.content.includes(userSettingPrompt))) {
         let lastSystemIndex = -1
         for (let i = 0; i < reqForApi.length; i++) {
@@ -1325,7 +1346,7 @@ async function deleteMessageAt(idx) {
             if (rIdx !== -1) {
               deleteReminder(rIdx) // 使用现有的带通知取消逻辑的函数
             }
-          } catch (e) {}
+          } catch { /* ignore */ }
         }
         
         // 检查并清理 Topic
@@ -1338,13 +1359,13 @@ async function deleteMessageAt(idx) {
             if (tIdx !== -1) {
               deleteTopic(tIdx) // 使用现有的带通知取消逻辑的函数
             }
-          } catch (e) {}
+          } catch { /* ignore */ }
         }
       }
     })
     
     // 执行删除：由于是按需删除，我们使用 filter 重新构建数组，而不是 splice 级联
-    messages.value = messages.value.filter((_, i) => !indicesToDelete.includes(i))
+    messages.value = messages.value.filter((m, i) => !indicesToDelete.includes(i))
     
     // 同步删除数据库中的关联记忆
     for (const ts of toDeleteTimestamps) {
@@ -1363,8 +1384,8 @@ async function deleteMessageAt(idx) {
     persistMessages()
     // 只有在历史记录面板没打开时才滚动（虽然删除通常在历史面板触发）
     if (!showHistory.value) scrollToBottom() 
-  } catch(e) {
-    console.error('删除消息失败:', e)
+  } catch {
+    // 忽略错误
   }
 }
 
@@ -1389,7 +1410,7 @@ async function copyMessage(m) {
     await navigator.clipboard.writeText(t)
     // 可以添加一个提示，告诉用户复制成功
     console.log('消息已复制到剪贴板')
-  } catch(_) {
+  } catch {
     try {
       const ta = document.createElement('textarea'); 
       ta.value = t; 
@@ -1400,7 +1421,7 @@ async function copyMessage(m) {
       document.execCommand('copy'); 
       document.body.removeChild(ta)
       console.log('消息已复制到剪贴板（备用方法）')
-    } catch(_) {
+    } catch {
       console.error('复制失败')
     }
   }
@@ -1442,6 +1463,12 @@ async function regenerateAt(idx) {
     // 注入当前时间
     baseReq = [{ role: 'system', content: getEnvPrompt() }, ...baseReq]
     
+    // 注入当前部位台词
+    const bodyLines = getCurrentBodyLines()
+    if (bodyLines) {
+      baseReq = [{ role: 'system', content: bodyLines }, ...baseReq]
+    }
+    
     // 检索并注入长期记忆（获取上一条用户消息作为检索词）
     const lastUserMsgText = typeof (baseReq.slice().reverse().find(m => m.role === 'user')?.content) === 'string' 
       ? baseReq.slice().reverse().find(m => m.role === 'user')?.content 
@@ -1450,11 +1477,6 @@ async function regenerateAt(idx) {
     if (relevantMemories.length > 0) {
       const memoryPrompt = `<LONG_TERM_MEMORY>\n${relevantMemories.map(m => `[${m.realTime || '未知时间'}] ${m.content}`).join('\n')}\n</LONG_TERM_MEMORY>`
       baseReq = [{ role: 'system', content: memoryPrompt }, ...baseReq]
-    }
-    
-    // 如果有系统提示词，添加到消息开头
-    if (systemPrompt && !baseReq.some(m => m.role === 'system' && m.content.includes(systemPrompt))) {
-      baseReq = [{ role: 'system', content: systemPrompt }, ...baseReq]
     }
     
     // 如果有人设提示词，添加到系统提示词之后或消息开头
@@ -1467,14 +1489,19 @@ async function regenerateAt(idx) {
       }
     }
 
+    // 如果有系统提示词，添加到消息开头
+    if (systemPrompt && !baseReq.some(m => m.role === 'system' && m.content.includes(systemPrompt))) {
+      baseReq = [{ role: 'system', content: systemPrompt }, ...baseReq]
+    }
+
     // 如果有用户设定，添加到系统/人设提示词之后
     if (userName || userPersona) {
-      const userSettingPrompt = `[User Info]\nName: ${userName || 'User'}\nDescription: ${userPersona || 'No description'}`
+      const userSettingPrompt = `[用户信息]\n姓名: ${userName || '主人'}\n描述: ${userPersona || '暂无描述'}`
       if (!baseReq.some(m => m.content.includes(userSettingPrompt))) {
         let lastSystemIndex = -1
         for (let i = 0; i < baseReq.length; i++) {
           if (baseReq[i].role === 'system') lastSystemIndex = i
-          else break // 只在开头的系统消息序列中寻找
+          else break
         }
         baseReq.splice(lastSystemIndex + 1, 0, { role: 'system', content: userSettingPrompt })
       }

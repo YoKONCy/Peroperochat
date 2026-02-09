@@ -335,6 +335,51 @@ async function sendMessage() {
   }
 }
 
+// 获取指定 Agent 当前部位的对应台词
+function getCurrentBodyLines(agentId) {
+  let cur = {}
+  try {
+    const saved = localStorage.getItem(`ppc.${agentId}.waifu.texts`)
+    if (saved) cur = JSON.parse(saved)
+  } catch (e) {}
+
+  const lines = {
+    head: [],
+    chest: [],
+    body: []
+  }
+
+  // 提取部位台词 (click_head_01, click_head_02...)
+  for (let i = 1; i <= 20; i++) {
+    const slot = String(i).padStart(2, '0')
+    if (cur[`click_head_${slot}`]) lines.head.push(cur[`click_head_${slot}`])
+    if (cur[`click_chest_${slot}`]) lines.chest.push(cur[`click_chest_${slot}`])
+    if (cur[`click_body_${slot}`]) lines.body.push(cur[`click_body_${slot}`])
+  }
+
+  // 如果没有台词，返回空
+  if (lines.head.length === 0 && lines.chest.length === 0 && lines.body.length === 0) {
+    return null
+  }
+
+  return `[当前交互台词设定]
+头部: ${lines.head.join(' / ') || '无'}
+胸部: ${lines.chest.join(' / ') || '无'}
+身体: ${lines.body.join(' / ') || '无'}`
+}
+
+// 获取当前环境信息 Prompt (时间、地点、天气)
+function getEnvPrompt() {
+  const d = new Date()
+  const weekdays = ['星期日', '星期一', '星期二', '星期三', '星期四', '星期五', '星期六']
+  const timeStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}:${String(d.getSeconds()).padStart(2, '0')} ${weekdays[d.getDay()]}`
+  
+  const location = localStorage.getItem('ppc.location') || '未知地点'
+  const weather = localStorage.getItem('ppc.weather') || '未知天气'
+  
+  return `[当前环境信息]\n时间: ${timeStr}\n地点: ${location}\n天气: ${weather}`
+}
+
 async function generateResponse(agentId) {
   processingAgent.value = AGENTS[agentId].name
   
@@ -364,7 +409,22 @@ async function generateResponse(agentId) {
       .filter(a => a.name !== config.name)
       .map(a => a.name)
       .join('、')
-    const systemPrompt = config.system_prompt + '\n' + config.persona_prompt + memoryContext + '\n' + `
+    
+    // 获取当前部位台词
+    const bodyLines = getCurrentBodyLines(agentId)
+    const bodyLinesPrompt = bodyLines ? `\n${bodyLines}\n` : ''
+
+    // 获取环境信息
+    const envPrompt = getEnvPrompt()
+    
+    // 获取用户信息
+    const userName = localStorage.getItem('ppc.userName') || ''
+    const userPersona = localStorage.getItem('ppc.userPersonaText') || ''
+    const userSettingPrompt = (userName || userPersona) 
+      ? `\n[用户信息]\n姓名: ${userName || '主人'}\n描述: ${userPersona || '暂无描述'}\n`
+      : ''
+
+    const systemPrompt = config.persona_prompt + '\n' + config.system_prompt + memoryContext + bodyLinesPrompt + '\n' + envPrompt + userSettingPrompt + '\n' + `
 <Output_Constraint>
 回复要求:
 1. 你的名字是 ${config.name}。

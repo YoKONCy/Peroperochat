@@ -248,8 +248,8 @@ import { db } from '../db'
 import { marked } from 'marked'
 import DOMPurify from 'dompurify'
 import { 
-  Search, Delete, InfoFilled, Connection, ArrowLeft, 
-  Cpu, Operation, User, Collection, Warning, Cpu as ApiIcon, Avatar,
+  Search, Connection, ArrowLeft, 
+  Cpu, Operation, User, Collection, Warning, Avatar,
   Edit
 } from '@element-plus/icons-vue'
 
@@ -350,16 +350,10 @@ const apiBase = ref('https://api.openai.com')
 const apiKey = ref('')
 const availableModels = ref([])
 const modelSearch = ref('')
-const ownerFilter = ref('')
-const systemPrompt = ref('')
-const personaText = ref('')
 const userPersonaText = ref('')
 const userName = ref('')
-const postSystemPrompt = ref('')
 const temperature = ref(0.7)
 const topP = ref(1)
-const frequencyPenalty = ref(0)
-const presencePenalty = ref(0)
 const stream = ref(false)
 const memoryRounds = ref(40)
 const memorySearch = ref('')
@@ -446,8 +440,6 @@ function applyModelSettings() {
   lsSet('ppc.modelSettings', { 
     temperature: Number(temperature.value), 
     topP: Number(topP.value), 
-    frequencyPenalty: Number(frequencyPenalty.value), 
-    presencePenalty: Number(presencePenalty.value), 
     stream: !!stream.value,
     memoryRounds: Number(memoryRounds.value)
   })
@@ -518,8 +510,6 @@ onMounted(async () => {
   const mSet = lsGet('ppc.modelSettings', {})
   temperature.value = mSet.temperature ?? 0.7
   topP.value = mSet.topP ?? 1
-  frequencyPenalty.value = mSet.frequencyPenalty ?? 0
-  presencePenalty.value = mSet.presencePenalty ?? 0
   stream.value = !!mSet.stream
   memoryRounds.value = mSet.memoryRounds ?? 40
 
@@ -529,11 +519,6 @@ onMounted(async () => {
 
   userPersonaText.value = lsGet('ppc.userPersonaText', '')
   userName.value = lsGet('ppc.userName', '')
-
-  const r = await getDefaultPrompts()
-  systemPrompt.value = lsGet('ppc.systemPrompt', r.system_prompt_default)
-  personaText.value = lsGet('ppc.personaText', r.persona_prompt_default)
-  postSystemPrompt.value = lsGet('ppc.postSystemPrompt', r.post_prompt_default)
 
   // Initialize editing rule agent ID
   editingRuleAgentId.value = activeAgentId.value
