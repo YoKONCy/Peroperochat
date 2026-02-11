@@ -779,16 +779,25 @@ function parsePeroStatus(content) {
       }
 
       if (statusMap && statusMap.mood) {
-        localStorage.setItem(`ppc.${agentId}.mood`, statusMap.mood)
-        window.dispatchEvent(new CustomEvent('ppc:mood', { detail: statusMap.mood }))
+        const curMood = localStorage.getItem(`ppc.${agentId}.mood`)
+        if (curMood !== statusMap.mood) {
+          localStorage.setItem(`ppc.${agentId}.mood`, statusMap.mood)
+          window.dispatchEvent(new CustomEvent('ppc:mood', { detail: statusMap.mood }))
+        }
       }
       if (statusMap.vibe) {
-        localStorage.setItem(`ppc.${agentId}.vibe`, statusMap.vibe)
-        window.dispatchEvent(new CustomEvent('ppc:vibe', { detail: statusMap.vibe }))
+        const curVibe = localStorage.getItem(`ppc.${agentId}.vibe`)
+        if (curVibe !== statusMap.vibe) {
+          localStorage.setItem(`ppc.${agentId}.vibe`, statusMap.vibe)
+          window.dispatchEvent(new CustomEvent('ppc:vibe', { detail: statusMap.vibe }))
+        }
       }
       if (statusMap.mind) {
-        localStorage.setItem(`ppc.${agentId}.mind`, statusMap.mind)
-        window.dispatchEvent(new CustomEvent('ppc:mind', { detail: statusMap.mind }))
+        const curMind = localStorage.getItem(`ppc.${agentId}.mind`)
+        if (curMind !== statusMap.mind) {
+          localStorage.setItem(`ppc.${agentId}.mind`, statusMap.mind)
+          window.dispatchEvent(new CustomEvent('ppc:mind', { detail: statusMap.mind }))
+        }
       }
     } catch (e) {
       console.error('解析 PEROCUE JSON 失败:', e)
@@ -829,6 +838,8 @@ function parsePeroStatus(content) {
         if (saved) cur = JSON.parse(saved)
       } catch { /* ignore */ }
 
+      const curStr = JSON.stringify(cur)
+      
       if (Array.isArray(data)) {
         console.log('[Waifu] Parsing CLICK_MESSAGES as Array:', data)
         if (data.length >= 6) {
@@ -920,8 +931,13 @@ function parsePeroStatus(content) {
         }
       }
       
-      localStorage.setItem(`ppc.${agentId}.waifu.texts`, JSON.stringify(cur))
-      window.dispatchEvent(new CustomEvent('ppc:waifu-texts-updated', { detail: cur }))
+      // 仅在内容真正变化时才更新
+      if (JSON.stringify(cur) !== curStr) {
+        localStorage.setItem(`ppc.${agentId}.waifu.texts`, JSON.stringify(cur))
+        window.dispatchEvent(new CustomEvent('ppc:waifu-texts-updated', { detail: cur }))
+      } else {
+        console.log('[Waifu] CLICK_MESSAGES content unchanged, skipping update.')
+      }
     } catch (e) {
       console.warn('Failed to parse click messages JSON:', e)
     }
@@ -960,20 +976,26 @@ function parsePeroStatus(content) {
           if (saved) cur = JSON.parse(saved)
         } catch { /* ignore */ }
         
-        // 1. 清除旧的挂机台词
-        for (let i = 1; i <= 20; i++) {
-          delete cur[`idleMessages_${String(i).padStart(2, '0')}`]
-        }
+        const curStr = JSON.stringify(cur)
+      
+      // 1. 清除旧的挂机台词
+      for (let i = 1; i <= 20; i++) {
+        delete cur[`idleMessages_${String(i).padStart(2, '0')}`]
+      }
 
-        // 2. 写入新台词
-        messages.forEach((msg, idx) => {
-          if (msg) {
-            cur[`idleMessages_${String(idx + 1).padStart(2, '0')}`] = msg
-          }
-        })
-        
+      // 2. 写入新台词
+      messages.forEach((msg, idx) => {
+        if (msg) {
+          cur[`idleMessages_${String(idx + 1).padStart(2, '0')}`] = msg
+        }
+      })
+      
+      if (JSON.stringify(cur) !== curStr) {
         localStorage.setItem(`ppc.${agentId}.waifu.texts`, JSON.stringify(cur))
         window.dispatchEvent(new CustomEvent('ppc:waifu-texts-updated', { detail: cur }))
+      } else {
+        console.log('[Waifu] IDLE_MESSAGES content unchanged, skipping update.')
+      }
       }
     } catch (e) {
       console.warn('Failed to parse idle messages JSON:', e)
@@ -1000,10 +1022,15 @@ function parsePeroStatus(content) {
           if (saved) cur = JSON.parse(saved)
         } catch { /* ignore */ }
         
+        const curStr = JSON.stringify(cur)
         cur.visibilityBack = messages[0]
         
-        localStorage.setItem(`ppc.${agentId}.waifu.texts`, JSON.stringify(cur))
-        window.dispatchEvent(new CustomEvent('ppc:waifu-texts-updated', { detail: cur }))
+        if (JSON.stringify(cur) !== curStr) {
+          localStorage.setItem(`ppc.${agentId}.waifu.texts`, JSON.stringify(cur))
+          window.dispatchEvent(new CustomEvent('ppc:waifu-texts-updated', { detail: cur }))
+        } else {
+          console.log('[Waifu] BACK_MESSAGES content unchanged, skipping update.')
+        }
       }
     } catch (e) {
       console.warn('Failed to parse back messages JSON:', e)
