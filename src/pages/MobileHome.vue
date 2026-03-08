@@ -2,11 +2,11 @@
   <div class="home">
     <div class="hero">
       <Live2DWidget @click="handleWaifuClick" />
-      
+
       <!-- 话题气泡容器 (左上角) - 聚合模式 -->
       <div class="topic-bubbles-container" v-if="topics.length > 0">
-        <div 
-          :class="['topic-aggregate-bubble', { 'bubble-shattering': isTopicExploding }]" 
+        <div
+          :class="['topic-aggregate-bubble', { 'bubble-shattering': isTopicExploding }]"
           @click="handleTopicClick"
         >
           <div class="bubble-content">
@@ -20,14 +20,14 @@
 
       <!-- 任务提醒小气泡容器 (右上角) -->
       <div class="reminder-bubbles-container" v-if="reminders.length > 0">
-        <div 
-          v-for="(r, idx) in reminders" 
-          :key="r.id || (r.time + r.task)"
+        <div
+          v-for="(r, idx) in reminders"
+          :key="r.id || r.time + r.task"
           :class="['reminder-bubble', { 'bubble-shattering': explodingReminders.has(r.id) }]"
           :style="getBubbleStyle(idx)"
-          @touchstart="handlePressStart(r)" 
+          @touchstart="handlePressStart(r)"
           @touchend="handlePressEnd(r.id)"
-          @mousedown="handlePressStart(r)" 
+          @mousedown="handlePressStart(r)"
           @mouseup="handlePressEnd(r.id)"
           @mouseleave="handlePressCancel"
         >
@@ -46,7 +46,9 @@
         <span>{{ isLoading ? '...' : '...' }}</span>
       </button>
       <div class="mini-tools">
-        <button class="tool-btn-mini" @click="showFeatureDrawer = true" title="更多功能"><i class="fas fa-plus-circle"></i></button>
+        <button class="tool-btn-mini" @click="showFeatureDrawer = true" title="更多功能">
+          <i class="fas fa-plus-circle"></i>
+        </button>
         <button class="tool-btn-mini" @click="toSettings"><i class="fas fa-cog"></i></button>
         <button class="tool-btn-mini" @click="openHistory"><i class="fas fa-history"></i></button>
       </div>
@@ -54,11 +56,17 @@
 
     <!-- 功能抽屉 (更多功能) -->
     <Transition name="fade-slide">
-      <div class="feature-drawer-overlay" v-if="showFeatureDrawer" @click.self="showFeatureDrawer = false">
+      <div
+        class="feature-drawer-overlay"
+        v-if="showFeatureDrawer"
+        @click.self="showFeatureDrawer = false"
+      >
         <div class="feature-drawer-card">
           <div class="drawer-header">
             <span class="drawer-title">更多功能</span>
-            <button class="drawer-close" @click="showFeatureDrawer = false"><i class="fas fa-times"></i></button>
+            <button class="drawer-close" @click="showFeatureDrawer = false">
+              <i class="fas fa-times"></i>
+            </button>
           </div>
           <div class="feature-grid">
             <div class="feature-item" @click="toGameAction">
@@ -73,6 +81,13 @@
               </div>
               <span class="feature-label">家庭群聊</span>
             </div>
+            <!-- 远程连接入口 -->
+            <div class="feature-item" @click="toRemoteHub">
+              <div class="feature-icon remote-icon">
+                <i class="fas fa-satellite-dish"></i>
+              </div>
+              <span class="feature-label">远程据点</span>
+            </div>
             <!-- 可以预留更多位置 -->
           </div>
         </div>
@@ -85,13 +100,15 @@
         <div class="expanded-input-card topic-list-card">
           <div class="card-header">
             <span class="title">{{ AGENTS[getActiveAgentId()]?.name || 'Pero' }} 的秘密话题</span>
-            <button class="close-btn" @click="showTopicList = false"><i class="fas fa-times"></i></button>
+            <button class="close-btn" @click="showTopicList = false">
+              <i class="fas fa-times"></i>
+            </button>
           </div>
-          
+
           <div class="topic-list-content">
-            <div 
-              v-for="t in topics" 
-              :key="t.id || (t.time + t.topic)"
+            <div
+              v-for="t in topics"
+              :key="t.id || t.time + t.topic"
               :class="['topic-item', { 'is-revealed': t.revealed }]"
               @click="toggleTopicReveal(t.id)"
             >
@@ -104,7 +121,7 @@
                   <i class="fas fa-trash-alt"></i>
                 </button>
               </div>
-              
+
               <div class="topic-body">
                 <span v-if="!t.revealed" class="blur-text">点击揭晓秘密...</span>
                 <span v-else class="real-text">{{ t.topic }}</span>
@@ -129,20 +146,20 @@
               <i class="fas fa-times"></i>
             </button>
           </div>
-          <textarea 
+          <textarea
             ref="inputRef"
-            v-model="text" 
-            class="expanded-textarea" 
+            v-model="text"
+            class="expanded-textarea"
             placeholder="..."
             @keyup.ctrl.enter="onSend"
           ></textarea>
           <div class="card-footer">
             <div class="footer-left">
-              <input 
-                type="file" 
-                ref="fileInputRef" 
-                style="display: none" 
-                accept="image/*" 
+              <input
+                type="file"
+                ref="fileInputRef"
+                style="display: none"
+                accept="image/*"
                 @change="handleImageUpload"
               />
               <button class="tool-btn" @click="triggerUpload" title="上传图片">
@@ -150,7 +167,11 @@
               </button>
               <span class="hint">Ctrl + Enter 发送</span>
             </div>
-            <button class="send-btn" :disabled="(!text.trim() && !pendingImage) || isLoading" @click="onSend">
+            <button
+              class="send-btn"
+              :disabled="(!text.trim() && !pendingImage) || isLoading"
+              @click="onSend"
+            >
               <el-icon><Promotion /></el-icon>
               <span>发送</span>
             </button>
@@ -161,18 +182,29 @@
 
     <!-- 任务详情模态框 -->
     <Transition name="fade-slide">
-      <div class="expanded-input-overlay" v-if="showReminderDetail" @click.self="showReminderDetail = false">
-        <div class="expanded-input-card reminder-detail-card" style="height: auto; max-height: 50vh;">
+      <div
+        class="expanded-input-overlay"
+        v-if="showReminderDetail"
+        @click.self="showReminderDetail = false"
+      >
+        <div
+          class="expanded-input-card reminder-detail-card"
+          style="height: auto; max-height: 50vh"
+        >
           <div class="card-header">
             <span class="title">任务详情</span>
-            <button class="close-btn" @click="showReminderDetail = false"><i class="fas fa-times"></i></button>
+            <button class="close-btn" @click="showReminderDetail = false">
+              <i class="fas fa-times"></i>
+            </button>
           </div>
-          <div style="padding: 20px; display: flex; flex-direction: column; gap: 10px;">
-            <div style="color: #666; font-size: 0.9em; display: flex; align-items: center; gap: 5px;">
-               <i class="fas fa-clock"></i> 
-               <span>{{ selectedReminder ? formatReminderTime(selectedReminder.time) : '' }}</span>
+          <div style="padding: 20px; display: flex; flex-direction: column; gap: 10px">
+            <div
+              style="color: #666; font-size: 0.9em; display: flex; align-items: center; gap: 5px"
+            >
+              <i class="fas fa-clock"></i>
+              <span>{{ selectedReminder ? formatReminderTime(selectedReminder.time) : '' }}</span>
             </div>
-            <div style="font-size: 1.1em; line-height: 1.6; color: #333; word-wrap: break-word;">
+            <div style="font-size: 1.1em; line-height: 1.6; color: #333; word-wrap: break-word">
               {{ selectedReminder ? selectedReminder.task : '' }}
             </div>
           </div>
@@ -180,10 +212,10 @@
       </div>
     </Transition>
 
-    <HistoryOverlay 
-      v-if="showHistory" 
+    <HistoryOverlay
+      v-if="showHistory"
       :messages="messages"
-      @close="showHistory=false" 
+      @close="showHistory = false"
       @delete="deleteMessageAt"
       @regenerate="regenerateAndClose"
       @copy="copyMessage"
@@ -204,11 +236,36 @@ const ImpactFeedbackStyle = {
   Rigid: 'Rigid',
   Soft: 'Soft'
 }
-import { isPermissionGranted, requestPermission, sendNotification } from '@tauri-apps/plugin-notification'
+import {
+  isPermissionGranted,
+  requestPermission,
+  sendNotification
+} from '@tauri-apps/plugin-notification'
 
 import Live2DWidget from '../components/Live2DWidget.vue'
 import HistoryOverlay from '../components/HistoryOverlay.vue'
-import { chat as chatApi, chatStream, getRelevantMemories, saveMemory, deleteMemoriesByMsgTimestamp, getDefaultPrompts, getActiveAgentId, AGENTS, saveMessage, getMessages, getReminders, getTopics, deleteReminder as apiDeleteReminder, updateTopicStatus, deleteTopic as apiDeleteTopic, saveConfig, getConfig, loadActiveAgentId, addReminder, addTopic } from '../api'
+import {
+  chat as chatApi,
+  chatStream,
+  getRelevantMemories,
+  saveMemory,
+  deleteMemoriesByMsgTimestamp,
+  getDefaultPrompts,
+  getActiveAgentId,
+  AGENTS,
+  saveMessage,
+  getMessages,
+  getReminders,
+  getTopics,
+  deleteReminder as apiDeleteReminder,
+  updateTopicStatus,
+  deleteTopic as apiDeleteTopic,
+  saveConfig,
+  getConfig,
+  loadActiveAgentId,
+  addReminder,
+  addTopic
+} from '../api'
 import { Promotion } from '@element-plus/icons-vue'
 
 const router = useRouter()
@@ -247,20 +304,20 @@ const topics = ref([])
 // 加载当前角色的数据
 const loadAgentData = async () => {
   try {
-    reminders.value = await getReminders() || []
-    topics.value = await getTopics() || []
+    reminders.value = (await getReminders()) || []
+    topics.value = (await getTopics()) || []
   } catch (e) {
     console.error('Failed to load reminders/topics from Rust DB:', e)
     reminders.value = []
     topics.value = []
   }
-  
+
   // 同时也加载当前角色的聊天记录
   try {
     const saved = await getMessages(getActiveAgentId())
     if (Array.isArray(saved)) {
-      messages.value = saved.map(m => ({ 
-        role: String(m.role), 
+      messages.value = saved.map((m) => ({
+        role: String(m.role),
         content: String(m.content || ''),
         timestamp: m.timestamp // 恢复时间戳用于关联记忆
       }))
@@ -273,7 +330,7 @@ const loadAgentData = async () => {
   }
 
   console.log(`[Storage] Data loaded for ${getActiveAgentId()}`)
-  
+
   // 滚动到底部
   nextTick(() => {
     scrollToBottom()
@@ -291,10 +348,10 @@ loadAgentData()
 // 初始化通知权限
 const initNotifications = async () => {
   try {
-    let permissionGranted = await isPermissionGranted();
+    let permissionGranted = await isPermissionGranted()
     if (!permissionGranted) {
-      const permission = await requestPermission();
-      permissionGranted = permission === 'granted';
+      const permission = await requestPermission()
+      permissionGranted = permission === 'granted'
     }
     console.log('Notification permission:', permissionGranted)
   } catch (e) {
@@ -305,13 +362,13 @@ const initNotifications = async () => {
 // 发送系统通知
 const sendSystemNotification = async (title, body) => {
   try {
-    let permissionGranted = await isPermissionGranted();
+    let permissionGranted = await isPermissionGranted()
     if (!permissionGranted) {
-      const permission = await requestPermission();
-      permissionGranted = permission === 'granted';
+      const permission = await requestPermission()
+      permissionGranted = permission === 'granted'
     }
     if (permissionGranted) {
-      sendNotification({ title, body });
+      sendNotification({ title, body })
     }
   } catch (e) {
     console.error('Failed to send notification:', e)
@@ -321,16 +378,16 @@ const sendSystemNotification = async (title, body) => {
 // 检查提醒任务和主动话题
 function checkReminders() {
   if (isLoading.value) return
-  
+
   const now = new Date().getTime()
-  
+
   // 1. 检查任务提醒
-  const toTriggerReminder = reminders.value.filter(r => {
+  const toTriggerReminder = reminders.value.filter((r) => {
     const targetTime = new Date(r.time).getTime()
     const isDue = now >= targetTime
-    
+
     // 如果任务过期超过 12 小时，视为失效，直接过滤掉
-    if (isDue && (now - targetTime) > 12 * 60 * 60 * 1000) {
+    if (isDue && now - targetTime > 12 * 60 * 60 * 1000) {
       console.log(`[Reminder] Task expired (>12h), skipping: ${r.task}`)
       return false
     }
@@ -338,14 +395,14 @@ function checkReminders() {
   })
 
   // 清理掉那些已经失效（超过12小时）的任务
-  const expiredReminders = reminders.value.filter(r => {
+  const expiredReminders = reminders.value.filter((r) => {
     const targetTime = new Date(r.time).getTime()
-    return now > targetTime && (now - targetTime) > 12 * 60 * 60 * 1000
+    return now > targetTime && now - targetTime > 12 * 60 * 60 * 1000
   })
   if (expiredReminders.length > 0) {
-    reminders.value = reminders.value.filter(r => !expiredReminders.includes(r))
+    reminders.value = reminders.value.filter((r) => !expiredReminders.includes(r))
     // 异步清理数据库
-    expiredReminders.forEach(r => {
+    expiredReminders.forEach((r) => {
       if (r.id) apiDeleteReminder(r.id).catch(console.error)
     })
   }
@@ -353,11 +410,13 @@ function checkReminders() {
   if (toTriggerReminder.length > 0) {
     const task = toTriggerReminder[0]
     // 从列表中移除并删除数据库记录
-    reminders.value = reminders.value.filter(r => r.id !== task.id)
+    reminders.value = reminders.value.filter((r) => r.id !== task.id)
     if (task.id) apiDeleteReminder(task.id).catch(console.error)
-    
-    onSend(`【管理系统提醒：${AGENTS[getActiveAgentId()]?.name || 'Pero'}，你与主人的约定时间已到，请主动提醒主人。约定内容：${task.task}】`)
-    
+
+    onSend(
+      `【管理系统提醒：${AGENTS[getActiveAgentId()]?.name || 'Pero'}，你与主人的约定时间已到，请主动提醒主人。约定内容：${task.task}】`
+    )
+
     // 发送系统级通知 (App环境)
     sendSystemNotification(`${AGENTS[getActiveAgentId()]?.name || 'Pero'} 的任务提醒`, task.task)
     return // 优先处理任务
@@ -366,7 +425,7 @@ function checkReminders() {
   // 检查 TOPIC (优化：支持时间簇打包触发)
   const nowDate = new Date()
   const triggeredTopics = []
-  
+
   // 1. 找出所有已到期的话题
   const dueIndices = []
   const staleIndices = []
@@ -374,7 +433,7 @@ function checkReminders() {
     const tTime = new Date(t.time)
     if (tTime <= nowDate) {
       // 如果话题过期超过 24 小时，视为过时
-      if ((nowDate.getTime() - tTime.getTime()) > 24 * 60 * 60 * 1000) {
+      if (nowDate.getTime() - tTime.getTime() > 24 * 60 * 60 * 1000) {
         staleIndices.push(i)
       } else {
         dueIndices.push(i)
@@ -386,18 +445,20 @@ function checkReminders() {
   if (staleIndices.length > 0) {
     console.log(`[Topic] Cleaning ${staleIndices.length} stale topics (>24h)`)
     // 倒序删除
-    staleIndices.sort((a, b) => b - a).forEach(i => {
-      const topic = topics.value[i]
-      if (topic.id) apiDeleteTopic(topic.id).catch(console.error)
-      topics.value.splice(i, 1)
-    })
+    staleIndices
+      .sort((a, b) => b - a)
+      .forEach((i) => {
+        const topic = topics.value[i]
+        if (topic.id) apiDeleteTopic(topic.id).catch(console.error)
+        topics.value.splice(i, 1)
+      })
   }
 
   if (dueIndices.length > 0) {
     // 2. 如果有到期的话题，进一步检查是否有其他话题在未来10分钟内
     // 逻辑：只要有一个触发，就把所有[已过期]和[未来10分钟内]的话题全部打包
     const tenMinsLater = new Date(nowDate.getTime() + 10 * 60 * 1000)
-    
+
     // 重新扫描所有话题，收集要打包的
     const bundleIndices = []
     topics.value.forEach((t, i) => {
@@ -407,22 +468,26 @@ function checkReminders() {
         triggeredTopics.push(t)
       }
     })
-    
+
     // 3. 构建打包消息
     if (triggeredTopics.length > 0) {
-      const topicListStr = triggeredTopics.map(t => `- ${t.topic} (原定: ${formatReminderTime(t.time)})`).join('\n')
-      
+      const topicListStr = triggeredTopics
+        .map((t) => `- ${t.topic} (原定: ${formatReminderTime(t.time)})`)
+        .join('\n')
+
       const agentName = AGENTS[getActiveAgentId()]?.name || 'Pero'
       const prompt = `【管理系统提醒：${agentName}，以下是你之前想找主人聊的话题（已汇总）：\n${topicListStr}\n\n请将这些话题自然地融合在一起，作为一次主动的聊天开场。不要生硬地列举，要用你可爱的语气把它们串联起来！去和主人聊天吧！】`
-      
+
       onSend(prompt)
-      
+
       // 4. 从列表中移除已触发的话题 (倒序移除以防索引错位)
-      bundleIndices.sort((a, b) => b - a).forEach(i => {
-        const topic = topics.value[i]
-        if (topic.id) apiDeleteTopic(topic.id).catch(console.error)
-        topics.value.splice(i, 1)
-      })
+      bundleIndices
+        .sort((a, b) => b - a)
+        .forEach((i) => {
+          const topic = topics.value[i]
+          if (topic.id) apiDeleteTopic(topic.id).catch(console.error)
+          topics.value.splice(i, 1)
+        })
     }
   }
 }
@@ -453,7 +518,7 @@ onMounted(async () => {
   })
 
   // 状态恢复：根据最后一条 AI 消息恢复 Pero 的状态
-  const lastAssistantMsg = [...messages.value].reverse().find(m => m.role === 'assistant')
+  const lastAssistantMsg = [...messages.value].reverse().find((m) => m.role === 'assistant')
   if (lastAssistantMsg) {
     await parsePeroStatus(lastAssistantMsg.content)
   }
@@ -467,7 +532,7 @@ function triggerUpload() {
 async function handleImageUpload(e) {
   const file = e.target.files?.[0]
   if (!file) return
-  
+
   if (file.size > 10 * 1024 * 1024) {
     alert('图片大小不能超过 10MB')
     return
@@ -488,19 +553,19 @@ function removeImage() {
 
 // 删除话题并取消通知
 const deleteTopic = async (id) => {
-  const idx = topics.value.findIndex(t => t.id === id)
+  const idx = topics.value.findIndex((t) => t.id === id)
   if (idx === -1) return
 
   // Optimistic UI update
   topics.value.splice(idx, 1)
-  
+
   // Call backend
   await apiDeleteTopic(id)
 }
 
 // 切换话题揭晓状态
 function toggleTopicReveal(id) {
-  const idx = topics.value.findIndex(t => t.id === id)
+  const idx = topics.value.findIndex((t) => t.id === id)
   if (idx !== -1) {
     const newVal = !topics.value[idx].revealed
     topics.value[idx].revealed = newVal
@@ -515,7 +580,7 @@ const handleWaifuClick = async (event) => {
   if (event && event.target) {
     const rect = event.target.getBoundingClientRect()
     const relativeY = (event.clientY - rect.top) / rect.height
-    
+
     if (relativeY < 0.3) {
       area = 'head'
     } else if (relativeY < 0.6) {
@@ -525,7 +590,7 @@ const handleWaifuClick = async (event) => {
     }
     console.log(`[Click] Area detected: ${area} (Y: ${relativeY.toFixed(2)})`)
   }
-  
+
   // 触发原本的点击交互逻辑，传递部位信息
   window.dispatchEvent(new CustomEvent('ppc:waifu-click', { detail: { area } }))
 }
@@ -533,7 +598,7 @@ const handleWaifuClick = async (event) => {
 // 处理任务气泡长按逻辑
 const handlePressStart = (reminder) => {
   if (explodingReminders.value.has(reminder.id)) return
-  
+
   isLongPress = false
   pressTimer = setTimeout(() => {
     isLongPress = true
@@ -564,13 +629,13 @@ const handlePressCancel = () => {
 // 处理任务气泡点击
 const handleReminderClick = async (id) => {
   if (explodingReminders.value.has(id)) return
-  
+
   // 1. 触发震动
   impactFeedback(ImpactFeedbackStyle.Medium).catch(() => {})
 
   // 2. 标记正在炸裂
   explodingReminders.value.add(id)
-  
+
   // 3. 等待动画结束 (300ms)
   setTimeout(async () => {
     await deleteReminder(id)
@@ -581,13 +646,13 @@ const handleReminderClick = async (id) => {
 // 处理话题聚合气泡点击
 const handleTopicClick = async () => {
   if (isTopicExploding.value) return
-  
+
   // 1. 触发震动
   impactFeedback(ImpactFeedbackStyle.Medium).catch(() => {})
-  
+
   // 2. 标记正在炸裂
   isTopicExploding.value = true
-  
+
   // 3. 等待动画结束 (300ms)
   setTimeout(() => {
     showTopicList.value = true
@@ -597,12 +662,12 @@ const handleTopicClick = async () => {
 
 // 删除任务并取消通知
 const deleteReminder = async (id) => {
-  const idx = reminders.value.findIndex(r => r.id === id)
+  const idx = reminders.value.findIndex((r) => r.id === id)
   if (idx === -1) return
 
   // Optimistic UI update
   reminders.value.splice(idx, 1)
-  
+
   // Call backend
   await apiDeleteReminder(id)
 }
@@ -630,16 +695,16 @@ function getBubbleStyle(idx) {
     { top: '10%', right: '30%' },
     { top: '75%', right: '15%' }
   ]
-  
+
   // 如果任务超过预设偏移量，加入微小的随机扰动避免完全重叠
   const offset = baseOffsets[idx % baseOffsets.length]
-  const jitterX = idx >= baseOffsets.length ? (Math.sin(idx) * 10) : 0
-  const jitterY = idx >= baseOffsets.length ? (Math.cos(idx) * 10) : 0
-  
+  const jitterX = idx >= baseOffsets.length ? Math.sin(idx) * 10 : 0
+  const jitterY = idx >= baseOffsets.length ? Math.cos(idx) * 10 : 0
+
   // 随机动画延迟，让每个气泡浮动不同步
-  const delay = (idx * 0.7) + 's'
-  const duration = (3 + (idx % 3)) + 's'
-  
+  const delay = idx * 0.7 + 's'
+  const duration = 3 + (idx % 3) + 's'
+
   return {
     top: `calc(${offset.top} + ${jitterY}px)`,
     right: `calc(${offset.right} + ${jitterX}px)`,
@@ -656,7 +721,7 @@ function regenerateAndClose(idx) {
 
 function persistMessages() {
   // 实时保存到 Rust 数据库
-  
+
   // 获取最后一条消息并保存 (防抖或去重逻辑由 Rust 端处理)
   const lastMsg = messages.value[messages.value.length - 1]
   if (lastMsg) {
@@ -664,13 +729,24 @@ function persistMessages() {
       role: lastMsg.role,
       content: lastMsg.content,
       timestamp: lastMsg.timestamp || Date.now()
-    }).catch(e => console.error('Failed to persist message:', e))
+    }).catch((e) => console.error('Failed to persist message:', e))
   }
 }
 
-function toSettings() { router.push('/settings') }
-function toGroupChat() { router.push('/group') }
-function toGame() { router.push('/game/blackjack') }
+function toSettings() {
+  router.push('/settings')
+}
+function toGroupChat() {
+  router.push('/group')
+}
+function toGame() {
+  router.push('/game/blackjack')
+}
+
+function toRemoteHub() {
+  showFeatureDrawer.value = false
+  setAppMode('remote')
+}
 
 function toGameAction() {
   showFeatureDrawer.value = false
@@ -682,7 +758,9 @@ function toGroupChatAction() {
   toGroupChat()
 }
 
-function openHistory() { showHistory.value = true }
+function openHistory() {
+  showHistory.value = true
+}
 
 function expandInput() {
   if (isLoading.value) return
@@ -733,7 +811,7 @@ const scheduleFutureNotification = async (id, title, body, timeStr) => {
 // 解析 Pero 状态标签
 async function parsePeroStatus(content) {
   if (!content) return
-  
+
   const agentId = getActiveAgentId()
 
   // 1. 解析旧版 PEROCUE
@@ -745,7 +823,11 @@ async function parsePeroStatus(content) {
       try {
         statusMap = JSON.parse(rawData)
       } catch {
-         try { statusMap = new Function('return ' + rawData)() } catch { /* ignore */ }
+        try {
+          statusMap = new Function('return ' + rawData)()
+        } catch {
+          /* ignore */
+        }
       }
 
       if (statusMap && statusMap.mood) {
@@ -780,7 +862,7 @@ async function parsePeroStatus(content) {
   if (clickMatch) {
     try {
       const rawData = clickMatch[1].trim()
-      
+
       // 支持快捷重置指令
       if (rawData === 'DEFAULT' || rawData === 'RESET') {
         saveConfig(`ppc.${agentId}.waifu.texts`, '{}')
@@ -795,10 +877,10 @@ async function parsePeroStatus(content) {
       } catch (e) {
         // Fallback: 尝试解析 JS 对象格式 (例如单引号)
         try {
-           data = new Function('return ' + rawData)()
+          data = new Function('return ' + rawData)()
         } catch {
-           console.warn('Failed to parse click messages (JSON & Eval):', e)
-           return
+          console.warn('Failed to parse click messages (JSON & Eval):', e)
+          return
         }
       }
 
@@ -806,10 +888,12 @@ async function parsePeroStatus(content) {
       try {
         const saved = await getConfig(`ppc.${agentId}.waifu.texts`)
         if (saved) cur = JSON.parse(saved)
-      } catch { /* ignore */ }
+      } catch {
+        /* ignore */
+      }
 
       const curStr = JSON.stringify(cur)
-      
+
       if (Array.isArray(data)) {
         console.log('[Waifu] Parsing CLICK_MESSAGES as Array:', data)
         if (data.length >= 6) {
@@ -825,14 +909,14 @@ async function parsePeroStatus(content) {
           ]
 
           // 清理旧数据
-          ;['head', 'chest', 'body'].forEach(part => {
-             for (let i = 1; i <= 20; i++) delete cur[`click_${part}_${String(i).padStart(2, '0')}`]
+          ;['head', 'chest', 'body'].forEach((part) => {
+            for (let i = 1; i <= 20; i++) delete cur[`click_${part}_${String(i).padStart(2, '0')}`]
           })
 
           data.forEach((msg, i) => {
             // 写入通用字段 (兼容)
             cur[`click_messages_${String(i + 1).padStart(2, '0')}`] = msg
-            
+
             // 写入部位字段
             if (i < 6) {
               const m = mapping[i]
@@ -853,17 +937,17 @@ async function parsePeroStatus(content) {
         console.log('[Waifu] Parsing CLICK_MESSAGES as Object:', data)
         // 新版部位格式
         const parts = ['head', 'chest', 'body']
-        
+
         // 预处理 data keys，支持大小写不敏感及中文映射
         const lowerData = {}
         const cnMap = {
-            '头部': 'head',
-            '胸部': 'chest',
-            '身体': 'body',
-            '通用': 'general'
+          头部: 'head',
+          胸部: 'chest',
+          身体: 'body',
+          通用: 'general'
         }
-        
-        Object.keys(data).forEach(k => {
+
+        Object.keys(data).forEach((k) => {
           if (!k) return
           let normalizedKey = k.toLowerCase()
           // 尝试中文映射
@@ -872,18 +956,18 @@ async function parsePeroStatus(content) {
           else if (k.includes('头')) normalizedKey = 'head'
           else if (k.includes('胸')) normalizedKey = 'chest'
           else if (k.includes('身')) normalizedKey = 'body'
-          
+
           lowerData[normalizedKey] = data[k]
         })
 
-        parts.forEach(part => {
+        parts.forEach((part) => {
           // 安全检查：确保 lowerData[part] 存在且是数组
           if (lowerData[part] && Array.isArray(lowerData[part])) {
             // 1. 清除该部位旧的所有台词 (假设最大 20 条)
             for (let i = 1; i <= 20; i++) {
               delete cur[`click_${part}_${String(i).padStart(2, '0')}`]
             }
-            
+
             // 2. 写入新台词
             lowerData[part].forEach((msg, idx) => {
               if (msg) {
@@ -900,7 +984,7 @@ async function parsePeroStatus(content) {
           cur.click_messages_03 = lowerData.general[2] || ''
         }
       }
-      
+
       // 仅在内容真正变化时才更新
       if (JSON.stringify(cur) !== curStr) {
         // 使用 Rust Store 保存
@@ -927,13 +1011,15 @@ async function parsePeroStatus(content) {
         try {
           const saved = await getConfig(`ppc.${agentId}.waifu.texts`)
           if (saved) cur = JSON.parse(saved)
-        } catch { /* ignore */ }
-        
+        } catch {
+          /* ignore */
+        }
+
         // 仅清除挂机相关的台词
         for (let i = 1; i <= 20; i++) {
           delete cur[`idleMessages_${String(i).padStart(2, '0')}`]
         }
-        
+
         saveConfig(`ppc.${agentId}.waifu.texts`, JSON.stringify(cur))
         window.dispatchEvent(new CustomEvent('ppc:waifu-texts-updated', { detail: cur }))
         return
@@ -945,28 +1031,30 @@ async function parsePeroStatus(content) {
         try {
           const saved = await getConfig(`ppc.${agentId}.waifu.texts`)
           if (saved) cur = JSON.parse(saved)
-        } catch { /* ignore */ }
-        
-        const curStr = JSON.stringify(cur)
-      
-      // 1. 清除旧的挂机台词
-      for (let i = 1; i <= 20; i++) {
-        delete cur[`idleMessages_${String(i).padStart(2, '0')}`]
-      }
-
-      // 2. 写入新台词
-      messages.forEach((msg, idx) => {
-        if (msg) {
-          cur[`idleMessages_${String(idx + 1).padStart(2, '0')}`] = msg
+        } catch {
+          /* ignore */
         }
-      })
-      
-      if (JSON.stringify(cur) !== curStr) {
-        saveConfig(`ppc.${agentId}.waifu.texts`, JSON.stringify(cur))
-        window.dispatchEvent(new CustomEvent('ppc:waifu-texts-updated', { detail: cur }))
-      } else {
-        console.log('[Waifu] IDLE_MESSAGES content unchanged, skipping update.')
-      }
+
+        const curStr = JSON.stringify(cur)
+
+        // 1. 清除旧的挂机台词
+        for (let i = 1; i <= 20; i++) {
+          delete cur[`idleMessages_${String(i).padStart(2, '0')}`]
+        }
+
+        // 2. 写入新台词
+        messages.forEach((msg, idx) => {
+          if (msg) {
+            cur[`idleMessages_${String(idx + 1).padStart(2, '0')}`] = msg
+          }
+        })
+
+        if (JSON.stringify(cur) !== curStr) {
+          saveConfig(`ppc.${agentId}.waifu.texts`, JSON.stringify(cur))
+          window.dispatchEvent(new CustomEvent('ppc:waifu-texts-updated', { detail: cur }))
+        } else {
+          console.log('[Waifu] IDLE_MESSAGES content unchanged, skipping update.')
+        }
       }
     } catch (e) {
       console.warn('Failed to parse idle messages JSON:', e)
@@ -983,7 +1071,11 @@ async function parsePeroStatus(content) {
       try {
         messages = JSON.parse(rawData)
       } catch {
-         try { messages = new Function('return ' + rawData)() } catch { /* ignore */ }
+        try {
+          messages = new Function('return ' + rawData)()
+        } catch {
+          /* ignore */
+        }
       }
 
       if (Array.isArray(messages) && messages.length >= 1) {
@@ -991,11 +1083,13 @@ async function parsePeroStatus(content) {
         try {
           const saved = await getConfig(`ppc.${agentId}.waifu.texts`)
           if (saved) cur = JSON.parse(saved)
-        } catch { /* ignore */ }
-        
+        } catch {
+          /* ignore */
+        }
+
         const curStr = JSON.stringify(cur)
         cur.visibilityBack = messages[0]
-        
+
         if (JSON.stringify(cur) !== curStr) {
           saveConfig(`ppc.${agentId}.waifu.texts`, JSON.stringify(cur))
           window.dispatchEvent(new CustomEvent('ppc:waifu-texts-updated', { detail: cur }))
@@ -1008,7 +1102,7 @@ async function parsePeroStatus(content) {
     }
   }
 
-      // 6. 解析 REMINDER (支持多个标签)
+  // 6. 解析 REMINDER (支持多个标签)
   const reminderRegex = /<REMINDER>([\s\S]*?)<\/REMINDER>/g
   let match
   while ((match = reminderRegex.exec(content)) !== null) {
@@ -1016,15 +1110,17 @@ async function parsePeroStatus(content) {
       const data = JSON.parse(match[1].trim())
       if (data.time && data.task) {
         // 添加到提醒列表（去重）
-        const exists = reminders.value.some(r => r.time === data.time && r.task === data.task)
+        const exists = reminders.value.some((r) => r.time === data.time && r.task === data.task)
         if (!exists) {
           // 调用后端 API 添加
-          addReminder(data.task, data.time).then(() => {
-             // 重新加载以获取带 ID 的完整数据
-             return getReminders()
-          }).then(list => {
-             if (list) reminders.value = list
-          })
+          addReminder(data.task, data.time)
+            .then(() => {
+              // 重新加载以获取带 ID 的完整数据
+              return getReminders()
+            })
+            .then((list) => {
+              if (list) reminders.value = list
+            })
 
           console.log('新提醒已添加:', data)
           // 立即向系统预设未来通知 (使用当前时间戳生成的临时ID，实际ID由后端生成，这里主要用于日志或临时通知)
@@ -1033,7 +1129,9 @@ async function parsePeroStatus(content) {
           scheduleFutureNotification(tempId, `${agentNameRemind} 的任务提醒`, data.task, data.time)
         }
       }
-    } catch { /* ignore */ }
+    } catch {
+      /* ignore */
+    }
   }
 
   // 7. 解析 TOPIC (支持多个标签)
@@ -1044,14 +1142,16 @@ async function parsePeroStatus(content) {
       const data = JSON.parse(tMatch[1].trim())
       if (data.time && data.topic) {
         // 添加到话题列表（去重）
-        const exists = topics.value.some(t => t.time === data.time && t.topic === data.topic)
+        const exists = topics.value.some((t) => t.time === data.time && t.topic === data.topic)
         if (!exists) {
           // 调用后端 API 添加
-          addTopic(data.topic, false).then(() => {
-             return getTopics()
-          }).then(list => {
-             if (list) topics.value = list
-          })
+          addTopic(data.topic, false)
+            .then(() => {
+              return getTopics()
+            })
+            .then((list) => {
+              if (list) topics.value = list
+            })
 
           console.log('新主动话题已添加:', data)
           // 立即向系统预设未来通知
@@ -1060,7 +1160,9 @@ async function parsePeroStatus(content) {
           scheduleFutureNotification(tempId, `${agentName} 想找你聊天`, data.topic, data.time)
         }
       }
-    } catch { /* ignore */ }
+    } catch {
+      /* ignore */
+    }
   }
 }
 
@@ -1068,10 +1170,10 @@ async function parsePeroStatus(content) {
 function cleanMessageContent(text) {
   if (!text) return ''
   if (text === '__loading__') return '正在思考...'
-  
+
   let content = text
   if (Array.isArray(content)) {
-    content = content.find(c => c.type === 'text')?.text || ''
+    content = content.find((c) => c.type === 'text')?.text || ''
   }
 
   // 移除所有 XML 标签及其内容 (因为现在使用 NIT 协议，XML 仅用于内部逻辑)
@@ -1085,11 +1187,11 @@ function cleanMessageContent(text) {
 // 清理发送给 API 的历史记录，仅保留 PEROCUE (用于后端状态机，可选)，移除其他冗余标签以节省 Token 并防止 Few-shot 干扰
 function cleanHistoryForApi(text) {
   if (!text) return ''
-  
+
   let content = text
   if (Array.isArray(content)) {
     // 移除图片，仅保留文本部分发送给历史记录（OpenAI 建议历史记录中不带 Base64 以节省空间）
-    content = content.find(c => c.type === 'text')?.text || ''
+    content = content.find((c) => c.type === 'text')?.text || ''
   }
 
   // 移除大部分 XML 标签，保留 PEROCUE 作为后端状态参考（如果需要）
@@ -1110,10 +1212,10 @@ async function getEnvPrompt() {
   const d = new Date()
   const weekdays = ['星期日', '星期一', '星期二', '星期三', '星期四', '星期五', '星期六']
   const timeStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}:${String(d.getSeconds()).padStart(2, '0')} ${weekdays[d.getDay()]}`
-  
-  const location = await getConfig('ppc.location') || '未知地点'
-  const weather = await getConfig('ppc.weather') || '未知天气'
-  
+
+  const location = (await getConfig('ppc.location')) || '未知地点'
+  const weather = (await getConfig('ppc.weather')) || '未知天气'
+
   return `[当前环境信息]\n时间: ${timeStr}\n地点: ${location}\n天气: ${weather}`
 }
 
@@ -1124,7 +1226,9 @@ async function getCurrentBodyLines() {
   try {
     const saved = await getConfig(`ppc.${agentId}.waifu.texts`)
     if (saved) cur = JSON.parse(saved)
-  } catch { /* ignore */ }
+  } catch {
+    /* ignore */
+  }
 
   const lines = {
     head: [],
@@ -1156,72 +1260,90 @@ async function onSend(systemMsg = null) {
   const img = pendingImage.value
   if (!t && !img && !systemMsg) return
   if (isLoading.value) return
-  
+
   // 只有非系统消息才清空输入框和图片
   if (!systemMsg) {
     text.value = ''
     pendingImage.value = null
   }
   isLoading.value = true
-  
+
   const now = Date.now()
-  const user = { 
-    role: 'user', 
-    content: img ? [
-      { type: 'text', text: t || '这张图片里有什么？' },
-      { type: 'image_url', image_url: { url: img } }
-    ] : t, 
-    timestamp: now 
+  const user = {
+    role: 'user',
+    content: img
+      ? [
+          { type: 'text', text: t || '这张图片里有什么？' },
+          { type: 'image_url', image_url: { url: img } }
+        ]
+      : t,
+    timestamp: now
   }
-  messages.value = [...messages.value, user, { role: 'assistant', content: '__loading__', timestamp: now + 1 }]
-  
+  messages.value = [
+    ...messages.value,
+    user,
+    { role: 'assistant', content: '__loading__', timestamp: now + 1 }
+  ]
+
   // 发送消息后折叠
   isExpanded.value = false
-  
+
   // 发送“正在思考”状态到 Live2D 气泡
   const agentName = AGENTS[getActiveAgentId()]?.name || 'Pero'
   window.dispatchEvent(new CustomEvent('ppc:chat', { detail: `${agentName}正在思考中...` }))
-  
+
   const idx = messages.value.length - 1
   persistMessages()
   scrollToBottom() // 新消息添加后滚动到底部
   try {
     // 获取默认提示词并设置回退逻辑
     const defaults = await getDefaultPrompts()
-    const systemPrompt = String((await getConfig('ppc.systemPrompt')) || '').trim() || defaults.system_prompt_default
-    const personaText = String((await getConfig('ppc.personaText')) || '').trim() || defaults.persona_prompt_default
-    const postSystemPrompt = String((await getConfig('ppc.postSystemPrompt')) || '').trim() || defaults.post_prompt_default
+    const systemPrompt =
+      String((await getConfig('ppc.systemPrompt')) || '').trim() || defaults.system_prompt_default
+    const personaText =
+      String((await getConfig('ppc.personaText')) || '').trim() || defaults.persona_prompt_default
+    const postSystemPrompt =
+      String((await getConfig('ppc.postSystemPrompt')) || '').trim() || defaults.post_prompt_default
     const userName = String((await getConfig('ppc.userName')) || '').trim()
     const userPersona = String((await getConfig('ppc.userPersonaText')) || '').trim()
-    
+
     // 构建请求消息，添加提示词
     // 根据设置的记忆轮次截断历史记录（1轮 = 1对消息）
     const limitCount = memoryRounds.value * 2
-    let reqForApi = messages.value.slice(0, idx).slice(-limitCount).map(m => ({
-      role: m.role,
-      content: m.role === 'assistant' ? cleanHistoryForApi(m.content) : m.content
-    }))
-    
+    let reqForApi = messages.value
+      .slice(0, idx)
+      .slice(-limitCount)
+      .map((m) => ({
+        role: m.role,
+        content: m.role === 'assistant' ? cleanHistoryForApi(m.content) : m.content
+      }))
+
     // 注入当前环境信息
     reqForApi = [{ role: 'system', content: await getEnvPrompt() }, ...reqForApi]
-    
+
     // 注入当前部位台词
     const bodyLines = await getCurrentBodyLines()
     if (bodyLines) {
       reqForApi = [{ role: 'system', content: bodyLines }, ...reqForApi]
     }
-    
+
     // 检索并注入长期记忆
-    const lastUserText = typeof user.content === 'string' ? user.content : (user.content.find(c => c.type === 'text')?.text || '')
+    const lastUserText =
+      typeof user.content === 'string'
+        ? user.content
+        : user.content.find((c) => c.type === 'text')?.text || ''
     const relevantMemories = await getRelevantMemories(lastUserText)
     if (relevantMemories.length > 0) {
-      const memoryPrompt = `<LONG_TERM_MEMORY>\n${relevantMemories.map(m => `[${m.realTime || '未知时间'}] ${m.content}`).join('\n')}\n</LONG_TERM_MEMORY>`
+      const memoryPrompt = `<LONG_TERM_MEMORY>\n${relevantMemories.map((m) => `[${m.realTime || '未知时间'}] ${m.content}`).join('\n')}\n</LONG_TERM_MEMORY>`
       reqForApi = [{ role: 'system', content: memoryPrompt }, ...reqForApi]
     }
-    
+
     // 如果有人设提示词，添加到系统提示词之后或消息开头
-    if (personaText && !reqForApi.some(m => typeof m.content === 'string' && m.content.includes(personaText))) {
-      const systemIndex = reqForApi.findIndex(m => m.role === 'system')
+    if (
+      personaText &&
+      !reqForApi.some((m) => typeof m.content === 'string' && m.content.includes(personaText))
+    ) {
+      const systemIndex = reqForApi.findIndex((m) => m.role === 'system')
       if (systemIndex >= 0) {
         reqForApi.splice(systemIndex + 1, 0, { role: 'system', content: personaText })
       } else {
@@ -1230,14 +1352,24 @@ async function onSend(systemMsg = null) {
     }
 
     // 如果有系统提示词，添加到消息开头
-    if (systemPrompt && !reqForApi.some(m => m.role === 'system' && typeof m.content === 'string' && m.content.includes(systemPrompt))) {
+    if (
+      systemPrompt &&
+      !reqForApi.some(
+        (m) =>
+          m.role === 'system' && typeof m.content === 'string' && m.content.includes(systemPrompt)
+      )
+    ) {
       reqForApi = [{ role: 'system', content: systemPrompt }, ...reqForApi]
     }
-    
+
     // 如果有用户设定，添加到系统/人设提示词之后
     if (userName || userPersona) {
       const userSettingPrompt = `[用户信息]\n姓名: ${userName || '主人'}\n描述: ${userPersona || '暂无描述'}`
-      if (!reqForApi.some(m => typeof m.content === 'string' && m.content.includes(userSettingPrompt))) {
+      if (
+        !reqForApi.some(
+          (m) => typeof m.content === 'string' && m.content.includes(userSettingPrompt)
+        )
+      ) {
         let lastSystemIndex = -1
         for (let i = 0; i < reqForApi.length; i++) {
           if (reqForApi[i].role === 'system') lastSystemIndex = i
@@ -1246,10 +1378,10 @@ async function onSend(systemMsg = null) {
         reqForApi.splice(lastSystemIndex + 1, 0, { role: 'system', content: userSettingPrompt })
       }
     }
-    
+
     // 如果有后置提示词，添加到用户消息之后
     if (postSystemPrompt && reqForApi.length > 0) {
-      const lastUserIndex = reqForApi.map(m => m.role).lastIndexOf('user')
+      const lastUserIndex = reqForApi.map((m) => m.role).lastIndexOf('user')
       if (lastUserIndex >= 0) {
         const lastUserMsg = reqForApi[lastUserIndex]
         if (typeof lastUserMsg.content === 'string') {
@@ -1257,7 +1389,7 @@ async function onSend(systemMsg = null) {
             lastUserMsg.content = `${lastUserMsg.content}\n\n${postSystemPrompt}`
           }
         } else if (Array.isArray(lastUserMsg.content)) {
-          const textPart = lastUserMsg.content.find(c => c.type === 'text')
+          const textPart = lastUserMsg.content.find((c) => c.type === 'text')
           if (textPart && !textPart.text.includes(postSystemPrompt)) {
             textPart.text = `${textPart.text}\n\n${postSystemPrompt}`
           } else if (!textPart) {
@@ -1266,28 +1398,39 @@ async function onSend(systemMsg = null) {
         }
       }
     }
-    
+
     const baseReq = reqForApi
-    const chatOpts = { 
-      topP: topP.value, 
-      frequencyPenalty: frequencyPenalty.value, 
+    const chatOpts = {
+      topP: topP.value,
+      frequencyPenalty: frequencyPenalty.value,
       presencePenalty: presencePenalty.value,
       source: 'mobile',
       session_id: sessionId.value
     }
 
     if (stream.value) {
-      const final = await chatStream(baseReq, modelName.value, temperature.value, apiBase.value, chatOpts, (_, full) => {
-        messages.value.splice(idx, 1, { role: 'assistant', content: String(full || '') })
-        scrollToBottom() // 流式更新时持续滚动到底部
-        
-        // [Add] 实时解析状态标签
-        parsePeroStatus(String(full || ''))
+      const final = await chatStream(
+        baseReq,
+        modelName.value,
+        temperature.value,
+        apiBase.value,
+        chatOpts,
+        (_, full) => {
+          messages.value.splice(idx, 1, { role: 'assistant', content: String(full || '') })
+          scrollToBottom() // 流式更新时持续滚动到底部
+
+          // [Add] 实时解析状态标签
+          parsePeroStatus(String(full || ''))
+        }
+      )
+      messages.value.splice(idx, 1, {
+        role: 'assistant',
+        content: String(final || '') || '（暂无内容）',
+        timestamp: messages.value[idx].timestamp
       })
-      messages.value.splice(idx, 1, { role: 'assistant', content: String(final || '') || '（暂无内容）', timestamp: messages.value[idx].timestamp })
       await parsePeroStatus(String(final || ''))
       await parseAndSaveMemory(String(final || ''), messages.value[idx].timestamp)
-      
+
       // 发送聊天事件到 Live2D 气泡
       const cleanContent = cleanMessageContent(String(final || ''))
       window.dispatchEvent(new CustomEvent('ppc:chat', { detail: cleanContent }))
@@ -1296,10 +1439,14 @@ async function onSend(systemMsg = null) {
       scrollToBottom() // 最终消息更新后滚动到底部
     } else {
       const r = await chatApi(baseReq, modelName.value, temperature.value, apiBase.value, chatOpts)
-      messages.value.splice(idx, 1, { role: 'assistant', content: String(r?.content || '') || '（暂无内容）', timestamp: messages.value[idx].timestamp })
+      messages.value.splice(idx, 1, {
+        role: 'assistant',
+        content: String(r?.content || '') || '（暂无内容）',
+        timestamp: messages.value[idx].timestamp
+      })
       await parsePeroStatus(String(r?.content || ''))
       await parseAndSaveMemory(String(r?.content || ''), messages.value[idx].timestamp)
-      
+
       // 发送聊天事件到 Live2D 气泡
       const cleanContent = cleanMessageContent(String(r?.content || ''))
       window.dispatchEvent(new CustomEvent('ppc:chat', { detail: cleanContent }))
@@ -1319,26 +1466,36 @@ async function onSend(systemMsg = null) {
 
 // 删除消息函数（按需删除：仅删除选中的消息及其关联的 AI 回复轮次，不再强制级联删除后续内容）
 async function deleteMessageAt(idx) {
-  try { 
+  try {
     if (idx < 0 || idx >= messages.value.length) return
-    
+
     // 确定要删除的索引范围
     let indicesToDelete = [idx]
-    
+
     // 如果点击的是用户消息，且下一条是 AI 回复，则成对删除
-    if (messages.value[idx].role === 'user' && idx + 1 < messages.value.length && messages.value[idx + 1].role === 'assistant') {
+    if (
+      messages.value[idx].role === 'user' &&
+      idx + 1 < messages.value.length &&
+      messages.value[idx + 1].role === 'assistant'
+    ) {
       indicesToDelete.push(idx + 1)
-    } 
+    }
     // 如果点击的是 AI 回复，且前一条是用户消息，则成对删除
-    else if (messages.value[idx].role === 'assistant' && idx > 0 && messages.value[idx - 1].role === 'user') {
+    else if (
+      messages.value[idx].role === 'assistant' &&
+      idx > 0 &&
+      messages.value[idx - 1].role === 'user'
+    ) {
       indicesToDelete.unshift(idx - 1)
     }
 
     // 收集要删除的时间戳，用于同步删除记忆
-    const toDeleteTimestamps = indicesToDelete.map(i => messages.value[i].timestamp).filter(Boolean)
+    const toDeleteTimestamps = indicesToDelete
+      .map((i) => messages.value[i].timestamp)
+      .filter(Boolean)
 
     // 修复 Bug：同步清理已触发但尚未手动删除的提醒和话题
-    indicesToDelete.forEach(i => {
+    indicesToDelete.forEach((i) => {
       const msg = messages.value[i]
       if (msg.role === 'assistant') {
         // 检查并清理 Reminder
@@ -1347,48 +1504,56 @@ async function deleteMessageAt(idx) {
         while ((rMatch = reminderRegex.exec(msg.content)) !== null) {
           try {
             const data = JSON.parse(rMatch[1].trim())
-            const rIdx = reminders.value.findIndex(r => r.time === data.time && r.task === data.task)
+            const rIdx = reminders.value.findIndex(
+              (r) => r.time === data.time && r.task === data.task
+            )
             if (rIdx !== -1) {
               deleteReminder(rIdx) // 使用现有的带通知取消逻辑的函数
             }
-          } catch { /* ignore */ }
+          } catch {
+            /* ignore */
+          }
         }
-        
+
         // 检查并清理 Topic
         const topicRegex = /<TOPIC>([\s\S]*?)<\/TOPIC>/g
         let tMatch
         while ((tMatch = topicRegex.exec(msg.content)) !== null) {
           try {
             const data = JSON.parse(tMatch[1].trim())
-            const tIdx = topics.value.findIndex(t => t.time === data.time && t.topic === data.topic)
+            const tIdx = topics.value.findIndex(
+              (t) => t.time === data.time && t.topic === data.topic
+            )
             if (tIdx !== -1) {
               deleteTopic(tIdx) // 使用现有的带通知取消逻辑的函数
             }
-          } catch { /* ignore */ }
+          } catch {
+            /* ignore */
+          }
         }
       }
     })
-    
+
     // 执行删除：由于是按需删除，我们使用 filter 重新构建数组，而不是 splice 级联
     messages.value = messages.value.filter((m, i) => !indicesToDelete.includes(i))
-    
+
     // 同步删除数据库中的关联记忆
     for (const ts of toDeleteTimestamps) {
       await deleteMemoriesByMsgTimestamp(ts)
     }
 
     // 状态恢复：如果删除了最后的消息，需要根据剩余的最后一条 AI 消息恢复 Pero 的状态
-    const lastAssistantMsg = [...messages.value].reverse().find(m => m.role === 'assistant')
+    const lastAssistantMsg = [...messages.value].reverse().find((m) => m.role === 'assistant')
     if (lastAssistantMsg) {
       parsePeroStatus(lastAssistantMsg.content)
     } else if (messages.value.length === 0) {
       // 如果消息全删了，重置状态
       resetPeroState()
     }
-    
+
     persistMessages()
     // 只有在历史记录面板没打开时才滚动（虽然删除通常在历史面板触发）
-    if (!showHistory.value) scrollToBottom() 
+    if (!showHistory.value) scrollToBottom()
   } catch {
     // 忽略错误
   }
@@ -1411,19 +1576,19 @@ async function resetPeroState() {
 // 复制消息函数
 async function copyMessage(m) {
   const t = cleanMessageContent(String(m?.content || ''))
-  try { 
+  try {
     await navigator.clipboard.writeText(t)
     // 可以添加一个提示，告诉用户复制成功
     console.log('消息已复制到剪贴板')
   } catch {
     try {
-      const ta = document.createElement('textarea'); 
-      ta.value = t; 
+      const ta = document.createElement('textarea')
+      ta.value = t
       ta.style.position = 'fixed'
       ta.style.opacity = '0'
-      document.body.appendChild(ta); 
-      ta.select(); 
-      document.execCommand('copy'); 
+      document.body.appendChild(ta)
+      ta.select()
+      document.execCommand('copy')
       document.body.removeChild(ta)
       console.log('消息已复制到剪贴板（备用方法）')
     } catch {
@@ -1437,56 +1602,77 @@ async function regenerateAt(idx) {
   try {
     const msg = messages.value[idx]
     if (!msg || msg.role !== 'assistant' || isLoading.value) return
-    
+
     isLoading.value = true
     // 确保索引有效
     if (idx < 0 || idx >= messages.value.length) return
-    
+
     // 设置加载状态
     const originalTimestamp = msg.timestamp || Date.now()
-    messages.value.splice(idx, 1, { role: 'assistant', content: '__loading__', timestamp: originalTimestamp })
-    
+    messages.value.splice(idx, 1, {
+      role: 'assistant',
+      content: '__loading__',
+      timestamp: originalTimestamp
+    })
+
     // 发送“正在思考”状态到 Live2D 气泡
     const agentNameRegen = AGENTS[getActiveAgentId()]?.name || 'Pero'
     window.dispatchEvent(new CustomEvent('ppc:chat', { detail: `${agentNameRegen}正在思考中...` }))
-    
+
     scrollToBottom() // 滚动到底部显示加载状态
-    
+
     // 获取提示词并设置回退逻辑
     const defaults = await getDefaultPrompts()
-    const systemPrompt = String((await getConfig('ppc.systemPrompt')) || '').trim() || defaults.system_prompt_default
-    const personaText = String((await getConfig('ppc.personaText')) || '').trim() || defaults.persona_prompt_default
-    const postSystemPrompt = String((await getConfig('ppc.postSystemPrompt')) || '').trim() || defaults.post_prompt_default
+    const systemPrompt =
+      String((await getConfig('ppc.systemPrompt')) || '').trim() || defaults.system_prompt_default
+    const personaText =
+      String((await getConfig('ppc.personaText')) || '').trim() || defaults.persona_prompt_default
+    const postSystemPrompt =
+      String((await getConfig('ppc.postSystemPrompt')) || '').trim() || defaults.post_prompt_default
     const userName = String((await getConfig('ppc.userName')) || '').trim()
     const userPersona = String((await getConfig('ppc.userPersonaText')) || '').trim()
-    
+
     // 构建请求消息，添加提示词
     // 根据设置的记忆轮次截断历史记录（1轮 = 1对消息）
     const limitCount = memoryRounds.value * 2
     let baseReq = messages.value.slice(0, idx).slice(-limitCount)
-    
+
     // 注入当前时间
     baseReq = [{ role: 'system', content: await getEnvPrompt() }, ...baseReq]
-    
+
     // 注入当前部位台词
     const bodyLines = await getCurrentBodyLines()
     if (bodyLines) {
       baseReq = [{ role: 'system', content: bodyLines }, ...baseReq]
     }
-    
+
     // 检索并注入长期记忆（获取上一条用户消息作为检索词）
-    const lastUserMsgText = typeof (baseReq.slice().reverse().find(m => m.role === 'user')?.content) === 'string' 
-      ? baseReq.slice().reverse().find(m => m.role === 'user')?.content 
-      : (baseReq.slice().reverse().find(m => m.role === 'user')?.content?.find(c => c.type === 'text')?.text || '')
+    const lastUserMsgText =
+      typeof baseReq
+        .slice()
+        .reverse()
+        .find((m) => m.role === 'user')?.content === 'string'
+        ? baseReq
+            .slice()
+            .reverse()
+            .find((m) => m.role === 'user')?.content
+        : baseReq
+            .slice()
+            .reverse()
+            .find((m) => m.role === 'user')
+            ?.content?.find((c) => c.type === 'text')?.text || ''
     const relevantMemories = await getRelevantMemories(lastUserMsgText || '')
     if (relevantMemories.length > 0) {
-      const memoryPrompt = `<LONG_TERM_MEMORY>\n${relevantMemories.map(m => `[${m.realTime || '未知时间'}] ${m.content}`).join('\n')}\n</LONG_TERM_MEMORY>`
+      const memoryPrompt = `<LONG_TERM_MEMORY>\n${relevantMemories.map((m) => `[${m.realTime || '未知时间'}] ${m.content}`).join('\n')}\n</LONG_TERM_MEMORY>`
       baseReq = [{ role: 'system', content: memoryPrompt }, ...baseReq]
     }
-    
+
     // 如果有人设提示词，添加到系统提示词之后或消息开头
-    if (personaText && !baseReq.some(m => typeof m.content === 'string' && m.content.includes(personaText))) {
-      const systemIndex = baseReq.findIndex(m => m.role === 'system')
+    if (
+      personaText &&
+      !baseReq.some((m) => typeof m.content === 'string' && m.content.includes(personaText))
+    ) {
+      const systemIndex = baseReq.findIndex((m) => m.role === 'system')
       if (systemIndex >= 0) {
         baseReq.splice(systemIndex + 1, 0, { role: 'system', content: personaText })
       } else {
@@ -1495,14 +1681,22 @@ async function regenerateAt(idx) {
     }
 
     // 如果有系统提示词，添加到消息开头
-    if (systemPrompt && !baseReq.some(m => m.role === 'system' && typeof m.content === 'string' && m.content.includes(systemPrompt))) {
+    if (
+      systemPrompt &&
+      !baseReq.some(
+        (m) =>
+          m.role === 'system' && typeof m.content === 'string' && m.content.includes(systemPrompt)
+      )
+    ) {
       baseReq = [{ role: 'system', content: systemPrompt }, ...baseReq]
     }
 
     // 如果有用户设定，添加到系统/人设提示词之后
     if (userName || userPersona) {
       const userSettingPrompt = `[用户信息]\n姓名: ${userName || '主人'}\n描述: ${userPersona || '暂无描述'}`
-      if (!baseReq.some(m => typeof m.content === 'string' && m.content.includes(userSettingPrompt))) {
+      if (
+        !baseReq.some((m) => typeof m.content === 'string' && m.content.includes(userSettingPrompt))
+      ) {
         let lastSystemIndex = -1
         for (let i = 0; i < baseReq.length; i++) {
           if (baseReq[i].role === 'system') lastSystemIndex = i
@@ -1511,10 +1705,10 @@ async function regenerateAt(idx) {
         baseReq.splice(lastSystemIndex + 1, 0, { role: 'system', content: userSettingPrompt })
       }
     }
-    
+
     // 如果有后置提示词，添加到用户消息之后
     if (postSystemPrompt && baseReq.length > 0) {
-      const lastUserIndex = baseReq.map(m => m.role).lastIndexOf('user')
+      const lastUserIndex = baseReq.map((m) => m.role).lastIndexOf('user')
       if (lastUserIndex >= 0) {
         const lastUserMsg = baseReq[lastUserIndex]
         if (typeof lastUserMsg.content === 'string') {
@@ -1522,7 +1716,7 @@ async function regenerateAt(idx) {
             lastUserMsg.content = `${lastUserMsg.content}\n\n${postSystemPrompt}`
           }
         } else if (Array.isArray(lastUserMsg.content)) {
-          const textPart = lastUserMsg.content.find(c => c.type === 'text')
+          const textPart = lastUserMsg.content.find((c) => c.type === 'text')
           if (textPart && !textPart.text.includes(postSystemPrompt)) {
             textPart.text = `${textPart.text}\n\n${postSystemPrompt}`
           } else if (!textPart) {
@@ -1531,10 +1725,10 @@ async function regenerateAt(idx) {
         }
       }
     }
-    
-    const chatOpts = { 
-      topP: topP.value, 
-      frequencyPenalty: frequencyPenalty.value, 
+
+    const chatOpts = {
+      topP: topP.value,
+      frequencyPenalty: frequencyPenalty.value,
       presencePenalty: presencePenalty.value,
       source: 'mobile',
       session_id: sessionId.value
@@ -1542,30 +1736,59 @@ async function regenerateAt(idx) {
 
     try {
       if (stream.value) {
-        const final = await chatStream(baseReq, modelName.value, temperature.value, apiBase.value, chatOpts, (_, full) => {
-          messages.value.splice(idx, 1, { role: 'assistant', content: String(full || ''), timestamp: originalTimestamp })
-          scrollToBottom() // 流式更新时持续滚动到底部
-          
-          // [Add] 实时解析状态标签
-          parsePeroStatus(String(full || ''))
+        const final = await chatStream(
+          baseReq,
+          modelName.value,
+          temperature.value,
+          apiBase.value,
+          chatOpts,
+          (_, full) => {
+            messages.value.splice(idx, 1, {
+              role: 'assistant',
+              content: String(full || ''),
+              timestamp: originalTimestamp
+            })
+            scrollToBottom() // 流式更新时持续滚动到底部
+
+            // [Add] 实时解析状态标签
+            parsePeroStatus(String(full || ''))
+          }
+        )
+        messages.value.splice(idx, 1, {
+          role: 'assistant',
+          content: String(final || '') || '（暂无内容）',
+          timestamp: originalTimestamp
         })
-        messages.value.splice(idx, 1, { role: 'assistant', content: String(final || '') || '（暂无内容）', timestamp: originalTimestamp })
         await parsePeroStatus(String(final || ''))
         await parseAndSaveMemory(String(final || ''), originalTimestamp)
-        
+
         // 发送聊天事件到 Live2D 气泡
-        window.dispatchEvent(new CustomEvent('ppc:chat', { detail: cleanMessageContent(String(final || '')) }))
+        window.dispatchEvent(
+          new CustomEvent('ppc:chat', { detail: cleanMessageContent(String(final || '')) })
+        )
 
         persistMessages()
         scrollToBottom() // 最终消息更新后滚动到底部
       } else {
-        const r = await chatApi(baseReq, modelName.value, temperature.value, apiBase.value, chatOpts)
-        messages.value.splice(idx, 1, { role: 'assistant', content: String(r?.content || '') || '（暂无内容）', timestamp: originalTimestamp })
+        const r = await chatApi(
+          baseReq,
+          modelName.value,
+          temperature.value,
+          apiBase.value,
+          chatOpts
+        )
+        messages.value.splice(idx, 1, {
+          role: 'assistant',
+          content: String(r?.content || '') || '（暂无内容）',
+          timestamp: originalTimestamp
+        })
         await parsePeroStatus(String(r?.content || ''))
         await parseAndSaveMemory(String(r?.content || ''), originalTimestamp)
-        
+
         // 发送聊天事件到 Live2D 气泡
-        window.dispatchEvent(new CustomEvent('ppc:chat', { detail: cleanMessageContent(String(r?.content || '')) }))
+        window.dispatchEvent(
+          new CustomEvent('ppc:chat', { detail: cleanMessageContent(String(r?.content || '')) })
+        )
 
         persistMessages()
         scrollToBottom() // 消息更新后滚动到底部
@@ -1598,7 +1821,7 @@ onMounted(async () => {
 
   const base = (await getConfig('ppc.apiBase')) || apiBase.value
   const model = (await getConfig('ppc.modelName')) || modelName.value
-  
+
   let ms = null
   try {
     const msStr = await getConfig('ppc.modelSettings')
@@ -1623,17 +1846,17 @@ onMounted(async () => {
   // 如果启用了远程服务器，尝试同步最近的历史记录
   const remoteEnabled = (await getConfig('ppc.remoteEnabled')) === 'true'
   const remoteUrl = await getConfig('ppc.remoteUrl')
-  
+
   if (remoteEnabled && remoteUrl && sessionId.value) {
     console.log('正在从远程服务器同步历史记录...')
     fetch(`${remoteUrl.replace(/\/$/, '')}/api/history/mobile/${sessionId.value}`)
-      .then(res => res.json())
-      .then(data => {
+      .then((res) => res.json())
+      .then((data) => {
         if (Array.isArray(data) && data.length > 0) {
           // 这里的策略是：如果本地没消息，或者远程消息更多，则使用远程的
           // 或者简单的合并？这里先采用“如果本地为空则同步”的保守策略，避免覆盖用户当前的本地对话
           if (messages.value.length === 0) {
-            messages.value = data.map(m => ({
+            messages.value = data.map((m) => ({
               role: m.role,
               content: m.content,
               timestamp: m.timestamp ? new Date(m.timestamp).getTime() : Date.now()
@@ -1643,20 +1866,27 @@ onMounted(async () => {
           }
         }
       })
-      .catch(err => console.warn('同步历史记录失败:', err))
+      .catch((err) => console.warn('同步历史记录失败:', err))
   }
 })
 </script>
 
 <style>
-.home { height: 100vh; display: flex; flex-direction: column; position: relative; overflow: hidden; background: transparent }
-.hero { 
-  flex: 1; 
-  display: flex; 
-  flex-direction: column; 
-  justify-content: flex-end; 
-  overflow: visible; 
-  z-index: 1; 
+.home {
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  position: relative;
+  overflow: hidden;
+  background: transparent;
+}
+.hero {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  overflow: visible;
+  z-index: 1;
   padding-bottom: 90px; /* 增加底部间距，避开输入栏 */
 }
 
@@ -1684,7 +1914,7 @@ onMounted(async () => {
   display: flex;
   align-items: center;
   justify-content: center;
-  box-shadow: 
+  box-shadow:
     0 4px 15px rgba(219, 39, 119, 0.1),
     inset 0 0 10px rgba(255, 255, 255, 0.5);
   cursor: pointer;
@@ -1700,18 +1930,28 @@ onMounted(async () => {
 
 /* 炸裂动画状态 */
 .bubble-shattering {
-  animation: 
+  animation:
     bubbleVibrate 0.1s linear infinite,
     bubbleShatter 0.3s cubic-bezier(0.19, 1, 0.22, 1) forwards !important;
   pointer-events: none;
 }
 
 @keyframes bubbleVibrate {
-  0% { transform: translate(0, 0) rotate(0deg); }
-  25% { transform: translate(1px, 1px) rotate(0.5deg); }
-  50% { transform: translate(-1px, -1px) rotate(-0.5deg); }
-  75% { transform: translate(1px, -1px) rotate(0.5deg); }
-  100% { transform: translate(-1px, 1px) rotate(-0.5deg); }
+  0% {
+    transform: translate(0, 0) rotate(0deg);
+  }
+  25% {
+    transform: translate(1px, 1px) rotate(0.5deg);
+  }
+  50% {
+    transform: translate(-1px, -1px) rotate(-0.5deg);
+  }
+  75% {
+    transform: translate(1px, -1px) rotate(0.5deg);
+  }
+  100% {
+    transform: translate(-1px, 1px) rotate(-0.5deg);
+  }
 }
 
 @keyframes bubbleShatter {
@@ -1760,9 +2000,16 @@ onMounted(async () => {
 }
 
 @keyframes taskBubbleFloat {
-  0%, 100% { transform: translate(0, 0) rotate(0deg); }
-  33% { transform: translate(3px, -8px) rotate(2deg); }
-  66% { transform: translate(-3px, -4px) rotate(-2deg); }
+  0%,
+  100% {
+    transform: translate(0, 0) rotate(0deg);
+  }
+  33% {
+    transform: translate(3px, -8px) rotate(2deg);
+  }
+  66% {
+    transform: translate(-3px, -4px) rotate(-2deg);
+  }
 }
 
 /* 话题气泡样式 (左侧) */
@@ -1827,7 +2074,7 @@ onMounted(async () => {
   border-radius: 10px;
   min-width: 18px;
   text-align: center;
-  box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
   transform: translate(20%, 20%);
 }
 
@@ -1942,8 +2189,13 @@ onMounted(async () => {
 }
 
 @keyframes topicBubbleFloat {
-  0%, 100% { transform: translate(0, 0) rotate(0deg); }
-  50% { transform: translate(-4px, 6px) rotate(-1deg); }
+  0%,
+  100% {
+    transform: translate(0, 0) rotate(0deg);
+  }
+  50% {
+    transform: translate(-4px, 6px) rotate(-1deg);
+  }
 }
 
 .inputbar-mini {
@@ -2136,7 +2388,7 @@ onMounted(async () => {
   justify-content: center;
   cursor: pointer;
   font-size: 10px;
-  box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
 }
 
 .hint {
@@ -2185,45 +2437,48 @@ onMounted(async () => {
   transform: translateY(0);
 }
 
-.bubble-container { display: grid; gap: 2px }
-.bubble { 
-  max-width: 75%; 
-  position: relative; 
-  border-radius: 20px; 
-  padding: 12px 16px; 
-  margin: 8px 0; 
-  word-break: break-word; 
-  line-height: 1.6; 
-  font-size: 15px; 
-  box-shadow: 0 4px 15px rgba(0,0,0,0.05); 
-  transition: all .2s ease;
+.bubble-container {
+  display: grid;
+  gap: 2px;
+}
+.bubble {
+  max-width: 75%;
+  position: relative;
+  border-radius: 20px;
+  padding: 12px 16px;
+  margin: 8px 0;
+  word-break: break-word;
+  line-height: 1.6;
+  font-size: 15px;
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.05);
+  transition: all 0.2s ease;
   animation: bubbleFloat 5.6s ease-in-out infinite;
 }
-.bubble.user { 
-  margin-left: auto; 
-  background: linear-gradient(135deg, #3b82f6, #2563eb); 
-  color: #fff; 
+.bubble.user {
+  margin-left: auto;
+  background: linear-gradient(135deg, #3b82f6, #2563eb);
+  color: #fff;
   border: none;
   font-family: 'Quicksand', sans-serif;
   border-radius: 20px 20px 4px 20px;
 }
-.bubble.assistant { 
-  margin-right: auto; 
-  background: rgba(255, 255, 255, 0.4); 
+.bubble.assistant {
+  margin-right: auto;
+  background: rgba(255, 255, 255, 0.4);
   backdrop-filter: blur(12px) saturate(150%);
-  color: #db2777; 
+  color: #db2777;
   border: 1.5px solid rgba(255, 255, 255, 0.5);
   font-family: 'ZCOOL KuaiLe', cursive;
   font-size: 17px;
   border-radius: 24px 24px 24px 8px;
-  box-shadow: 
+  box-shadow:
     0 8px 32px rgba(219, 39, 119, 0.1),
     inset 0 0 15px rgba(255, 255, 255, 0.5),
     inset 0 -5px 10px rgba(219, 39, 119, 0.05);
   position: relative;
 }
 .bubble.assistant::before {
-  content: "";
+  content: '';
   position: absolute;
   top: 6px;
   left: 12px;
@@ -2236,39 +2491,123 @@ onMounted(async () => {
   pointer-events: none;
   display: block !important;
 }
-.bubble.assistant::after { 
-  content: ""; 
-  position: absolute; 
-  left: -7px; 
-  bottom: 12px; 
-  width: 12px; 
-  height: 12px; 
-  background: rgba(255, 255, 255, 0.4); 
+.bubble.assistant::after {
+  content: '';
+  position: absolute;
+  left: -7px;
+  bottom: 12px;
+  width: 12px;
+  height: 12px;
+  background: rgba(255, 255, 255, 0.4);
   backdrop-filter: blur(12px);
-  transform: rotate(45deg); 
-  border-left: 1.5px solid rgba(255, 255, 255, 0.5); 
+  transform: rotate(45deg);
+  border-left: 1.5px solid rgba(255, 255, 255, 0.5);
   border-bottom: 1.5px solid rgba(255, 255, 255, 0.5);
   z-index: -1;
 }
-.bubble pre { background: #1e293b; color: #e2e8f0; border-radius: 8px; padding: 8px; overflow: auto }
-.bubble code { background: rgba(0,0,0,0.2); border-radius: 4px; padding: 2px 4px }
-@keyframes bubbleFloat { 
-  0%, 100% { transform: translateY(0) rotate(0deg); } 
-  33% { transform: translateY(-4px) rotate(1deg); } 
-  66% { transform: translateY(-2px) rotate(-1deg); } 
+.bubble pre {
+  background: #1e293b;
+  color: #e2e8f0;
+  border-radius: 8px;
+  padding: 8px;
+  overflow: auto;
 }
-.bubble-tools { display: flex; gap: 6px; align-items: center; max-width: 68% }
-.bubble-tools.user { margin-left: auto; justify-content: flex-end }
-.bubble-tools.assistant { margin-right: auto; justify-content: flex-start }
-.tool-btn { width: 22px; height: 22px; display: grid; place-items: center; border-radius: 6px; border: 1px solid #e5e7eb; background: #f9fafb; color: #6b7280 }
-.tool-btn:disabled { opacity: 0.5 }
-.input { height: 40px; border-radius: 12px; border: 1px solid rgba(0,0,0,0.08); background: rgba(255, 255, 255, 0.5); backdrop-filter: blur(4px); color: #111; padding: 0 12px; transition: all 0.2s }
-.input:focus { background: rgba(255, 255, 255, 0.8); border-color: #3b82f6; outline: none; box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1) }
-.btn { width: 40px; height: 40px; display: grid; place-items: center; padding: 0; border-radius: 12px; background: linear-gradient(135deg, #3b82f6, #2563eb); color: #fff; border: none; box-shadow: 0 4px 12px rgba(37, 99, 235, 0.2); cursor: pointer }
-.btn-secondary { height: 40px; padding: 0 14px; border-radius: 12px; border: 1px solid rgba(0,0,0,0.08); background: rgba(255, 255, 255, 0.6); backdrop-filter: blur(4px); color: #374151; display: inline-flex; align-items: center; justify-content: center; white-space: nowrap; cursor: pointer; transition: all 0.2s }
-.btn-secondary:hover { background: rgba(255, 255, 255, 0.8); border-color: rgba(0,0,0,0.15) }
-@media (max-width: 768px) { 
-  .hero { min-height: 400px }
+.bubble code {
+  background: rgba(0, 0, 0, 0.2);
+  border-radius: 4px;
+  padding: 2px 4px;
+}
+@keyframes bubbleFloat {
+  0%,
+  100% {
+    transform: translateY(0) rotate(0deg);
+  }
+  33% {
+    transform: translateY(-4px) rotate(1deg);
+  }
+  66% {
+    transform: translateY(-2px) rotate(-1deg);
+  }
+}
+.bubble-tools {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  max-width: 68%;
+}
+.bubble-tools.user {
+  margin-left: auto;
+  justify-content: flex-end;
+}
+.bubble-tools.assistant {
+  margin-right: auto;
+  justify-content: flex-start;
+}
+.tool-btn {
+  width: 22px;
+  height: 22px;
+  display: grid;
+  place-items: center;
+  border-radius: 6px;
+  border: 1px solid #e5e7eb;
+  background: #f9fafb;
+  color: #6b7280;
+}
+.tool-btn:disabled {
+  opacity: 0.5;
+}
+.input {
+  height: 40px;
+  border-radius: 12px;
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  background: rgba(255, 255, 255, 0.5);
+  backdrop-filter: blur(4px);
+  color: #111;
+  padding: 0 12px;
+  transition: all 0.2s;
+}
+.input:focus {
+  background: rgba(255, 255, 255, 0.8);
+  border-color: #3b82f6;
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
+.btn {
+  width: 40px;
+  height: 40px;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border-radius: 12px;
+  background: linear-gradient(135deg, #3b82f6, #2563eb);
+  color: #fff;
+  border: none;
+  box-shadow: 0 4px 12px rgba(37, 99, 235, 0.2);
+  cursor: pointer;
+}
+.btn-secondary {
+  height: 40px;
+  padding: 0 14px;
+  border-radius: 12px;
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  background: rgba(255, 255, 255, 0.6);
+  backdrop-filter: blur(4px);
+  color: #374151;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+.btn-secondary:hover {
+  background: rgba(255, 255, 255, 0.8);
+  border-color: rgba(0, 0, 0, 0.15);
+}
+@media (max-width: 768px) {
+  .hero {
+    min-height: 400px;
+  }
 }
 
 /* 功能抽屉样式 */
@@ -2364,6 +2703,10 @@ onMounted(async () => {
 
 .group-icon {
   background: linear-gradient(135deg, rgba(16, 185, 129, 0.5), rgba(5, 150, 105, 0.5));
+}
+
+.remote-icon {
+  background: linear-gradient(135deg, rgba(245, 158, 11, 0.5), rgba(217, 119, 6, 0.5));
 }
 
 .feature-label {

@@ -1,10 +1,14 @@
 <template>
-  <div class="app"><router-view /></div>
+  <div class="app">
+    <RemoteHubView v-if="appMode.current === 'remote'" />
+    <router-view v-else />
+  </div>
 </template>
 
 <script setup>
 import { onMounted } from 'vue'
-import { loadActiveAgentId, loadAgents } from './api'
+import { loadActiveAgentId, loadAgents, appMode } from './api'
+import RemoteHubView from './pages/RemoteHubView.vue'
 
 onMounted(async () => {
   await Promise.all([

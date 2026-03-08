@@ -1,11 +1,8 @@
 use tauri::{AppHandle, Emitter, Manager};
-use tauri::WindowEvent;
 use rusqlite::params;
 use chrono::Local;
 use crate::db::DbState;
 use crate::db::Reminder;
-use tauri::menu::{MenuBuilder, MenuItemBuilder};
-use tauri::tray::TrayIconBuilder;
 use tauri_plugin_store::StoreExt;
 use serde::{Deserialize, Serialize};
 use reqwest::Client;
@@ -223,46 +220,10 @@ async fn chat_stream(
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
   tauri::Builder::default()
-    // 拦截窗口关闭事件：隐藏到托盘而不是退出
-    .on_window_event(|window, event| {
-        if let WindowEvent::CloseRequested { api, .. } = event {
-            let _ = window.hide();
-            api.prevent_close();
-        }
-    })
     .setup(|app| {
         // 初始化数据库
         let db_state = db::init_db(app.handle()).expect("failed to init db");
         app.manage(db_state);
-
-        // 创建系统托盘（最小实现）
-        // 仅在桌面平台启用
-        #[cfg(not(any(target_os = "android", target_os = "ios")))]
-        {
-            let show = MenuItemBuilder::with_id("show", "显示窗口").build(app).ok();
-            let quit = MenuItemBuilder::with_id("quit", "退出").build(app).ok();
-            if let (Some(show), Some(quit)) = (show, quit) {
-                if let Ok(menu) = MenuBuilder::new(app).items(&[&show, &quit]).build() {
-                    let _ = TrayIconBuilder::with_id("main")
-                        .menu(&menu)
-                        .on_menu_event(|app: &AppHandle, event: tauri::menu::MenuEvent| {
-                            match event.id.as_ref() {
-                                "show" => {
-                                    if let Some(w) = app.get_webview_window("main") {
-                                        let _ = w.show();
-                                        let _ = w.set_focus();
-                                    }
-                                }
-                                "quit" => {
-                                    app.exit(0);
-                                }
-                                _ => {}
-                            }
-                        })
-                        .build(app);
-                }
-            }
-        }
 
         // 启动后台提醒轮询器
         start_background_reminder_poller(app.handle().clone());

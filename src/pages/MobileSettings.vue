@@ -25,9 +25,9 @@
       class="settings-drawer"
     >
       <div class="drawer-menu">
-        <div 
-          v-for="item in menuItems" 
-          :key="item.id" 
+        <div
+          v-for="item in menuItems.filter((i) => i.id !== 'remote')"
+          :key="item.id"
           :class="['drawer-item', { active: tab === item.id }]"
           @click="switchTab(item.id)"
         >
@@ -43,19 +43,24 @@
       <div class="content-area">
         <Transition name="fade" mode="out-in">
           <div :key="tab" class="content-card">
-            
             <!-- 角色选择与管理 -->
             <div v-if="tab === 'role'" class="section">
               <div class="section-header">
                 <el-icon><Avatar /></el-icon>
                 <h3>角色管理</h3>
-                <el-button type="primary" class="create-btn" :icon="Plus" @click="createNewAgent" circle></el-button>
+                <el-button
+                  type="primary"
+                  class="create-btn"
+                  :icon="Plus"
+                  @click="createNewAgent"
+                  circle
+                ></el-button>
               </div>
-              
+
               <div class="agent-selection-container">
-                <div 
-                  v-for="(agent, id) in AGENTS" 
-                  :key="id" 
+                <div
+                  v-for="(agent, id) in AGENTS"
+                  :key="id"
                   class="agent-select-card"
                   :class="{ active: activeAgentId === id }"
                   @click="activeAgentId = id"
@@ -65,20 +70,26 @@
                   </div>
                   <div class="agent-info">
                     <div class="agent-name">{{ agent.name }}</div>
-                    <div class="agent-desc">{{ id === 'pero' ? '看板娘' : (id === 'nana' ? '雌小鬼AI' : '自定义角色') }}</div>
+                    <div class="agent-desc">
+                      {{ id === 'pero' ? '看板娘' : id === 'nana' ? '雌小鬼AI' : '自定义角色' }}
+                    </div>
                   </div>
                   <div class="agent-actions">
                     <div class="status-indicator" v-if="activeAgentId === id">
                       <span class="dot"></span> 使用中
                     </div>
-                    <el-dropdown trigger="click" @command="(cmd) => handleAgentCommand(cmd, id)" v-else-if="!['pero', 'nana'].includes(id)">
+                    <el-dropdown
+                      trigger="click"
+                      @command="(cmd) => handleAgentCommand(cmd, id)"
+                      v-else-if="!['pero', 'nana'].includes(id)"
+                    >
                       <el-icon class="more-btn" @click.stop><MoreFilled /></el-icon>
                       <template #dropdown>
                         <el-dropdown-menu>
                           <el-dropdown-item command="edit" :icon="Edit">编辑配置</el-dropdown-item>
-                          <el-dropdown-item 
-                            command="delete" 
-                            :icon="Delete" 
+                          <el-dropdown-item
+                            command="delete"
+                            :icon="Delete"
                             class="danger-text"
                             :disabled="['pero', 'nana'].includes(id)"
                           >
@@ -87,13 +98,14 @@
                         </el-dropdown-menu>
                       </template>
                     </el-dropdown>
-                    <el-button 
-                      v-if="activeAgentId === id && !['pero', 'nana'].includes(id)" 
-                      type="primary" 
-                      link 
-                      :icon="Edit" 
+                    <el-button
+                      v-if="activeAgentId === id && !['pero', 'nana'].includes(id)"
+                      type="primary"
+                      link
+                      :icon="Edit"
                       @click.stop="editAgent(id)"
-                    >配置</el-button>
+                      >配置</el-button
+                    >
                   </div>
                 </div>
               </div>
@@ -127,49 +139,64 @@
                       </span>
                     </template>
                     <el-form :model="editingAgentForm" label-position="top" class="editor-form">
-                      <el-alert 
+                      <el-alert
                         v-if="['pero', 'nana'].includes(editingAgentIdRaw)"
                         title="默认角色核心设定不可更改"
-                        type="warning" 
-                        show-icon 
-                        :closable="false" 
-                        class="mb-2" 
+                        type="warning"
+                        show-icon
+                        :closable="false"
+                        class="mb-2"
                       />
                       <div class="form-row">
                         <el-form-item label="角色名称" class="half-width">
-                          <el-input 
-                            v-model="editingAgentForm.name" 
-                            placeholder="例如：Mio" 
-                            :prefix-icon="User" 
+                          <el-input
+                            v-model="editingAgentForm.name"
+                            placeholder="例如：Mio"
+                            :prefix-icon="User"
                             :disabled="['pero', 'nana'].includes(editingAgentIdRaw)"
                           />
                         </el-form-item>
                         <el-form-item label="角色ID" v-if="isNewAgent" class="half-width">
-                          <el-input v-model="editingAgentIdRaw" placeholder="例如：mio_001" :prefix-icon="Key" />
+                          <el-input
+                            v-model="editingAgentIdRaw"
+                            placeholder="例如：mio_001"
+                            :prefix-icon="Key"
+                          />
                         </el-form-item>
                       </div>
-                      
+
                       <el-form-item label="欢迎语">
-                        <el-input 
-                          v-model="editingAgentForm.welcome_message" 
-                          type="textarea" 
-                          :rows="3" 
-                          placeholder="你好呀！我是..." 
+                        <el-input
+                          v-model="editingAgentForm.welcome_message"
+                          type="textarea"
+                          :rows="3"
+                          placeholder="你好呀！我是..."
                           resize="none"
                         />
                       </el-form-item>
-                      
-                      <el-divider content-position="left"><el-icon><Operation /></el-icon> 默认状态</el-divider>
-                      
+
+                      <el-divider content-position="left"
+                        ><el-icon><Operation /></el-icon> 默认状态</el-divider
+                      >
+
                       <div class="state-grid">
                         <el-form-item label="Mood (心情)">
-                          <el-input v-model="editingAgentForm.default_state.mood" placeholder="开心" />
+                          <el-input
+                            v-model="editingAgentForm.default_state.mood"
+                            placeholder="开心"
+                          />
                         </el-form-item>
                         <el-form-item label="Vibe (氛围)">
-                          <el-input v-model="editingAgentForm.default_state.vibe" placeholder="充满活力" />
+                          <el-input
+                            v-model="editingAgentForm.default_state.vibe"
+                            placeholder="充满活力"
+                          />
                         </el-form-item>
                         <el-form-item label="Mind (想法)">
-                          <el-input v-model="editingAgentForm.default_state.mind" placeholder="希望能帮到主人" />
+                          <el-input
+                            v-model="editingAgentForm.default_state.mind"
+                            placeholder="希望能帮到主人"
+                          />
                         </el-form-item>
                       </div>
                     </el-form>
@@ -184,28 +211,28 @@
                       </span>
                     </template>
                     <el-form :model="editingAgentForm" label-position="top" class="editor-form">
-                      <el-alert 
-                        title="Prompt 设定决定了角色的性格和行为方式" 
-                        type="info" 
-                        show-icon 
-                        :closable="false" 
-                        class="mb-2" 
+                      <el-alert
+                        title="Prompt 设定决定了角色的性格和行为方式"
+                        type="info"
+                        show-icon
+                        :closable="false"
+                        class="mb-2"
                       />
                       <el-form-item label="System Prompt (系统指令)">
-                        <el-input 
-                          v-model="editingAgentForm.system_prompt" 
-                          type="textarea" 
-                          :rows="8" 
-                          placeholder="<System_Core_Setting>..." 
+                        <el-input
+                          v-model="editingAgentForm.system_prompt"
+                          type="textarea"
+                          :rows="8"
+                          placeholder="<System_Core_Setting>..."
                           :disabled="['pero', 'nana'].includes(editingAgentIdRaw)"
                         />
                       </el-form-item>
                       <el-form-item label="Persona Prompt (人设模块)">
-                        <el-input 
-                          v-model="editingAgentForm.persona_prompt" 
-                          type="textarea" 
-                          :rows="8" 
-                          placeholder="<Identity_Module>..." 
+                        <el-input
+                          v-model="editingAgentForm.persona_prompt"
+                          type="textarea"
+                          :rows="8"
+                          placeholder="<Identity_Module>..."
                           :disabled="['pero', 'nana'].includes(editingAgentIdRaw)"
                         />
                       </el-form-item>
@@ -221,19 +248,19 @@
                       </span>
                     </template>
                     <el-form :model="editingAgentForm" label-position="top" class="editor-form">
-                      <el-alert 
-                        title="每行一句，看板娘闲置时会随机播放" 
-                        type="success" 
-                        show-icon 
-                        :closable="false" 
-                        class="mb-2" 
+                      <el-alert
+                        title="每行一句，看板娘闲置时会随机播放"
+                        type="success"
+                        show-icon
+                        :closable="false"
+                        class="mb-2"
                       />
                       <el-form-item>
-                        <el-input 
-                          v-model="editingAgentForm.idle_messages_text" 
-                          type="textarea" 
-                          :rows="15" 
-                          placeholder="今天天气真好呀！&#10;主人在忙什么呢？&#10;好想吃甜点..." 
+                        <el-input
+                          v-model="editingAgentForm.idle_messages_text"
+                          type="textarea"
+                          :rows="15"
+                          placeholder="今天天气真好呀！&#10;主人在忙什么呢？&#10;好想吃甜点..."
                         />
                       </el-form-item>
                     </el-form>
@@ -248,8 +275,6 @@
                 </template>
               </el-dialog>
             </div>
-
-
 
             <!-- API 设置 -->
             <div v-if="tab === 'api'" class="section">
@@ -277,7 +302,11 @@
                   <el-input v-model="modelName" placeholder="请先获取模型" />
                 </el-form-item>
                 <el-form-item label="API 地址">
-                  <el-input v-model="apiBase" placeholder="https://api.openai.com" :disabled="selectedProvider !== 'custom'" />
+                  <el-input
+                    v-model="apiBase"
+                    placeholder="https://api.openai.com"
+                    :disabled="selectedProvider !== 'custom'"
+                  />
                 </el-form-item>
                 <el-form-item label="API 秘钥">
                   <el-input v-model="apiKey" type="password" placeholder="sk-..." show-password />
@@ -286,7 +315,12 @@
                   <el-button type="primary" plain @click="fetchModels">获取模型</el-button>
                   <el-input v-model="modelSearch" placeholder="搜索模型..." clearable />
                 </div>
-                <el-table :data="filteredModels" height="200" @row-click="row => modelName = row.id" class="mini-table">
+                <el-table
+                  :data="filteredModels"
+                  height="200"
+                  @row-click="(row) => (modelName = row.id)"
+                  class="mini-table"
+                >
                   <el-table-column width="40">
                     <template #default="{ row }">
                       <el-radio v-model="modelName" :label="row.id"><span></span></el-radio>
@@ -294,30 +328,9 @@
                   </el-table-column>
                   <el-table-column prop="id" label="可用模型列表" />
                 </el-table>
-                <el-button type="primary" class="full-btn" @click="applySettings">保存 API 设置</el-button>
-              </el-form>
-            </div>
-
-            <!-- 远程连接 -->
-            <div v-if="tab === 'remote'" class="section">
-              <div class="section-header">
-                <el-icon><Connection /></el-icon>
-                <h3>远程连接</h3>
-              </div>
-              <div class="info-banner">
-                <p>连接到 PC 集成版或私有服务器，共享记忆与更强 AI 能力。</p>
-              </div>
-              <el-form label-position="top">
-                <el-form-item label="启用远程模式">
-                  <el-switch v-model="remoteEnabled" active-text="开启" inactive-text="关闭" />
-                </el-form-item>
-                <el-form-item label="服务器地址">
-                  <el-input v-model="remoteUrl" placeholder="http://192.168.x.x:3000" :disabled="!remoteEnabled" />
-                </el-form-item>
-                <el-form-item label="访问令牌 (Handshake Token)">
-                  <el-input v-model="remoteToken" type="password" placeholder="pero_default_token" show-password :disabled="!remoteEnabled" />
-                </el-form-item>
-                <el-button type="primary" class="full-btn" @click="applyRemoteSettings" :disabled="!remoteEnabled">保存并连接</el-button>
+                <el-button type="primary" class="full-btn" @click="applySettings"
+                  >保存 API 设置</el-button
+                >
               </el-form>
             </div>
 
@@ -344,7 +357,9 @@
                 <el-form-item label="流式传输">
                   <el-switch v-model="stream" />
                 </el-form-item>
-                <el-button type="primary" class="full-btn" @click="applyModelSettings">确定</el-button>
+                <el-button type="primary" class="full-btn" @click="applyModelSettings"
+                  >确定</el-button
+                >
               </el-form>
             </div>
 
@@ -359,9 +374,16 @@
                   <el-input v-model="userName" placeholder="填写你的名字" />
                 </el-form-item>
                 <el-form-item :label="`我的人设`">
-                  <el-input v-model="userPersonaText" type="textarea" :rows="8" placeholder="例如：性格温柔、喜欢吃甜食..." />
+                  <el-input
+                    v-model="userPersonaText"
+                    type="textarea"
+                    :rows="8"
+                    placeholder="例如：性格温柔、喜欢吃甜食..."
+                  />
                 </el-form-item>
-                <el-button type="primary" class="full-btn" @click="applyUserSettings">确定</el-button>
+                <el-button type="primary" class="full-btn" @click="applyUserSettings"
+                  >确定</el-button
+                >
               </el-form>
             </div>
 
@@ -371,20 +393,30 @@
                 <el-icon><Collection /></el-icon>
                 <h3>记忆管理</h3>
               </div>
-              <el-input v-model="memorySearch" placeholder="搜索记忆..." clearable class="search-input">
-                <template #prefix><el-icon><Search /></el-icon></template>
+              <el-input
+                v-model="memorySearch"
+                placeholder="搜索记忆..."
+                clearable
+                class="search-input"
+              >
+                <template #prefix
+                  ><el-icon><Search /></el-icon
+                ></template>
               </el-input>
               <div class="memory-list">
                 <div v-if="filteredMemories.length === 0" class="empty">暂无相关记忆</div>
                 <div v-for="m in filteredMemories" :key="m.id" class="memory-item">
-                  <div class="memory-content markdown-body" v-html="renderMarkdown(m.content)"></div>
+                  <div
+                    class="memory-content markdown-body"
+                    v-html="renderMarkdown(m.content)"
+                  ></div>
                   <div v-if="m.tags && m.tags.length" class="memory-tags">
-                    <el-tag 
-                      v-for="tag in m.tags" 
-                      :key="tag" 
-                      size="small" 
-                      type="info" 
-                      effect="plain" 
+                    <el-tag
+                      v-for="tag in m.tags"
+                      :key="tag"
+                      size="small"
+                      type="info"
+                      effect="plain"
                       round
                       class="m-tag"
                     >
@@ -393,7 +425,9 @@
                   </div>
                   <div class="memory-footer">
                     <span class="m-time">{{ m.realTime || '未知时间' }}</span>
-                    <el-button type="danger" size="small" link @click="deleteMemory(m.id)">删除</el-button>
+                    <el-button type="danger" size="small" link @click="deleteMemory(m.id)"
+                      >删除</el-button
+                    >
                   </div>
                 </div>
               </div>
@@ -405,21 +439,23 @@
                 <el-icon><Warning /></el-icon>
                 <h3>数据管理</h3>
               </div>
-              
+
               <div class="data-card">
                 <h4><i class="fas fa-file-export"></i> 导出全部数据</h4>
-                <p>将所有配置、角色、记忆及对话数据导出为一个 JSON 文件，方便备份或在其他设备上使用。</p>
+                <p>
+                  将所有配置、角色、记忆及对话数据导出为一个 JSON 文件，方便备份或在其他设备上使用。
+                </p>
                 <el-button type="primary" @click="handleExportAllData">
                   <i class="fas fa-download"></i> 导出数据
                 </el-button>
               </div>
-              
+
               <div class="data-card">
                 <h4><i class="fas fa-file-import"></i> 导入全部数据</h4>
                 <p>从之前导出的 JSON 文件中恢复所有数据。警告：此操作将覆盖当前的所有数据。</p>
-                <input 
+                <input
                   ref="importDataInput"
-                  type="file" 
+                  type="file"
                   accept=".json"
                   style="display: none"
                   @change="handleImportAllData"
@@ -428,14 +464,13 @@
                   <i class="fas fa-upload"></i> 选择文件并导入
                 </el-button>
               </div>
-              
+
               <div class="data-card danger">
                 <h4><i class="fas fa-trash-alt"></i> 数据重置</h4>
                 <p>将删除所有对话、记忆及偏好设置，恢复到初始状态。</p>
                 <el-button type="danger" @click="handleResetAll">重置所有数据</el-button>
               </div>
             </div>
-
           </div>
         </Transition>
       </div>
@@ -448,13 +483,42 @@ import { ref, computed, onMounted, watch } from 'vue'
 import { invoke } from '@tauri-apps/api/core'
 import { useRouter } from 'vue-router'
 import { ElMessageBox, ElMessage } from 'element-plus'
-import { resetAll, AGENTS, getActiveAgentId, setActiveAgentId, saveApiKey, getApiKey, getAllMemories, deleteMemory as apiDeleteMemory, getConfig, saveConfig, saveAgent, deleteAgent, exportAllData, importAllData } from '../api'
+import {
+  resetAll,
+  AGENTS,
+  getActiveAgentId,
+  setActiveAgentId,
+  saveApiKey,
+  getApiKey,
+  getAllMemories,
+  deleteMemory as apiDeleteMemory,
+  getConfig,
+  saveConfig,
+  saveAgent,
+  deleteAgent,
+  exportAllData,
+  importAllData
+} from '../api'
 import { marked } from 'marked'
 import DOMPurify from 'dompurify'
-import { 
-  Search, Connection, ArrowLeft, ArrowRight,
-  Cpu, Operation, User, Collection, Warning, Avatar, Setting,
-  Edit, Menu, Plus, Delete, ChatDotRound, Key, MoreFilled
+import {
+  Search,
+  ArrowLeft,
+  ArrowRight,
+  Cpu,
+  Operation,
+  User,
+  Collection,
+  Warning,
+  Avatar,
+  Setting,
+  Edit,
+  Menu,
+  Plus,
+  Delete,
+  ChatDotRound,
+  Key,
+  MoreFilled
 } from '@element-plus/icons-vue'
 
 const tab = ref('role')
@@ -476,7 +540,7 @@ function renderMarkdown(text) {
   try {
     if (!text) return ''
     const clean = cleanMessageContent(text)
-    
+
     // 更加防御性的 marked 调用
     let html = ''
     if (typeof marked === 'function') {
@@ -486,9 +550,9 @@ function renderMarkdown(text) {
     } else {
       html = String(clean)
     }
-    
-    return DOMPurify && typeof DOMPurify.sanitize === 'function' 
-      ? DOMPurify.sanitize(html) 
+
+    return DOMPurify && typeof DOMPurify.sanitize === 'function'
+      ? DOMPurify.sanitize(html)
       : String(html)
   } catch (e) {
     console.error('Markdown render error:', e)
@@ -505,7 +569,7 @@ function cleanMessageContent(text) {
       const agentName = AGENTS[agentId]?.name || 'Pero'
       return `${agentName}正在思考...`
     }
-    
+
     // 移除所有 XML 标签及其内容
     return text
       .replace(/<([A-Z_]+)>[\s\S]*?<\/\1>/g, '')
@@ -523,7 +587,7 @@ const menuItems = [
   { id: 'model', label: '模型', icon: Operation },
   { id: 'user', label: '用户', icon: User },
   { id: 'memory', label: '记忆', icon: Collection },
-  { id: 'data', label: '数据', icon: Warning },
+  { id: 'data', label: '数据', icon: Warning }
 ]
 
 // Role & Rules Settings
@@ -563,7 +627,9 @@ function editAgent(id) {
   editingAgentIdRaw.value = id
   // Deep copy to avoid direct mutation before save
   const formData = JSON.parse(JSON.stringify(agent))
-  formData.idle_messages_text = Array.isArray(formData.idle_messages) ? formData.idle_messages.join('\n') : ''
+  formData.idle_messages_text = Array.isArray(formData.idle_messages)
+    ? formData.idle_messages.join('\n')
+    : ''
   editingAgentForm.value = formData
   editorActiveTab.value = 'basic'
   showAgentEditor.value = true
@@ -577,61 +643,69 @@ async function handleDeleteAgent(id) {
       cancelButtonText: '取消',
       confirmButtonClass: 'el-button--danger'
     })
-    
+
     if (id === activeAgentId.value) {
       ElMessage.warning('不能删除当前正在使用的角色')
       return
     }
-    
+
     const success = await deleteAgent(id)
     if (success) {
       ElMessage.success('角色已删除')
     } else {
       ElMessage.error('删除失败')
     }
-  } catch { /* cancel */ }
+  } catch {
+    /* cancel */
+  }
 }
 
 async function saveAgentData() {
   if (!editingAgentForm.value.name) return ElMessage.warning('请输入角色名称')
-  
+
   let id = editingAgentIdRaw.value.trim()
   if (!id) return ElMessage.warning('请输入角色ID')
-  
+
   if (isNewAgent.value) {
     if (AGENTS[id]) return ElMessage.warning('该角色ID已存在')
   }
-  
+
   // Process idle messages
-  const idleMsgs = editingAgentForm.value.idle_messages_text 
-    ? editingAgentForm.value.idle_messages_text.split('\n').map(s => s.trim()).filter(Boolean)
+  const idleMsgs = editingAgentForm.value.idle_messages_text
+    ? editingAgentForm.value.idle_messages_text
+        .split('\n')
+        .map((s) => s.trim())
+        .filter(Boolean)
     : []
-  
+
   const finalData = JSON.parse(JSON.stringify(editingAgentForm.value))
   finalData.idle_messages = idleMsgs
   delete finalData.idle_messages_text // Clean up temporary field
-  
+
   const success = await saveAgent(id, finalData)
   if (success) {
     // Sync to waifu-tips.js via localStorage
     try {
       const waifuData = {
-        welcome: editingAgentForm.value.welcome_message,
+        welcome: editingAgentForm.value.welcome_message
       }
       // Map idle messages to waifu-tips format
       idleMsgs.forEach((msg, idx) => {
-        if (idx < 50) { // Limit to 50 messages
-           waifuData[`idleMessages_${String(idx + 1).padStart(2, '0')}`] = msg
+        if (idx < 50) {
+          // Limit to 50 messages
+          waifuData[`idleMessages_${String(idx + 1).padStart(2, '0')}`] = msg
         }
       })
-      
+
       localStorage.setItem(`ppc.${id}.waifu.texts`, JSON.stringify(waifuData))
-      
+
       // If we are editing the active agent, trigger an update immediately
       if (id === activeAgentId.value) {
-        window.dispatchEvent(new CustomEvent('ppc:agent-switched', { 
-          detail: { agentId: id } 
-        }))
+        window.dispatchEvent(
+          new CustomEvent('ppc:agent-switched', {
+            detail: { agentId: id }
+          })
+        )
       }
     } catch (e) {
       console.warn('Failed to sync waifu texts:', e)
@@ -643,8 +717,6 @@ async function saveAgentData() {
     ElMessage.error('保存失败')
   }
 }
-
-
 
 const providerDefaults = {
   siliconflow: 'https://api.siliconflow.cn/v1',
@@ -690,21 +762,19 @@ function handleProviderChange(val) {
   }
 }
 
-
-
 // Watch active agent change (Global Switch)
 watch(activeAgentId, async (newVal) => {
   await setActiveAgentId(newVal)
-  
+
   // 触发全局事件通知 Live2D 角色已切换，以便同步更新台词
-  window.dispatchEvent(new CustomEvent('ppc:agent-switched', { 
-    detail: { agentId: newVal } 
-  }))
-  
+  window.dispatchEvent(
+    new CustomEvent('ppc:agent-switched', {
+      detail: { agentId: newVal }
+    })
+  )
+
   ElMessage.success(`已切换为 ${AGENTS[newVal].name}`)
 })
-
-
 
 const modelName = ref('请先获取模型')
 const apiBase = ref('https://api.openai.com')
@@ -720,20 +790,19 @@ const memoryRounds = ref(40)
 const memorySearch = ref('')
 const allMemories = ref([])
 
-const remoteEnabled = ref(false)
-const remoteUrl = ref('')
-const remoteToken = ref('')
 const importDataInput = ref(null)
 
 const router = useRouter()
-function goHome() { router.push('/') }
-function goToRoleManager() { router.push('/roles') }
+function goHome() {
+  router.push('/')
+}
+function goToRoleManager() {
+  router.push('/roles')
+}
 
 const filteredModels = computed(() => {
   const kw = modelSearch.value.trim().toLowerCase()
-  return (availableModels.value || []).filter(m => 
-    String(m.id).toLowerCase().includes(kw)
-  )
+  return (availableModels.value || []).filter((m) => String(m.id).toLowerCase().includes(kw))
 })
 
 const filteredMemories = computed(() => {
@@ -741,9 +810,16 @@ const filteredMemories = computed(() => {
     const memories = Array.isArray(allMemories.value) ? allMemories.value : []
     const kw = (memorySearch.value || '').trim().toLowerCase()
     if (!kw) return memories
-    return memories.filter(m => 
-      String(m.content || '').toLowerCase().includes(kw) || 
-      (Array.isArray(m.tags) ? m.tags : []).some(t => String(t || '').toLowerCase().includes(kw))
+    return memories.filter(
+      (m) =>
+        String(m.content || '')
+          .toLowerCase()
+          .includes(kw) ||
+        (Array.isArray(m.tags) ? m.tags : []).some((t) =>
+          String(t || '')
+            .toLowerCase()
+            .includes(kw)
+        )
     )
   } catch (e) {
     console.error('Filter memories error:', e)
@@ -761,14 +837,16 @@ async function loadMemories() {
 
 async function deleteMemory(id) {
   try {
-    await ElMessageBox.confirm('确定要删除这条记忆吗？', '提示', { 
+    await ElMessageBox.confirm('确定要删除这条记忆吗？', '提示', {
       type: 'warning',
       confirmButtonClass: 'el-button--danger'
     })
     await apiDeleteMemory(id)
     await loadMemories()
     ElMessage.success('已删除')
-  } catch { /* ignore */ }
+  } catch {
+    /* ignore */
+  }
 }
 
 watch(tab, (newTab) => {
@@ -779,7 +857,11 @@ watch(tab, (newTab) => {
 async function getStoreConfig(k, def) {
   const v = await getConfig(k)
   if (!v) return def
-  try { return JSON.parse(v) } catch { return v }
+  try {
+    return JSON.parse(v)
+  } catch {
+    return v
+  }
 }
 async function saveStoreConfig(k, v) {
   const val = typeof v === 'object' ? JSON.stringify(v) : String(v)
@@ -794,27 +876,20 @@ async function applySettings() {
   ElMessage.success('API配置已保存')
 }
 
-async function applyRemoteSettings() {
-  await saveStoreConfig('ppc.remoteEnabled', remoteEnabled.value)
-  await saveStoreConfig('ppc.remoteUrl', remoteUrl.value.trim())
-  await saveStoreConfig('ppc.remoteToken', remoteToken.value.trim())
-  ElMessage.success('远程连接设置已保存')
-}
-
 async function applyModelSettings() {
-  await saveStoreConfig('ppc.modelSettings', { 
-    temperature: Number(temperature.value), 
-    topP: Number(topP.value), 
+  await saveStoreConfig('ppc.modelSettings', {
+    temperature: Number(temperature.value),
+    topP: Number(topP.value),
     stream: !!stream.value,
     memoryRounds: Number(memoryRounds.value)
   })
   ElMessage.success('已保存')
 }
 
-async function applyUserSettings() { 
+async function applyUserSettings() {
   await saveStoreConfig('ppc.userPersonaText', String(userPersonaText.value || ''))
   await saveStoreConfig('ppc.userName', String(userName.value || ''))
-  ElMessage.success('已保存') 
+  ElMessage.success('已保存')
 }
 
 async function fetchModels() {
@@ -822,18 +897,18 @@ async function fetchModels() {
   const loading = ElMessage({ message: '正在获取模型列表...', duration: 0 })
   try {
     // 使用 Rust 后端获取模型列表，避免 CORS 问题
-    const data = await invoke('fetch_models', { 
-      apiBase: apiBase.value, 
-      apiKey: apiKey.value 
+    const data = await invoke('fetch_models', {
+      apiBase: apiBase.value,
+      apiKey: apiKey.value
     })
-    
+
     // 兼容 OpenAI 格式返回 { object: "list", data: [...] }
     if (data && Array.isArray(data.data)) {
       availableModels.value = data.data
       ElMessage.success(`成功获取 ${availableModels.value.length} 个模型`)
     } else if (Array.isArray(data)) {
-       availableModels.value = data
-       ElMessage.success(`成功获取 ${availableModels.value.length} 个模型`)
+      availableModels.value = data
+      ElMessage.success(`成功获取 ${availableModels.value.length} 个模型`)
     } else {
       console.warn('Unknown model response format:', data)
       ElMessage.warning('获取到的模型格式无法解析')
@@ -851,7 +926,7 @@ async function handleResetAll() {
     const agentName = AGENTS[getActiveAgentId()]?.name || 'Pero'
     const { value, action } = await ElMessageBox.prompt(
       `<div class="danger-main-text">主人，真的要让${agentName}忘掉你吗？o(╥﹏╥)o</div>` +
-      '<div class="danger-sub-text">（此操作将清空所有数据，如需继续，请在文本框中输入“我们还会再见的...”）</div>',
+        '<div class="danger-sub-text">（此操作将清空所有数据，如需继续，请在文本框中输入“我们还会再见的...”）</div>',
       '危险操作确认',
       {
         inputValue: '',
@@ -861,7 +936,7 @@ async function handleResetAll() {
         type: 'error',
         customClass: 'danger-reset-box',
         center: true,
-        dangerouslyUseHTMLString: true,
+        dangerouslyUseHTMLString: true
       }
     )
     if (action === 'confirm') {
@@ -877,7 +952,9 @@ async function handleResetAll() {
         ElMessage.error('重置失败')
       }
     }
-  } catch { /* ignore */ }
+  } catch {
+    /* ignore */
+  }
 }
 
 // 导出全部数据
@@ -885,7 +962,7 @@ async function handleExportAllData() {
   try {
     const loading = ElMessage({ message: '正在导出数据...', duration: 0 })
     const data = await exportAllData()
-    
+
     // 创建下载链接
     const jsonString = JSON.stringify(data, null, 2)
     const blob = new Blob([jsonString], { type: 'application/json' })
@@ -898,7 +975,7 @@ async function handleExportAllData() {
     a.click()
     document.body.removeChild(a)
     URL.revokeObjectURL(url)
-    
+
     loading.close()
     ElMessage.success('数据导出成功！')
   } catch (e) {
@@ -916,7 +993,7 @@ function triggerImportData() {
 async function handleImportAllData(event) {
   const file = event.target.files?.[0]
   if (!file) return
-  
+
   try {
     const { value } = await ElMessageBox.confirm(
       '导入数据将覆盖当前所有数据，确定要继续吗？',
@@ -924,30 +1001,30 @@ async function handleImportAllData(event) {
       {
         confirmButtonText: '确定导入',
         cancelButtonText: '取消',
-        type: 'warning',
+        type: 'warning'
       }
     )
-    
+
     if (!value) {
       event.target.value = ''
       return
     }
-    
+
     const loading = ElMessage({ message: '正在导入数据...', duration: 0 })
-    
+
     // 读取文件内容
     const text = await file.text()
     const data = JSON.parse(text)
-    
+
     // 导入数据
     await importAllData(data)
-    
+
     loading.close()
     ElMessage.success('数据导入成功！正在重新加载...')
-    
+
     // 清空文件输入
     event.target.value = ''
-    
+
     // 刷新页面
     setTimeout(() => location.reload(), 1500)
   } catch (e) {
@@ -965,8 +1042,8 @@ async function handleImportAllData(event) {
 onMounted(async () => {
   modelName.value = await getStoreConfig('ppc.modelName', '请先获取模型')
   apiBase.value = await getStoreConfig('ppc.apiBase', 'https://api.openai.com')
-  apiKey.value = await getApiKey() || ''
-  
+  apiKey.value = (await getApiKey()) || ''
+
   const mSettings = await getStoreConfig('ppc.modelSettings', {})
   if (mSettings.temperature !== undefined) temperature.value = mSettings.temperature
   if (mSettings.topP !== undefined) topP.value = mSettings.topP
@@ -977,7 +1054,7 @@ onMounted(async () => {
   userName.value = await getStoreConfig('ppc.userName', '')
 
   const rEnabled = await getStoreConfig('ppc.remoteEnabled', 'false')
-  remoteEnabled.value = (rEnabled === 'true' || rEnabled === true)
+  remoteEnabled.value = rEnabled === 'true' || rEnabled === true
   remoteUrl.value = await getStoreConfig('ppc.remoteUrl', '')
   remoteToken.value = await getStoreConfig('ppc.remoteToken', '')
 
@@ -988,8 +1065,6 @@ onMounted(async () => {
   } else {
     selectedProvider.value = 'custom'
   }
-  
-
 })
 </script>
 
@@ -1025,7 +1100,7 @@ onMounted(async () => {
   justify-content: center;
   border-radius: 12px;
   background: white;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
   cursor: pointer;
 }
 
@@ -1128,7 +1203,7 @@ onMounted(async () => {
 :deep(.el-drawer__header) {
   margin-bottom: 0;
   padding: 24px;
-  border-bottom: 1px solid rgba(0,0,0,0.05);
+  border-bottom: 1px solid rgba(0, 0, 0, 0.05);
   color: #1e293b;
   font-weight: 700;
 }
@@ -1149,7 +1224,7 @@ onMounted(async () => {
   border: 1px solid rgba(255, 255, 255, 0.5);
   padding: 20px;
   min-height: 400px;
-  box-shadow: 0 10px 25px rgba(0,0,0,0.03);
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.03);
 }
 
 .section-header {
@@ -1191,7 +1266,9 @@ onMounted(async () => {
   line-height: 1.6;
 }
 
-.section-header.danger .el-icon { color: #ef4444; }
+.section-header.danger .el-icon {
+  color: #ef4444;
+}
 
 .danger-card {
   background: rgba(254, 242, 242, 0.8);
@@ -1453,7 +1530,7 @@ onMounted(async () => {
   padding: 16px;
   background: #fff;
   border-radius: 16px;
-  border: 1px solid rgba(0,0,0,0.03);
+  border: 1px solid rgba(0, 0, 0, 0.03);
   transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
   cursor: pointer;
   position: relative;
@@ -1462,7 +1539,7 @@ onMounted(async () => {
 
 .agent-select-card:hover {
   transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(0,0,0,0.03);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.03);
 }
 
 .agent-select-card.active {
@@ -1483,7 +1560,7 @@ onMounted(async () => {
   align-items: center;
   justify-content: center;
   margin-right: 16px;
-  box-shadow: 0 2px 6px rgba(0,0,0,0.05);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.05);
 }
 
 .agent-select-card.active .agent-avatar-placeholder {
@@ -1538,9 +1615,18 @@ onMounted(async () => {
 }
 
 @keyframes pulse {
-  0% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.4); }
-  70% { transform: scale(1); box-shadow: 0 0 0 6px rgba(34, 197, 94, 0); }
-  100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(34, 197, 94, 0); }
+  0% {
+    transform: scale(0.95);
+    box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.4);
+  }
+  70% {
+    transform: scale(1);
+    box-shadow: 0 0 0 6px rgba(34, 197, 94, 0);
+  }
+  100% {
+    transform: scale(0.95);
+    box-shadow: 0 0 0 0 rgba(34, 197, 94, 0);
+  }
 }
 
 .more-btn {
