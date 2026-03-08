@@ -3,6 +3,15 @@
 </template>
 
 <script setup>
+import { onMounted } from 'vue'
+import { loadActiveAgentId, loadAgents } from './api'
+
+onMounted(async () => {
+  await Promise.all([
+    loadActiveAgentId(), // 预加载当前角色ID缓存
+    loadAgents()         // 加载所有角色配置
+  ])
+})
 </script>
 
 <style>

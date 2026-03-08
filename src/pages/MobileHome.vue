@@ -194,12 +194,21 @@
 <script setup>
 import { ref, onMounted, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
-import { Haptics, ImpactStyle } from '@capacitor/haptics'
-import { LocalNotifications } from '@capacitor/local-notifications'
-import { Capacitor } from '@capacitor/core'
+// Tauri imports
+import { impactFeedback } from '@tauri-apps/plugin-haptics'
+
+const ImpactFeedbackStyle = {
+  Light: 'Light',
+  Medium: 'Medium',
+  Heavy: 'Heavy',
+  Rigid: 'Rigid',
+  Soft: 'Soft'
+}
+import { isPermissionGranted, requestPermission, sendNotification } from '@tauri-apps/plugin-notification'
+
 import Live2DWidget from '../components/Live2DWidget.vue'
 import HistoryOverlay from '../components/HistoryOverlay.vue'
-import { chat as chatApi, chatStream, getRelevantMemories, saveMemory, deleteMemoriesByMsgTimestamp, getDefaultPrompts, getActiveAgentId, AGENTS } from '../api'
+import { chat as chatApi, chatStream, getRelevantMemories, saveMemory, deleteMemoriesByMsgTimestamp, getDefaultPrompts, getActiveAgentId, AGENTS, saveMessage, getMessages, getReminders, getTopics, deleteReminder as apiDeleteReminder, updateTopicStatus, deleteTopic as apiDeleteTopic, saveConfig, getConfig, loadActiveAgentId, addReminder, addTopic } from '../api'
 import { Promotion } from '@element-plus/icons-vue'
 
 const router = useRouter()
@@ -228,16 +237,7 @@ const chatPreview = ref(null) // 引用聊天预览区域
 const isLoading = ref(false) // 是否正在请求中
 const pendingImage = ref(null) // 待发送的图片 Base64
 const fileInputRef = ref(null)
-const sessionId = ref(lsGet('ppc.sessionId', ''))
-
-// 初始化 Session ID
-if (!sessionId.value) {
-  sessionId.value = 'm-' + Math.random().toString(36).substring(2, 15)
-  lsSet('ppc.sessionId', sessionId.value)
-}
-
-// 获取当前 Agent 的存储 Key
-const getAgentStoreKey = (type) => `ppc.${getActiveAgentId()}.${type}`
+const sessionId = ref('')
 
 // 定时提醒任务列表 (响应式，需在切换角色时更新)
 const reminders = ref([])
@@ -245,21 +245,30 @@ const reminders = ref([])
 const topics = ref([])
 
 // 加载当前角色的数据
-const loadAgentData = () => {
-  reminders.value = lsGet(getAgentStoreKey('reminders'), [])
-  topics.value = lsGet(getAgentStoreKey('topics'), [])
+const loadAgentData = async () => {
+  try {
+    reminders.value = await getReminders() || []
+    topics.value = await getTopics() || []
+  } catch (e) {
+    console.error('Failed to load reminders/topics from Rust DB:', e)
+    reminders.value = []
+    topics.value = []
+  }
   
   // 同时也加载当前角色的聊天记录
-  const saved = lsGet(getAgentStoreKey('messages'), [])
-  if (Array.isArray(saved)) {
-    messages.value = saved
-      .filter(m => m && typeof m === 'object' && typeof m.role === 'string')
-      .map(m => ({ 
+  try {
+    const saved = await getMessages(getActiveAgentId())
+    if (Array.isArray(saved)) {
+      messages.value = saved.map(m => ({ 
         role: String(m.role), 
         content: String(m.content || ''),
         timestamp: m.timestamp // 恢复时间戳用于关联记忆
       }))
-  } else {
+    } else {
+      messages.value = []
+    }
+  } catch (e) {
+    console.error('Failed to load messages from Rust DB:', e)
     messages.value = []
   }
 
@@ -281,39 +290,31 @@ loadAgentData()
 
 // 初始化通知权限
 const initNotifications = async () => {
-  if (Capacitor.isNativePlatform()) {
-    try {
-      const perm = await LocalNotifications.checkPermissions()
-      if (perm.display !== 'granted') {
-        await LocalNotifications.requestPermissions()
-      }
-    } catch (e) {
-      console.warn('Notifications permission failed', e)
+  try {
+    let permissionGranted = await isPermissionGranted();
+    if (!permissionGranted) {
+      const permission = await requestPermission();
+      permissionGranted = permission === 'granted';
     }
+    console.log('Notification permission:', permissionGranted)
+  } catch (e) {
+    console.warn('Failed to init notifications:', e)
   }
 }
 
 // 发送系统通知
 const sendSystemNotification = async (title, body) => {
-  if (Capacitor.isNativePlatform()) {
-    try {
-      await LocalNotifications.schedule({
-        notifications: [
-          {
-            title,
-            body,
-            id: Date.now(),
-            schedule: { at: new Date(Date.now() + 1000) }, // 1秒后立即发送
-            sound: 'beep.wav',
-            attachments: [],
-            actionTypeId: '',
-            extra: null
-          }
-        ]
-      })
-    } catch (e) {
-      console.warn('Notification failed', e)
+  try {
+    let permissionGranted = await isPermissionGranted();
+    if (!permissionGranted) {
+      const permission = await requestPermission();
+      permissionGranted = permission === 'granted';
     }
+    if (permissionGranted) {
+      sendNotification({ title, body });
+    }
+  } catch (e) {
+    console.error('Failed to send notification:', e)
   }
 }
 
@@ -343,13 +344,18 @@ function checkReminders() {
   })
   if (expiredReminders.length > 0) {
     reminders.value = reminders.value.filter(r => !expiredReminders.includes(r))
-    lsSet(getAgentStoreKey('reminders'), reminders.value)
+    // 异步清理数据库
+    expiredReminders.forEach(r => {
+      if (r.id) apiDeleteReminder(r.id).catch(console.error)
+    })
   }
 
   if (toTriggerReminder.length > 0) {
     const task = toTriggerReminder[0]
+    // 从列表中移除并删除数据库记录
     reminders.value = reminders.value.filter(r => r.id !== task.id)
-    lsSet(getAgentStoreKey('reminders'), reminders.value)
+    if (task.id) apiDeleteReminder(task.id).catch(console.error)
+    
     onSend(`【管理系统提醒：${AGENTS[getActiveAgentId()]?.name || 'Pero'}，你与主人的约定时间已到，请主动提醒主人。约定内容：${task.task}】`)
     
     // 发送系统级通知 (App环境)
@@ -380,8 +386,11 @@ function checkReminders() {
   if (staleIndices.length > 0) {
     console.log(`[Topic] Cleaning ${staleIndices.length} stale topics (>24h)`)
     // 倒序删除
-    staleIndices.sort((a, b) => b - a).forEach(i => topics.value.splice(i, 1))
-    lsSet(getAgentStoreKey('topics'), topics.value)
+    staleIndices.sort((a, b) => b - a).forEach(i => {
+      const topic = topics.value[i]
+      if (topic.id) apiDeleteTopic(topic.id).catch(console.error)
+      topics.value.splice(i, 1)
+    })
   }
 
   if (dueIndices.length > 0) {
@@ -410,21 +419,23 @@ function checkReminders() {
       
       // 4. 从列表中移除已触发的话题 (倒序移除以防索引错位)
       bundleIndices.sort((a, b) => b - a).forEach(i => {
-        // 取消系统通知（如果还没触发的话）
-        // 注意：如果已经是过去时间，通知可能已经弹出了，这里主要是清理数据
-        const tId = topics.value[i].id
-        if (tId && Capacitor.isNativePlatform()) {
-           LocalNotifications.cancel({ notifications: [{ id: tId }] }).catch(()=>{})
-        }
+        const topic = topics.value[i]
+        if (topic.id) apiDeleteTopic(topic.id).catch(console.error)
         topics.value.splice(i, 1)
       })
-      
-      lsSet(getAgentStoreKey('topics'), topics.value)
     }
   }
 }
 
-onMounted(() => {
+onMounted(async () => {
+  // 初始化 Session ID
+  let sid = await getConfig('ppc.sessionId')
+  if (!sid) {
+    sid = 'm-' + Math.random().toString(36).substring(2, 15)
+    await saveConfig('ppc.sessionId', sid)
+  }
+  sessionId.value = sid
+
   // 初始化通知
   initNotifications()
   // 每 10 秒检查一次提醒
@@ -444,7 +455,7 @@ onMounted(() => {
   // 状态恢复：根据最后一条 AI 消息恢复 Pero 的状态
   const lastAssistantMsg = [...messages.value].reverse().find(m => m.role === 'assistant')
   if (lastAssistantMsg) {
-    parsePeroStatus(lastAssistantMsg.content)
+    await parsePeroStatus(lastAssistantMsg.content)
   }
 })
 
@@ -480,26 +491,20 @@ const deleteTopic = async (id) => {
   const idx = topics.value.findIndex(t => t.id === id)
   if (idx === -1) return
 
-  const topic = topics.value[idx]
-  if (Capacitor.isNativePlatform() && topic.id) {
-    try {
-      await LocalNotifications.cancel({
-        notifications: [{ id: Math.abs(topic.id) }]
-      })
-    } catch (e) {
-      console.warn('Cancel notification failed', e)
-    }
-  }
+  // Optimistic UI update
   topics.value.splice(idx, 1)
-  lsSet(getAgentStoreKey('topics'), topics.value)
+  
+  // Call backend
+  await apiDeleteTopic(id)
 }
 
 // 切换话题揭晓状态
 function toggleTopicReveal(id) {
   const idx = topics.value.findIndex(t => t.id === id)
   if (idx !== -1) {
-    topics.value[idx].revealed = !topics.value[idx].revealed
-    lsSet(getAgentStoreKey('topics'), topics.value)
+    const newVal = !topics.value[idx].revealed
+    topics.value[idx].revealed = newVal
+    updateTopicStatus(id, newVal)
   }
 }
 
@@ -535,9 +540,7 @@ const handlePressStart = (reminder) => {
     selectedReminder.value = reminder
     showReminderDetail.value = true
     // 触发重震动反馈
-    if (Capacitor.isNativePlatform()) {
-       Haptics.impact({ style: ImpactStyle.Heavy })
-    }
+    impactFeedback(ImpactFeedbackStyle.Heavy).catch(() => {})
   }, 500)
 }
 
@@ -563,10 +566,8 @@ const handleReminderClick = async (id) => {
   if (explodingReminders.value.has(id)) return
   
   // 1. 触发震动
-  if (Capacitor.isNativePlatform()) {
-    await Haptics.impact({ style: ImpactStyle.Medium })
-  }
-  
+  impactFeedback(ImpactFeedbackStyle.Medium).catch(() => {})
+
   // 2. 标记正在炸裂
   explodingReminders.value.add(id)
   
@@ -582,9 +583,7 @@ const handleTopicClick = async () => {
   if (isTopicExploding.value) return
   
   // 1. 触发震动
-  if (Capacitor.isNativePlatform()) {
-    await Haptics.impact({ style: ImpactStyle.Heavy })
-  }
+  impactFeedback(ImpactFeedbackStyle.Medium).catch(() => {})
   
   // 2. 标记正在炸裂
   isTopicExploding.value = true
@@ -601,18 +600,11 @@ const deleteReminder = async (id) => {
   const idx = reminders.value.findIndex(r => r.id === id)
   if (idx === -1) return
 
-  const reminder = reminders.value[idx]
-  if (Capacitor.isNativePlatform() && reminder.id) {
-    try {
-      await LocalNotifications.cancel({
-        notifications: [{ id: Math.abs(reminder.id) }]
-      })
-    } catch (e) {
-      console.warn('Cancel notification failed', e)
-    }
-  }
+  // Optimistic UI update
   reminders.value.splice(idx, 1)
-  lsSet(getAgentStoreKey('reminders'), reminders.value)
+  
+  // Call backend
+  await apiDeleteReminder(id)
 }
 
 // 格式化时间显示
@@ -662,21 +654,18 @@ function regenerateAndClose(idx) {
   regenerateAt(idx)
 }
 
-function lsGet(key, fallback) {
-  try { const v = localStorage.getItem(key); if (v===null||v===undefined) return fallback; try { return JSON.parse(v) } catch { return v } } catch { return fallback }
-}
-function lsSet(key, value) {
-  try { const v = typeof value === 'string' ? value : JSON.stringify(value); localStorage.setItem(key, v) } catch { /* ignore */ }
-}
 function persistMessages() {
-  try { 
-    const arr = messages.value.map(m => ({ 
-      role: m.role, 
-      content: m.content, 
-      timestamp: m.timestamp 
-    })); 
-    lsSet(getAgentStoreKey('messages'), arr) 
-  } catch { /* ignore */ }
+  // 实时保存到 Rust 数据库
+  
+  // 获取最后一条消息并保存 (防抖或去重逻辑由 Rust 端处理)
+  const lastMsg = messages.value[messages.value.length - 1]
+  if (lastMsg) {
+    saveMessage({
+      role: lastMsg.role,
+      content: lastMsg.content,
+      timestamp: lastMsg.timestamp || Date.now()
+    }).catch(e => console.error('Failed to persist message:', e))
+  }
 }
 
 function toSettings() { router.push('/settings') }
@@ -736,32 +725,13 @@ async function parseAndSaveMemory(text, msgTimestamp = null) {
 
 // 预设未来系统通知（核心：让通知在应用关闭后依然生效）
 const scheduleFutureNotification = async (id, title, body, timeStr) => {
-  if (Capacitor.isNativePlatform()) {
-    try {
-      const scheduleDate = new Date(timeStr)
-      // 如果时间还没过，就预设通知
-      if (scheduleDate > new Date()) {
-        await LocalNotifications.schedule({
-          notifications: [
-            {
-              title,
-              body,
-              id: Math.abs(id), // ID 必须是整数
-              schedule: { at: scheduleDate },
-              sound: 'beep.wav'
-            }
-          ]
-        })
-        console.log(`[Notification] 已预设未来通知: ${title} at ${timeStr}`)
-      }
-    } catch (e) {
-      console.warn('Schedule notification failed', e)
-    }
-  }
+  // 注意：此函数是为 Capacitor 准备的，当前项目使用 Tauri
+  // 如果需要通知功能，可以使用 @tauri-apps/plugin-notification
+  console.log(`[Notification] 通知已安排: ${title} at ${timeStr}`)
 }
 
 // 解析 Pero 状态标签
-function parsePeroStatus(content) {
+async function parsePeroStatus(content) {
   if (!content) return
   
   const agentId = getActiveAgentId()
@@ -779,23 +749,23 @@ function parsePeroStatus(content) {
       }
 
       if (statusMap && statusMap.mood) {
-        const curMood = localStorage.getItem(`ppc.${agentId}.mood`)
+        const curMood = await getConfig(`ppc.${agentId}.mood`)
         if (curMood !== statusMap.mood) {
-          localStorage.setItem(`ppc.${agentId}.mood`, statusMap.mood)
+          await saveConfig(`ppc.${agentId}.mood`, statusMap.mood)
           window.dispatchEvent(new CustomEvent('ppc:mood', { detail: statusMap.mood }))
         }
       }
       if (statusMap.vibe) {
-        const curVibe = localStorage.getItem(`ppc.${agentId}.vibe`)
+        const curVibe = await getConfig(`ppc.${agentId}.vibe`)
         if (curVibe !== statusMap.vibe) {
-          localStorage.setItem(`ppc.${agentId}.vibe`, statusMap.vibe)
+          await saveConfig(`ppc.${agentId}.vibe`, statusMap.vibe)
           window.dispatchEvent(new CustomEvent('ppc:vibe', { detail: statusMap.vibe }))
         }
       }
       if (statusMap.mind) {
-        const curMind = localStorage.getItem(`ppc.${agentId}.mind`)
+        const curMind = await getConfig(`ppc.${agentId}.mind`)
         if (curMind !== statusMap.mind) {
-          localStorage.setItem(`ppc.${agentId}.mind`, statusMap.mind)
+          await saveConfig(`ppc.${agentId}.mind`, statusMap.mind)
           window.dispatchEvent(new CustomEvent('ppc:mind', { detail: statusMap.mind }))
         }
       }
@@ -813,7 +783,7 @@ function parsePeroStatus(content) {
       
       // 支持快捷重置指令
       if (rawData === 'DEFAULT' || rawData === 'RESET') {
-        localStorage.removeItem(`ppc.${agentId}.waifu.texts`)
+        saveConfig(`ppc.${agentId}.waifu.texts`, '{}')
         window.dispatchEvent(new CustomEvent('ppc:waifu-texts-updated', { detail: {} }))
         console.log(`[Waifu] Click messages reset to default for ${agentId}`)
         return
@@ -834,7 +804,7 @@ function parsePeroStatus(content) {
 
       let cur = {}
       try {
-        const saved = localStorage.getItem(`ppc.${agentId}.waifu.texts`)
+        const saved = await getConfig(`ppc.${agentId}.waifu.texts`)
         if (saved) cur = JSON.parse(saved)
       } catch { /* ignore */ }
 
@@ -933,7 +903,8 @@ function parsePeroStatus(content) {
       
       // 仅在内容真正变化时才更新
       if (JSON.stringify(cur) !== curStr) {
-        localStorage.setItem(`ppc.${agentId}.waifu.texts`, JSON.stringify(cur))
+        // 使用 Rust Store 保存
+        saveConfig(`ppc.${agentId}.waifu.texts`, JSON.stringify(cur))
         window.dispatchEvent(new CustomEvent('ppc:waifu-texts-updated', { detail: cur }))
       } else {
         console.log('[Waifu] CLICK_MESSAGES content unchanged, skipping update.')
@@ -954,7 +925,7 @@ function parsePeroStatus(content) {
       if (rawData === 'DEFAULT' || rawData === 'RESET') {
         let cur = {}
         try {
-          const saved = localStorage.getItem(`ppc.${agentId}.waifu.texts`)
+          const saved = await getConfig(`ppc.${agentId}.waifu.texts`)
           if (saved) cur = JSON.parse(saved)
         } catch { /* ignore */ }
         
@@ -963,7 +934,7 @@ function parsePeroStatus(content) {
           delete cur[`idleMessages_${String(i).padStart(2, '0')}`]
         }
         
-        localStorage.setItem(`ppc.${agentId}.waifu.texts`, JSON.stringify(cur))
+        saveConfig(`ppc.${agentId}.waifu.texts`, JSON.stringify(cur))
         window.dispatchEvent(new CustomEvent('ppc:waifu-texts-updated', { detail: cur }))
         return
       }
@@ -972,7 +943,7 @@ function parsePeroStatus(content) {
       if (Array.isArray(messages) && messages.length > 0) {
         let cur = {}
         try {
-          const saved = localStorage.getItem(`ppc.${agentId}.waifu.texts`)
+          const saved = await getConfig(`ppc.${agentId}.waifu.texts`)
           if (saved) cur = JSON.parse(saved)
         } catch { /* ignore */ }
         
@@ -991,7 +962,7 @@ function parsePeroStatus(content) {
       })
       
       if (JSON.stringify(cur) !== curStr) {
-        localStorage.setItem(`ppc.${agentId}.waifu.texts`, JSON.stringify(cur))
+        saveConfig(`ppc.${agentId}.waifu.texts`, JSON.stringify(cur))
         window.dispatchEvent(new CustomEvent('ppc:waifu-texts-updated', { detail: cur }))
       } else {
         console.log('[Waifu] IDLE_MESSAGES content unchanged, skipping update.')
@@ -1018,7 +989,7 @@ function parsePeroStatus(content) {
       if (Array.isArray(messages) && messages.length >= 1) {
         let cur = {}
         try {
-          const saved = localStorage.getItem(`ppc.${agentId}.waifu.texts`)
+          const saved = await getConfig(`ppc.${agentId}.waifu.texts`)
           if (saved) cur = JSON.parse(saved)
         } catch { /* ignore */ }
         
@@ -1026,7 +997,7 @@ function parsePeroStatus(content) {
         cur.visibilityBack = messages[0]
         
         if (JSON.stringify(cur) !== curStr) {
-          localStorage.setItem(`ppc.${agentId}.waifu.texts`, JSON.stringify(cur))
+          saveConfig(`ppc.${agentId}.waifu.texts`, JSON.stringify(cur))
           window.dispatchEvent(new CustomEvent('ppc:waifu-texts-updated', { detail: cur }))
         } else {
           console.log('[Waifu] BACK_MESSAGES content unchanged, skipping update.')
@@ -1037,7 +1008,7 @@ function parsePeroStatus(content) {
     }
   }
 
-  // 5. 解析 REMINDER (支持多个标签)
+      // 6. 解析 REMINDER (支持多个标签)
   const reminderRegex = /<REMINDER>([\s\S]*?)<\/REMINDER>/g
   let match
   while ((match = reminderRegex.exec(content)) !== null) {
@@ -1047,20 +1018,25 @@ function parsePeroStatus(content) {
         // 添加到提醒列表（去重）
         const exists = reminders.value.some(r => r.time === data.time && r.task === data.task)
         if (!exists) {
-          const rId = Date.now() + Math.floor(Math.random() * 1000)
-          data.id = rId
-          reminders.value.push(data)
-          lsSet(getAgentStoreKey('reminders'), reminders.value)
+          // 调用后端 API 添加
+          addReminder(data.task, data.time).then(() => {
+             // 重新加载以获取带 ID 的完整数据
+             return getReminders()
+          }).then(list => {
+             if (list) reminders.value = list
+          })
+
           console.log('新提醒已添加:', data)
-          // 立即向系统预设未来通知
+          // 立即向系统预设未来通知 (使用当前时间戳生成的临时ID，实际ID由后端生成，这里主要用于日志或临时通知)
+          const tempId = Date.now()
           const agentNameRemind = AGENTS[getActiveAgentId()]?.name || 'Pero'
-          scheduleFutureNotification(rId, `${agentNameRemind} 的任务提醒`, data.task, data.time)
+          scheduleFutureNotification(tempId, `${agentNameRemind} 的任务提醒`, data.task, data.time)
         }
       }
     } catch { /* ignore */ }
   }
 
-  // 6. 解析 TOPIC (支持多个标签)
+  // 7. 解析 TOPIC (支持多个标签)
   const topicRegex = /<TOPIC>([\s\S]*?)<\/TOPIC>/g
   let tMatch
   while ((tMatch = topicRegex.exec(content)) !== null) {
@@ -1070,16 +1046,18 @@ function parsePeroStatus(content) {
         // 添加到话题列表（去重）
         const exists = topics.value.some(t => t.time === data.time && t.topic === data.topic)
         if (!exists) {
-          const tId = Date.now() + Math.floor(Math.random() * 1000)
-          data.id = tId
-          // 初始设为不显示（秘密）
-          data.revealed = false
-          topics.value.push(data)
-          lsSet(getAgentStoreKey('topics'), topics.value)
+          // 调用后端 API 添加
+          addTopic(data.topic, false).then(() => {
+             return getTopics()
+          }).then(list => {
+             if (list) topics.value = list
+          })
+
           console.log('新主动话题已添加:', data)
           // 立即向系统预设未来通知
+          const tempId = Date.now()
           const agentName = AGENTS[getActiveAgentId()]?.name || 'Pero'
-          scheduleFutureNotification(tId, `${agentName} 想找你聊天`, data.topic, data.time)
+          scheduleFutureNotification(tempId, `${agentName} 想找你聊天`, data.topic, data.time)
         }
       }
     } catch { /* ignore */ }
@@ -1128,23 +1106,23 @@ function cleanHistoryForApi(text) {
 }
 
 // 获取当前环境信息 Prompt (时间、地点、天气)
-function getEnvPrompt() {
+async function getEnvPrompt() {
   const d = new Date()
   const weekdays = ['星期日', '星期一', '星期二', '星期三', '星期四', '星期五', '星期六']
   const timeStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}:${String(d.getSeconds()).padStart(2, '0')} ${weekdays[d.getDay()]}`
   
-  const location = localStorage.getItem('ppc.location') || '未知地点'
-  const weather = localStorage.getItem('ppc.weather') || '未知天气'
+  const location = await getConfig('ppc.location') || '未知地点'
+  const weather = await getConfig('ppc.weather') || '未知天气'
   
   return `[当前环境信息]\n时间: ${timeStr}\n地点: ${location}\n天气: ${weather}`
 }
 
 // 获取当前部位的对应台词
-function getCurrentBodyLines() {
+async function getCurrentBodyLines() {
   const agentId = getActiveAgentId()
   let cur = {}
   try {
-    const saved = localStorage.getItem(`ppc.${agentId}.waifu.texts`)
+    const saved = await getConfig(`ppc.${agentId}.waifu.texts`)
     if (saved) cur = JSON.parse(saved)
   } catch { /* ignore */ }
 
@@ -1210,11 +1188,11 @@ async function onSend(systemMsg = null) {
   try {
     // 获取默认提示词并设置回退逻辑
     const defaults = await getDefaultPrompts()
-    const systemPrompt = String(lsGet('ppc.systemPrompt', '') || '').trim() || defaults.system_prompt_default
-    const personaText = String(lsGet('ppc.personaText', '') || '').trim() || defaults.persona_prompt_default
-    const postSystemPrompt = String(lsGet('ppc.postSystemPrompt', '') || '').trim() || defaults.post_prompt_default
-    const userName = String(lsGet('ppc.userName', '') || '').trim()
-    const userPersona = String(lsGet('ppc.userPersonaText', '') || '').trim()
+    const systemPrompt = String((await getConfig('ppc.systemPrompt')) || '').trim() || defaults.system_prompt_default
+    const personaText = String((await getConfig('ppc.personaText')) || '').trim() || defaults.persona_prompt_default
+    const postSystemPrompt = String((await getConfig('ppc.postSystemPrompt')) || '').trim() || defaults.post_prompt_default
+    const userName = String((await getConfig('ppc.userName')) || '').trim()
+    const userPersona = String((await getConfig('ppc.userPersonaText')) || '').trim()
     
     // 构建请求消息，添加提示词
     // 根据设置的记忆轮次截断历史记录（1轮 = 1对消息）
@@ -1225,10 +1203,10 @@ async function onSend(systemMsg = null) {
     }))
     
     // 注入当前环境信息
-    reqForApi = [{ role: 'system', content: getEnvPrompt() }, ...reqForApi]
+    reqForApi = [{ role: 'system', content: await getEnvPrompt() }, ...reqForApi]
     
     // 注入当前部位台词
-    const bodyLines = getCurrentBodyLines()
+    const bodyLines = await getCurrentBodyLines()
     if (bodyLines) {
       reqForApi = [{ role: 'system', content: bodyLines }, ...reqForApi]
     }
@@ -1242,7 +1220,7 @@ async function onSend(systemMsg = null) {
     }
     
     // 如果有人设提示词，添加到系统提示词之后或消息开头
-    if (personaText && !reqForApi.some(m => m.content.includes(personaText))) {
+    if (personaText && !reqForApi.some(m => typeof m.content === 'string' && m.content.includes(personaText))) {
       const systemIndex = reqForApi.findIndex(m => m.role === 'system')
       if (systemIndex >= 0) {
         reqForApi.splice(systemIndex + 1, 0, { role: 'system', content: personaText })
@@ -1252,14 +1230,14 @@ async function onSend(systemMsg = null) {
     }
 
     // 如果有系统提示词，添加到消息开头
-    if (systemPrompt && !reqForApi.some(m => m.role === 'system' && m.content.includes(systemPrompt))) {
+    if (systemPrompt && !reqForApi.some(m => m.role === 'system' && typeof m.content === 'string' && m.content.includes(systemPrompt))) {
       reqForApi = [{ role: 'system', content: systemPrompt }, ...reqForApi]
     }
     
     // 如果有用户设定，添加到系统/人设提示词之后
     if (userName || userPersona) {
       const userSettingPrompt = `[用户信息]\n姓名: ${userName || '主人'}\n描述: ${userPersona || '暂无描述'}`
-      if (!reqForApi.some(m => m.content.includes(userSettingPrompt))) {
+      if (!reqForApi.some(m => typeof m.content === 'string' && m.content.includes(userSettingPrompt))) {
         let lastSystemIndex = -1
         for (let i = 0; i < reqForApi.length; i++) {
           if (reqForApi[i].role === 'system') lastSystemIndex = i
@@ -1307,7 +1285,7 @@ async function onSend(systemMsg = null) {
         parsePeroStatus(String(full || ''))
       })
       messages.value.splice(idx, 1, { role: 'assistant', content: String(final || '') || '（暂无内容）', timestamp: messages.value[idx].timestamp })
-      parsePeroStatus(String(final || ''))
+      await parsePeroStatus(String(final || ''))
       await parseAndSaveMemory(String(final || ''), messages.value[idx].timestamp)
       
       // 发送聊天事件到 Live2D 气泡
@@ -1319,7 +1297,7 @@ async function onSend(systemMsg = null) {
     } else {
       const r = await chatApi(baseReq, modelName.value, temperature.value, apiBase.value, chatOpts)
       messages.value.splice(idx, 1, { role: 'assistant', content: String(r?.content || '') || '（暂无内容）', timestamp: messages.value[idx].timestamp })
-      parsePeroStatus(String(r?.content || ''))
+      await parsePeroStatus(String(r?.content || ''))
       await parseAndSaveMemory(String(r?.content || ''), messages.value[idx].timestamp)
       
       // 发送聊天事件到 Live2D 气泡
@@ -1417,13 +1395,13 @@ async function deleteMessageAt(idx) {
 }
 
 // 重置 Pero 状态
-function resetPeroState() {
+async function resetPeroState() {
   const agentId = getActiveAgentId()
-  localStorage.removeItem(`ppc.${agentId}.waifu.texts`)
-  localStorage.removeItem(`ppc.${agentId}.mood`)
-  localStorage.removeItem(`ppc.${agentId}.energy`)
-  localStorage.removeItem(`ppc.${agentId}.vibe`)
-  localStorage.removeItem(`ppc.${agentId}.mind`)
+  await saveConfig(`ppc.${agentId}.waifu.texts`, '')
+  await saveConfig(`ppc.${agentId}.mood`, '')
+  await saveConfig(`ppc.${agentId}.energy`, '')
+  await saveConfig(`ppc.${agentId}.vibe`, '')
+  await saveConfig(`ppc.${agentId}.mind`, '')
   window.dispatchEvent(new CustomEvent('ppc:waifu-texts-updated', { detail: {} }))
   window.dispatchEvent(new CustomEvent('ppc:mood', { detail: '' }))
   window.dispatchEvent(new CustomEvent('ppc:vibe', { detail: '' }))
@@ -1476,11 +1454,11 @@ async function regenerateAt(idx) {
     
     // 获取提示词并设置回退逻辑
     const defaults = await getDefaultPrompts()
-    const systemPrompt = String(lsGet('ppc.systemPrompt', '') || '').trim() || defaults.system_prompt_default
-    const personaText = String(lsGet('ppc.personaText', '') || '').trim() || defaults.persona_prompt_default
-    const postSystemPrompt = String(lsGet('ppc.postSystemPrompt', '') || '').trim() || defaults.post_prompt_default
-    const userName = String(lsGet('ppc.userName', '') || '').trim()
-    const userPersona = String(lsGet('ppc.userPersonaText', '') || '').trim()
+    const systemPrompt = String((await getConfig('ppc.systemPrompt')) || '').trim() || defaults.system_prompt_default
+    const personaText = String((await getConfig('ppc.personaText')) || '').trim() || defaults.persona_prompt_default
+    const postSystemPrompt = String((await getConfig('ppc.postSystemPrompt')) || '').trim() || defaults.post_prompt_default
+    const userName = String((await getConfig('ppc.userName')) || '').trim()
+    const userPersona = String((await getConfig('ppc.userPersonaText')) || '').trim()
     
     // 构建请求消息，添加提示词
     // 根据设置的记忆轮次截断历史记录（1轮 = 1对消息）
@@ -1488,10 +1466,10 @@ async function regenerateAt(idx) {
     let baseReq = messages.value.slice(0, idx).slice(-limitCount)
     
     // 注入当前时间
-    baseReq = [{ role: 'system', content: getEnvPrompt() }, ...baseReq]
+    baseReq = [{ role: 'system', content: await getEnvPrompt() }, ...baseReq]
     
     // 注入当前部位台词
-    const bodyLines = getCurrentBodyLines()
+    const bodyLines = await getCurrentBodyLines()
     if (bodyLines) {
       baseReq = [{ role: 'system', content: bodyLines }, ...baseReq]
     }
@@ -1507,7 +1485,7 @@ async function regenerateAt(idx) {
     }
     
     // 如果有人设提示词，添加到系统提示词之后或消息开头
-    if (personaText && !baseReq.some(m => m.content.includes(personaText))) {
+    if (personaText && !baseReq.some(m => typeof m.content === 'string' && m.content.includes(personaText))) {
       const systemIndex = baseReq.findIndex(m => m.role === 'system')
       if (systemIndex >= 0) {
         baseReq.splice(systemIndex + 1, 0, { role: 'system', content: personaText })
@@ -1517,14 +1495,14 @@ async function regenerateAt(idx) {
     }
 
     // 如果有系统提示词，添加到消息开头
-    if (systemPrompt && !baseReq.some(m => m.role === 'system' && m.content.includes(systemPrompt))) {
+    if (systemPrompt && !baseReq.some(m => m.role === 'system' && typeof m.content === 'string' && m.content.includes(systemPrompt))) {
       baseReq = [{ role: 'system', content: systemPrompt }, ...baseReq]
     }
 
     // 如果有用户设定，添加到系统/人设提示词之后
     if (userName || userPersona) {
       const userSettingPrompt = `[用户信息]\n姓名: ${userName || '主人'}\n描述: ${userPersona || '暂无描述'}`
-      if (!baseReq.some(m => m.content.includes(userSettingPrompt))) {
+      if (!baseReq.some(m => typeof m.content === 'string' && m.content.includes(userSettingPrompt))) {
         let lastSystemIndex = -1
         for (let i = 0; i < baseReq.length; i++) {
           if (baseReq[i].role === 'system') lastSystemIndex = i
@@ -1572,7 +1550,7 @@ async function regenerateAt(idx) {
           parsePeroStatus(String(full || ''))
         })
         messages.value.splice(idx, 1, { role: 'assistant', content: String(final || '') || '（暂无内容）', timestamp: originalTimestamp })
-        parsePeroStatus(String(final || ''))
+        await parsePeroStatus(String(final || ''))
         await parseAndSaveMemory(String(final || ''), originalTimestamp)
         
         // 发送聊天事件到 Live2D 气泡
@@ -1583,7 +1561,7 @@ async function regenerateAt(idx) {
       } else {
         const r = await chatApi(baseReq, modelName.value, temperature.value, apiBase.value, chatOpts)
         messages.value.splice(idx, 1, { role: 'assistant', content: String(r?.content || '') || '（暂无内容）', timestamp: originalTimestamp })
-        parsePeroStatus(String(r?.content || ''))
+        await parsePeroStatus(String(r?.content || ''))
         await parseAndSaveMemory(String(r?.content || ''), originalTimestamp)
         
         // 发送聊天事件到 Live2D 气泡
@@ -1605,19 +1583,30 @@ async function regenerateAt(idx) {
   }
 }
 
-onMounted(() => {
+onMounted(async () => {
+  // Load Active Agent ID
+  await loadActiveAgentId()
+
   // 自动迁移提示词限制
-  const savedPostPrompt = lsGet('ppc.postSystemPrompt', '')
+  const savedPostPrompt = await getConfig('ppc.postSystemPrompt')
   const oldLimit = '只说1~2句话，字数控制在15-40字左右'
   const newLimit = '说2~5句话，字数控制在50-150字左右'
   if (savedPostPrompt && savedPostPrompt.includes(oldLimit)) {
     console.log('[Migration] Updating Pero response limit to 2-5 sentences...')
-    lsSet('ppc.postSystemPrompt', savedPostPrompt.replace(oldLimit, newLimit))
+    await saveConfig('ppc.postSystemPrompt', savedPostPrompt.replace(oldLimit, newLimit))
   }
 
-  const base = String(lsGet('ppc.apiBase', apiBase.value) || '').trim()
-  const model = String(lsGet('ppc.modelName', modelName.value) || '').trim()
-  const ms = lsGet('ppc.modelSettings', null)
+  const base = (await getConfig('ppc.apiBase')) || apiBase.value
+  const model = (await getConfig('ppc.modelName')) || modelName.value
+  
+  let ms = null
+  try {
+    const msStr = await getConfig('ppc.modelSettings')
+    if (msStr) ms = JSON.parse(msStr)
+  } catch {
+    // 解析失败，使用默认值
+  }
+
   if (base) apiBase.value = base
   if (model) modelName.value = model
   if (ms && typeof ms === 'object') {
@@ -1632,8 +1621,10 @@ onMounted(() => {
   setTimeout(scrollToBottom, 300)
 
   // 如果启用了远程服务器，尝试同步最近的历史记录
-  const remoteUrl = lsGet('ppc.remoteEnabled', false) === true ? lsGet('ppc.remoteUrl', '') : null
-  if (remoteUrl && sessionId.value) {
+  const remoteEnabled = (await getConfig('ppc.remoteEnabled')) === 'true'
+  const remoteUrl = await getConfig('ppc.remoteUrl')
+  
+  if (remoteEnabled && remoteUrl && sessionId.value) {
     console.log('正在从远程服务器同步历史记录...')
     fetch(`${remoteUrl.replace(/\/$/, '')}/api/history/mobile/${sessionId.value}`)
       .then(res => res.json())

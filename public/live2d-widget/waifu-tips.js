@@ -23,23 +23,13 @@ function loadWidget(config) {
 
   // 初始化加载当前角色的自定义台词
   ;(function initWaifuTexts() {
-    const agentId = localStorage.getItem('ppc.activeAgent') || 'pero'
-    try {
-      let saved = localStorage.getItem(`ppc.${agentId}.waifu.texts`)
-      // 兼容性回退
-      if (!saved && agentId === 'pero') {
-          saved = localStorage.getItem('ppc.waifu.texts')
-      }
-      if (saved) {
-        window.WAIFU_TEXTS = JSON.parse(saved)
-        console.log(`[WaifuTips] Initialized texts for ${agentId}`)
-      } else {
-        window.WAIFU_TEXTS = {}
-      }
-    } catch (err) {
-      console.error('[WaifuTips] Failed to init texts:', err)
-      window.WAIFU_TEXTS = {}
+    // 优先使用 window.WAIFU_TEXTS (Vue 已注入)
+    if (window.WAIFU_TEXTS && Object.keys(window.WAIFU_TEXTS).length > 0) {
+        console.log('[WaifuTips] Using pre-injected texts.')
+        return
     }
+    // 生产环境应走 Vue 注入，这里不再回退到 localStorage
+    window.WAIFU_TEXTS = {}
   })()
 
   function randomSelection(obj) { return Array.isArray(obj) ? obj[Math.floor(Math.random() * obj.length)] : obj }
@@ -52,15 +42,15 @@ function loadWidget(config) {
       userActionTimer = setInterval(() => { 
         const T = window.WAIFU_TEXTS || {}
         const idleArray = []
-        for (let i = 1; i <= 10; i++) {
+        for (let i = 1; i <= 50; i++) {
           const key = `idleMessages_${String(i).padStart(2, '0')}`
           if (T[key]) idleArray.push(T[key])
-          else break
+          else if (i > 10 && !T[key]) break // Optimized break only after checking reasonable range
         }
         
         // 动态回退逻辑：根据 agentId 选择默认台词
         if (idleArray.length === 0) {
-            const agentId = localStorage.getItem('ppc.activeAgent') || 'pero'
+            const agentId = (window.WAIFU_GET_AGENT_ID && window.WAIFU_GET_AGENT_ID()) || 'pero'
             const defaultIdle = {
                 pero: ["好久不见，日子过得好快呢……", "大坏蛋！你都多久没理人家了呀，嘤嘤嘤～", "嗨～快来逗我玩吧！", "拿小拳拳锤你胸口！"],
                 nana: ["杂鱼主人死到哪里去了？怎么还不回来...呜...", "喂！你是不是把我忘了？真是无可救药的笨蛋！", "好无聊啊...这种时候要是有人来给我骂一下就好了...", "哈？你以为Nana在想你吗？别自作多情了，杂鱼！♡"]
@@ -83,13 +73,21 @@ function loadWidget(config) {
     document.querySelector("#waifu-tool .fa-street-view").addEventListener("click", loadRandModel)
     document.querySelector("#waifu-tool .fa-camera-retro").addEventListener("click", () => { Live2D.captureName = "photo.png"; Live2D.captureFrame = true })
     document.querySelector("#waifu-tool .fa-info-circle").addEventListener("click", () => { open("https://github.com/stevenjoezhang/live2d-widget") })
-    document.querySelector("#waifu-tool .fa-times").addEventListener("click", () => { localStorage.setItem("waifu-display", Date.now()); document.getElementById("waifu").style.bottom = "-500px"; setTimeout(() => { document.getElementById("waifu").style.display = "none"; const t = document.getElementById("waifu-toggle"); if (t) t.classList.add("waifu-toggle-active") }, 3000) })
+    document.querySelector("#waifu-tool .fa-times").addEventListener("click", () => { 
+        // 隐藏逻辑：不再使用 localStorage，而是直接操作 DOM
+        document.getElementById("waifu").style.bottom = "-500px"; 
+        setTimeout(() => { 
+            document.getElementById("waifu").style.display = "none"; 
+            const t = document.getElementById("waifu-toggle"); 
+            if (t) t.classList.add("waifu-toggle-active") 
+        }, 3000) 
+    })
     const devtools = () => {}
     console.log("%c", devtools)
     window.addEventListener("visibilitychange", () => { 
       const T = window.WAIFU_TEXTS || {}
       if (!document.hidden) {
-        let agentId = localStorage.getItem('ppc.activeAgent') || 'pero'
+        let agentId = (window.WAIFU_GET_AGENT_ID && window.WAIFU_GET_AGENT_ID()) || 'pero'
         const allLines = window.WAIFU_INTERACTION_LINES
         let text = T.visibilityBack
         if (!text && allLines && allLines[agentId] && allLines[agentId].visibility) {
@@ -106,7 +104,7 @@ function loadWidget(config) {
       const W = (T.welcome || {})
       const TR = (W.timeRanges || {})
       
-      let agentId = localStorage.getItem('ppc.activeAgent') || 'pero'
+      let agentId = (window.WAIFU_GET_AGENT_ID && window.WAIFU_GET_AGENT_ID()) || 'pero'
       const allLines = window.WAIFU_INTERACTION_LINES
       const fallbackTR = (allLines && allLines[agentId] && allLines[agentId].welcome) || {}
       
@@ -170,7 +168,21 @@ function loadWidget(config) {
 
         // 2. 显示欢迎语
         const T = window.WAIFU_TEXTS || {}
-        const welcome = (agentId === 'nana') ? "哈？杂鱼主人，你怎么又把我换回来了？" : "锵锵！Pero 酱回来啦！"
+        let welcome = T.welcome || T.welcome_message
+        
+        if (!welcome) {
+             // Fallback to hardcoded defaults if no custom text found
+             welcome = (agentId === 'nana') ? "哈？杂鱼主人，你怎么又把我换回来了？" : "锵锵！Pero 酱回来啦！"
+        }
+        
+        // 如果是数组，随机取一条
+        if (Array.isArray(welcome)) {
+            welcome = welcome[Math.floor(Math.random() * welcome.length)]
+        } else if (typeof welcome === 'object' && welcome.message) {
+             // Handle structured welcome object if needed
+             welcome = welcome.message
+        }
+        
         showMessage(welcome, 4000, 10)
     }
   })
@@ -373,6 +385,9 @@ function loadWidget(config) {
   async function loadModel(modelId, modelTexturesId, message) {
     localStorage.setItem("modelId", modelId)
     localStorage.setItem("modelTexturesId", modelTexturesId)
+    if (window.PPC_SAVE_MODEL_SETTINGS) {
+        window.PPC_SAVE_MODEL_SETTINGS(modelId, modelTexturesId)
+    }
     showMessage(message, 4000, 10)
     const ok = await ensureLoadFn()
     if (!ok || typeof window.loadlive2d !== "function") { try { console.warn("loadlive2d unavailable") } catch (_) {}; return }

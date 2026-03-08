@@ -89,10 +89,9 @@
 <script setup>
 import { ref, onMounted, onBeforeUnmount } from 'vue'
 import axios from 'axios'
-import { db } from '../db'
 import { marked } from 'marked'
 import DOMPurify from 'dompurify'
-import { getActiveAgentId, AGENTS } from '../api'
+import { getActiveAgentId, AGENTS, getRecentMemories, getConfig, saveConfig } from '../api'
 import { INTERACTION_LINES } from '../constants/interaction'
 
 // Markdown 渲染
@@ -229,7 +228,7 @@ function changeOutfit(outfit) {
 
 async function loadRecentMemories() {
   try {
-    const memories = await db.memories.orderBy('timestamp').reverse().limit(10).toArray()
+    const memories = await getRecentMemories(10)
     const tags = []
     const seenTags = new Set()
     
@@ -294,7 +293,7 @@ async function fetchLocationAndWeather(force = false) {
   try {
     const CACHE_KEY = 'ppc.env.last_fetch'
     const CACHE_EXPIRE = 30 * 60 * 1000 // 30 分钟缓存
-    const lastFetch = Number(localStorage.getItem(CACHE_KEY) || 0)
+    const lastFetch = Number(await getConfig(CACHE_KEY) || 0)
     const nowTimestamp = Date.now()
 
     // 如果不是强制更新，且在缓存时间内，则直接跳过
@@ -332,7 +331,7 @@ async function fetchLocationAndWeather(force = false) {
 
     if (city) {
       locationText.value = city
-      localStorage.setItem('ppc.location', city)
+      await saveConfig('ppc.location', city)
     }
 
     // 2. 获取天气 (使用更稳定的 Open-Meteo API)
@@ -359,10 +358,10 @@ async function fetchLocationAndWeather(force = false) {
           const desc = weatherMap[code] || '天气晴'
           const weatherString = `${desc} ${temp}°C`
           weatherText.value = weatherString
-          localStorage.setItem('ppc.weather', weatherString)
+          await saveConfig('ppc.weather', weatherString)
           
           // 更新最后抓取时间戳
-          localStorage.setItem(CACHE_KEY, String(Date.now()))
+          await saveConfig(CACHE_KEY, String(Date.now()))
         }
       } catch (weaErr) {
         console.warn('Weather API failed:', weaErr)
@@ -375,6 +374,32 @@ async function fetchLocationAndWeather(force = false) {
 
 onMounted(async () => {
   ensureFontAwesome()
+
+  // 1. 预加载配置 (从 Rust Store)，注入到全局供 waifu-tips.js 使用
+  try {
+    const agentId = await getActiveAgentId() || 'pero' // Ensure we get the latest
+    const [modelId, modelTexturesId, savedTexts, activeAgent] = await Promise.all([
+      getConfig('ppc.modelId'),
+      getConfig('ppc.modelTexturesId'),
+      getConfig(`ppc.${agentId}.waifu.texts`),
+      getConfig('ppc.activeAgent')
+    ])
+
+    window.PPC_LIVE2D_CONFIG = {
+      modelId: modelId,
+      modelTexturesId: modelTexturesId,
+      activeAgent: activeAgent || 'pero',
+      waifuTexts: savedTexts ? JSON.parse(savedTexts) : null
+    }
+    
+    // 如果有预加载的文本，直接设置到 WAIFU_TEXTS
+    if (window.PPC_LIVE2D_CONFIG.waifuTexts) {
+      window.WAIFU_TEXTS = { ...(window.WAIFU_TEXTS || {}), ...window.PPC_LIVE2D_CONFIG.waifuTexts }
+    }
+  } catch (e) {
+    console.warn('Failed to preload Live2D config:', e)
+  }
+
   try { await loadAutoload() } catch { /* ignore */ }
   setTimeout(() => {
     if (!document.getElementById('waifu') && typeof window.initWidget === 'function') {
@@ -388,15 +413,15 @@ onMounted(async () => {
   fetchLocationAndWeather()
   try {
     const agentId = getActiveAgentId()
-    const loc = localStorage.getItem('ppc.location')
+    const loc = await getConfig('ppc.location')
     if (loc) locationText.value = loc
-    const wet = localStorage.getItem('ppc.weather')
+    const wet = await getConfig('ppc.weather')
     if (wet) weatherText.value = wet
-    const m = String(localStorage.getItem(`ppc.${agentId}.mood`) || '').trim()
+    const m = String(await getConfig(`ppc.${agentId}.mood`) || '').trim()
     if (m) moodText.value = m
-    const md = String(localStorage.getItem(`ppc.${agentId}.mind`) || '').trim()
+    const md = String(await getConfig(`ppc.${agentId}.mind`) || '').trim()
     if (md) mindText.value = md
-    const vb = String(localStorage.getItem(`ppc.${agentId}.vibe`) || '').trim()
+    const vb = String(await getConfig(`ppc.${agentId}.vibe`) || '').trim()
     if (vb) vibeText.value = vb
   } catch { /* ignore */ }
   tick = setInterval(() => { updateTime() }, 1000)
@@ -426,17 +451,21 @@ onMounted(async () => {
   // 暴露配置给全局 waifu-tips.js 使用
   window.WAIFU_INTERACTION_LINES = INTERACTION_LINES
   window.WAIFU_GET_AGENT_ID = getActiveAgentId
+  
+  // 暴露模型保存接口
+  window.PPC_SAVE_MODEL_SETTINGS = async (modelId, modelTexturesId) => {
+    try {
+        const agentId = getActiveAgentId() || 'pero'
+        await saveConfig(`ppc.${agentId}.modelId`, String(modelId))
+        await saveConfig(`ppc.${agentId}.modelTexturesId`, String(modelTexturesId))
+        // 同时保存到全局作为最后使用的默认值
+        await saveConfig('ppc.modelId', String(modelId))
+        await saveConfig('ppc.modelTexturesId', String(modelTexturesId))
+    } catch (e) { console.warn('Failed to save model settings to Rust:', e) }
+  }
 
-  // 初始加载本地存储的自定义台词
-  try {
-    const agentId = getActiveAgentId()
-    const savedTexts = localStorage.getItem(`ppc.${agentId}.waifu.texts`)
-    if (savedTexts) {
-      const parsed = JSON.parse(savedTexts)
-      window.WAIFU_TEXTS = { ...(window.WAIFU_TEXTS || {}), ...parsed }
-    }
-  } catch { /* ignore */ }
-
+  // 初始加载本地存储的自定义台词 (已在 onMounted 顶部处理，这里仅做事件绑定和 cleanup)
+  
   window.addEventListener('ppc:pero-status-updated', (e) => {
     const status = e.detail
     moodText.value = status.mood || '--'

@@ -35,10 +35,20 @@
     try {
       let v = newData
       if (!v) {
-        // [Modified] Support Multi-Agent Storage
-        const agentId = localStorage.getItem('ppc.activeAgent') || 'pero'
-        const saved = localStorage.getItem(`ppc.${agentId}.waifu.texts`) || localStorage.getItem('ppc.waifu.texts')
-        if (saved) v = JSON.parse(saved)
+        // [Modified] Support Multi-Agent Storage with Global Config Injection
+        let agentId = 'pero'
+        let savedTexts = null
+
+        if (window.PPC_LIVE2D_CONFIG) {
+            agentId = window.PPC_LIVE2D_CONFIG.activeAgent || 'pero'
+            savedTexts = window.PPC_LIVE2D_CONFIG.waifuTexts
+        } else {
+             // Default to 'pero' if global config is missing (Tauri injection failed or standalone)
+            agentId = 'pero'
+            savedTexts = null
+        }
+
+        if (savedTexts) v = savedTexts
         else {
           const r = await fetch('/live2d-widget/waifu-texts.json')
           v = await r.json()

@@ -1,3 +1,7 @@
+src-tauri/target/
+src-tauri/gen/android/
+src-tauri/gen/schemas/
+src-tauri/gen/
 .DS_Store
 Thumbs.db
 .vscode/
@@ -46,3 +50,10 @@ tmp/
 PeroCore/
 Peroperochat/backend/app/data/*.db
 **/app/data/*.db
+
+# User Data & Local Config
+data/
+*.db
+*.db-shm
+*.db-wal
+settings.json
