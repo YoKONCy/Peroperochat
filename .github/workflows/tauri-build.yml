@@ -46,7 +46,7 @@ jobs:
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
         with:
-          targets: aarch64-linux-android armv7-linux-androideabi i686-linux-android x86_64-linux-android
+          targets: aarch64-linux-android
 
       - name: Install pnpm
         uses: pnpm/action-setup@v3
@@ -71,24 +71,19 @@ jobs:
         env:
           CI: true
 
-      - name: Build Android APK
-        run: pnpm tauri android build --apk
+      - name: Build Android APK (aarch64 only)
+        run: pnpm tauri android build --apk --target aarch64
         env:
           NDK_HOME: ${{ steps.setup-ndk.outputs.ndk-path }}
           OPENSSL_DIR: /usr/lib/ssl
 
-      # 可选：签名 APK（需要在 GitHub Secrets 中配置签名密钥）
-      # - name: Sign APK
-      #   uses: r0adkll/sign-android-release@v1
-      #   with:
-      #     releaseDirectory: src-tauri/gen/android/app/build/outputs/apk/universal/release
-      #     signingKeyBase64: ${{ secrets.ANDROID_SIGNING_KEY }}
-      #     alias: ${{ secrets.ANDROID_ALIAS }}
-      #     keyStorePassword: ${{ secrets.ANDROID_KEY_STORE_PASSWORD }}
-      #     keyPassword: ${{ secrets.ANDROID_KEY_PASSWORD }}
+      - name: Rename APK
+        run: |
+          mv src-tauri/gen/android/app/build/outputs/apk/universal/release/app-universal-release-unsigned.apk \
+             src-tauri/gen/android/app/build/outputs/apk/universal/release/PeroperoChat-v1.2.2-arm64.apk || true
 
       - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: app-release
-          path: src-tauri/gen/android/app/build/outputs/apk/universal/release/app-universal-release-unsigned.apk
+          name: PeroperoChat-android-arm64
+          path: src-tauri/gen/android/app/build/outputs/apk/universal/release/*.apk

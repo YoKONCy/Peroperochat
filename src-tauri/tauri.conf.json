@@ -1,7 +1,7 @@
 {
   "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
   "productName": "PeroperoChat",
-  "version": "0.1.0",
+  "version": "1.2.2",
   "identifier": "com.peroperochat.mobile",
   "build": {
     "frontendDist": "../dist",
@@ -12,7 +12,7 @@
   "app": {
     "windows": [
       {
-        "title": "Your better friend",
+        "title": "PeroperoChat",
         "width": 800,
         "height": 600,
         "resizable": true,
@@ -32,6 +32,9 @@
       "icons/128x128@2x.png",
       "icons/icon.icns",
       "icons/icon.ico"
-    ]
+    ],
+    "android": {
+      "minSdkVersion": 24
+    }
   }
 }

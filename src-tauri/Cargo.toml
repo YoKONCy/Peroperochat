@@ -1,11 +1,9 @@
 [package]
 name = "peroperochat"
-version = "0.0.0"
+version = "1.2.2"
 description = "Your better friend"
 authors = ["you"]
 edition = "2021"
-
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [lib]
 name = "app_lib"
@@ -28,3 +26,10 @@ tauri-plugin-store = "2.4.2"
 rusqlite = { version = "0.32", features = ["bundled"] }
 uuid = { version = "1.10", features = ["v4", "serde"] }
 chrono = { version = "0.4", features = ["serde", "clock"] }
+
+[profile.release]
+panic = "abort"
+codegen-units = 1
+lto = true
+opt-level = "s"
+strip = true
