@@ -77,13 +77,23 @@ jobs:
           NDK_HOME: ${{ steps.setup-ndk.outputs.ndk-path }}
           OPENSSL_DIR: /usr/lib/ssl
 
-      - name: Rename APK
+      - name: Ensure debug keystore exists
         run: |
-          mv src-tauri/gen/android/app/build/outputs/apk/universal/release/app-universal-release-unsigned.apk \
-             src-tauri/gen/android/app/build/outputs/apk/universal/release/PeroperoChat-v1.2.2-arm64.apk || true
+          mkdir -p ~/.android
+          if [ ! -f ~/.android/debug.keystore ]; then
+            keytool -genkey -v -keystore ~/.android/debug.keystore -storepass android -alias androiddebugkey -keypass android -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Android Debug,O=Android,C=US"
+          fi
+
+      - name: Sign APK with debug key
+        run: |
+          cd src-tauri/gen/android
+          ./gradlew signingReport || true
+          cd app/build/outputs/apk/universal/release
+          $ANDROID_SDK_ROOT/build-tools/34.0.0/zipalign -v 4 app-universal-release-unsigned.apk app-aligned.apk
+          $ANDROID_SDK_ROOT/build-tools/34.0.0/apksigner sign --ks ~/.android/debug.keystore --ks-pass pass:android --key-pass pass:android --out PeroperoChat-v1.2.2-arm64.apk app-aligned.apk
 
       - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
         with:
           name: PeroperoChat-android-arm64
-          path: src-tauri/gen/android/app/build/outputs/apk/universal/release/*.apk
+          path: src-tauri/gen/android/app/build/outputs/apk/universal/release/PeroperoChat-v1.2.2-arm64.apk
