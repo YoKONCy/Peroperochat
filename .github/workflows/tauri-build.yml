@@ -73,12 +73,22 @@ jobs:
           NDK_HOME: ${{ steps.setup-ndk.outputs.ndk-path }}
           OPENSSL_DIR: /usr/lib/ssl
 
-      - name: Find and rename APK
+      - name: Ensure debug keystore exists
         run: |
-          APK_PATH=$(find src-tauri/gen/android/app/build/outputs/apk -name "*aarch64*.apk" | head -1)
+          mkdir -p ~/.android
+          if [ ! -f ~/.android/debug.keystore ]; then
+            keytool -genkey -v -keystore ~/.android/debug.keystore -storepass android -alias androiddebugkey -keypass android -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Android Debug,O=Android,C=US"
+          fi
+
+      - name: Sign APK with debug key
+        run: |
+          APK_PATH=$(find src-tauri/gen/android/app/build/outputs/apk -name "*.apk" | head -1)
           if [ -n "$APK_PATH" ]; then
-            cp "$APK_PATH" PeroperoChat-v1.2.2-arm64.apk
-            echo "APK found: $APK_PATH"
+            echo "Found APK: $APK_PATH"
+            BUILD_TOOLS=$(ls -d $ANDROID_SDK_ROOT/build-tools/* | sort -r | head -1)
+            echo "Using build-tools: $BUILD_TOOLS"
+            $BUILD_TOOLS/zipalign -v 4 "$APK_PATH" app-aligned.apk
+            $BUILD_TOOLS/apksigner sign --ks ~/.android/debug.keystore --ks-pass pass:android --key-pass pass:android --out PeroperoChat-v1.2.2-arm64.apk app-aligned.apk
           else
             echo "APK not found!"
             find src-tauri/gen/android -name "*.apk" || true
