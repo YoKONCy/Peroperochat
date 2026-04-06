@@ -233,13 +233,7 @@ async fn schedule_alarm(
 ) -> Result<(), String> {
     #[cfg(target_os = "android")]
     {
-        use tauri::plugin::PluginHandle;
-        // 通过 Tauri 插件机制调用 Kotlin 侧的 AlarmPlugin.scheduleAlarm
-        let _result = app
-            .plugin::<tauri::plugin::PluginApi<serde_json::Value>>("alarm")
-            .map_err(|e| format!("获取闹铃插件失败: {}", e))?;
-        
-        // 使用 run_on_main_thread 确保在 UI 线程调用 Android API
+        // 通过事件机制通知 Kotlin 原生层注册系统闹铃
         let app_clone = app.clone();
         app.run_on_main_thread(move || {
             let payload = serde_json::json!({
