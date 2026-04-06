@@ -2,8 +2,11 @@ name: Tauri Build
 
 on:
   push:
-    branches: [ main ]
+    tags: [ '*' ]
   workflow_dispatch:
+
+permissions:
+  contents: write
 
 jobs:
   build-android:
@@ -113,3 +116,27 @@ jobs:
         with:
           name: PeroperoChat-android-arm64
           path: PeroperoChat-v${{ steps.version.outputs.version }}-arm64.apk
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: PeroperoChat v${{ steps.version.outputs.version }}
+          tag_name: ${{ github.ref_name }}
+          body: |
+            ## PeroperoChat v${{ steps.version.outputs.version }}
+
+            ### 🆕 新功能
+            - 安卓系统级闹铃通知（App 被杀死后仍可准时通知）
+            - 角色管理 UI 现代化翻新（毛玻璃质感）
+
+            ### 🐛 Bug 修复
+            - 修复历史记录中出现"正在思考..."占位符的问题
+            - 修复加载历史消息时的传参类型错误
+            - 修复重新生成回复时人设提示词丢失的问题
+
+            ### 📦 下载
+            - `PeroperoChat-v${{ steps.version.outputs.version }}-arm64.apk` — Android ARM64 安装包
+          draft: false
+          prerelease: false
+          files: |
+            PeroperoChat-v${{ steps.version.outputs.version }}-arm64.apk
