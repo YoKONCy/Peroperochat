@@ -155,13 +155,13 @@ async function handleImport(e) {
 .role-list {
   display: flex;
   flex-direction: column;
-  gap: 20px;
+  gap: 24px;
   height: 100%;
 }
 
 .toolbar {
   display: flex;
-  gap: 12px;
+  gap: 16px;
   align-items: center;
 }
 
@@ -172,67 +172,98 @@ async function handleImport(e) {
 
 .search-box i {
   position: absolute;
-  left: 14px;
+  left: 18px;
   top: 50%;
   transform: translateY(-50%);
   color: #94a3b8;
+  font-size: 16px;
+  pointer-events: none;
 }
 
 .search-box input {
   width: 100%;
-  padding: 12px 16px 12px 42px;
-  border: 1px solid rgba(0, 0, 0, 0.05);
-  border-radius: 16px;
-  background: rgba(255, 255, 255, 0.8);
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.03);
-  font-size: 14px;
-  transition: all 0.2s;
+  padding: 14px 16px 14px 46px;
+  border: 1px solid rgba(255, 255, 255, 0.8);
+  border-radius: 20px;
+  background: rgba(255, 255, 255, 0.6);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.02);
+  font-size: 15px;
+  color: #1e293b;
+  transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.search-box input::placeholder {
+  color: #94a3b8;
+  font-weight: 500;
 }
 
 .search-box input:focus {
   outline: none;
-  border-color: #3b82f6;
-  background: white;
-  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+  background: rgba(255, 255, 255, 0.9);
+  border-color: #818cf8;
+  box-shadow: 0 8px 20px rgba(129, 140, 248, 0.15), 0 0 0 3px rgba(129, 140, 248, 0.1);
+  transform: translateY(-1px);
 }
 
 .toolbar-actions {
   display: flex;
-  gap: 8px;
+  gap: 10px;
 }
 
 .tool-btn {
-  width: 44px;
-  height: 44px;
-  border: 1px solid rgba(0, 0, 0, 0.05);
-  border-radius: 16px;
-  background: white;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.03);
+  width: 50px;
+  height: 50px;
+  border: 1px solid rgba(255, 255, 255, 0.8);
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.6);
+  backdrop-filter: blur(10px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.02);
   color: #64748b;
+  font-size: 16px;
   cursor: pointer;
-  transition: all 0.2s;
+  transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
   display: flex;
   align-items: center;
   justify-content: center;
 }
 
 .tool-btn:hover {
-  background: #3b82f6;
-  color: white;
-  border-color: #3b82f6;
-  transform: scale(0.95);
+  background: white;
+  color: #818cf8;
+  border-color: #818cf8;
+  transform: translateY(-2px);
+  box-shadow: 0 8px 20px rgba(129, 140, 248, 0.15);
 }
 
 .roles-container {
   flex: 1;
   overflow-y: auto;
   padding-right: 8px;
+  padding-bottom: 20px;
+}
+
+/* 自定义滚动条风格 */
+.roles-container::-webkit-scrollbar {
+  width: 6px;
+}
+.roles-container::-webkit-scrollbar-track {
+  background: transparent;
+}
+.roles-container::-webkit-scrollbar-thumb {
+  background: rgba(148, 163, 184, 0.2);
+  border-radius: 10px;
+}
+.roles-container::-webkit-scrollbar-thumb:hover {
+  background: rgba(148, 163, 184, 0.4);
 }
 
 .roles-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
-  gap: 16px;
+  grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+  gap: 20px;
+  margin-bottom: 20px;
 }
 
 .add-role-card {
@@ -240,39 +271,47 @@ async function handleImport(e) {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 12px;
-  padding: 24px;
-  background: rgba(255, 255, 255, 0.8);
-  border: 2px dashed rgba(59, 130, 246, 0.3);
-  border-radius: 20px;
+  gap: 14px;
+  padding: 30px;
+  background: rgba(255, 255, 255, 0.4);
+  backdrop-filter: blur(10px);
+  border: 2px dashed rgba(148, 163, 184, 0.4);
+  border-radius: 24px;
   cursor: pointer;
-  transition: all 0.3s;
-  min-height: 140px;
+  transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+  min-height: 160px;
 }
 
 .add-role-card:hover {
-  background: rgba(59, 130, 246, 0.05);
-  border-color: #3b82f6;
-  transform: translateY(-2px);
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.08);
+  background: rgba(255, 255, 255, 0.7);
+  border-color: #818cf8;
+  border-style: solid;
+  transform: translateY(-4px);
+  box-shadow: 0 12px 30px rgba(129, 140, 248, 0.1);
 }
 
 .add-icon {
-  width: 48px;
-  height: 48px;
+  width: 54px;
+  height: 54px;
   border-radius: 50%;
-  background: linear-gradient(135deg, #f472b6, #3b82f6);
+  background: linear-gradient(135deg, #f472b6, #818cf8);
   display: flex;
   align-items: center;
   justify-content: center;
   color: white;
-  font-size: 20px;
+  font-size: 22px;
+  box-shadow: 0 8px 20px rgba(244, 114, 182, 0.3);
+  transition: transform 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.add-role-card:hover .add-icon {
+  transform: scale(1.1) rotate(90deg);
 }
 
 .add-text {
-  color: #64748b;
-  font-size: 14px;
-  font-weight: 500;
+  color: #475569;
+  font-size: 15px;
+  font-weight: 700;
 }
 
 .empty-state {
@@ -280,53 +319,56 @@ async function handleImport(e) {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  padding: 48px 24px;
+  padding: 60px 24px;
   color: #94a3b8;
 }
 
 .empty-state i {
-  font-size: 48px;
-  margin-bottom: 16px;
+  font-size: 56px;
+  margin-bottom: 20px;
+  opacity: 0.5;
 }
 
 .empty-state p {
   font-size: 16px;
-  margin-bottom: 20px;
+  font-weight: 500;
+  margin-bottom: 24px;
 }
 
 .create-btn {
-  padding: 12px 24px;
+  padding: 14px 28px;
   border: none;
-  border-radius: 16px;
-  background: linear-gradient(135deg, #f472b6, #3b82f6);
+  border-radius: 18px;
+  background: linear-gradient(135deg, #f472b6, #818cf8);
   color: white;
-  font-size: 14px;
+  font-size: 15px;
+  font-weight: 600;
   cursor: pointer;
   display: flex;
   align-items: center;
-  gap: 8px;
-  transition: transform 0.2s, box-shadow 0.2s;
-  box-shadow: 0 4px 12px rgba(244, 114, 182, 0.3);
+  gap: 10px;
+  transition: all 0.3s;
+  box-shadow: 0 8px 20px rgba(244, 114, 182, 0.3);
 }
 
 .create-btn:hover {
-  transform: scale(1.05);
-  box-shadow: 0 6px 20px rgba(244, 114, 182, 0.4);
+  transform: translateY(-2px) scale(1.02);
+  box-shadow: 0 12px 28px rgba(244, 114, 182, 0.4);
 }
 
 .list-enter-active,
 .list-leave-active {
-  transition: all 0.3s ease;
+  transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 .list-enter-from {
   opacity: 0;
-  transform: translateY(20px);
+  transform: translateY(30px) scale(0.98);
 }
 
 .list-leave-to {
   opacity: 0;
-  transform: translateX(-20px);
+  transform: scale(0.95);
 }
 
 @media (max-width: 768px) {

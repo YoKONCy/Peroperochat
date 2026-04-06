@@ -518,7 +518,8 @@ import {
   Delete,
   ChatDotRound,
   Key,
-  MoreFilled
+  MoreFilled,
+  Connection
 } from '@element-plus/icons-vue'
 
 const tab = ref('role')
@@ -789,6 +790,11 @@ const stream = ref(false)
 const memoryRounds = ref(40)
 const memorySearch = ref('')
 const allMemories = ref([])
+
+// 远程服务器配置
+const remoteEnabled = ref(false)
+const remoteUrl = ref('')
+const remoteToken = ref('')
 
 const importDataInput = ref(null)
 

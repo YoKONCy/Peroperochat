@@ -264,7 +264,8 @@ import {
   getConfig,
   loadActiveAgentId,
   addReminder,
-  addTopic
+  addTopic,
+  setAppMode
 } from '../api'
 import { Promotion } from '@element-plus/icons-vue'
 
@@ -314,7 +315,7 @@ const loadAgentData = async () => {
 
   // 同时也加载当前角色的聊天记录
   try {
-    const saved = await getMessages(getActiveAgentId())
+    const saved = await getMessages() // api.js 已内置 getActiveAgentId，不支持手动传 string agentId
     if (Array.isArray(saved)) {
       messages.value = saved.map((m) => ({
         role: String(m.role),
@@ -720,16 +721,38 @@ function regenerateAndClose(idx) {
 }
 
 function persistMessages() {
-  // 实时保存到 Rust 数据库
+  // 提取用户真实文本
+  const extractContent = (content) => {
+    if (typeof content === 'string') return content
+    if (Array.isArray(content)) {
+      const textPart = content.find(c => c.type === 'text')
+      return textPart ? textPart.text : '[图片记录]'
+    }
+    return String(content || '')
+  }
 
-  // 获取最后一条消息并保存 (防抖或去重逻辑由 Rust 端处理)
   const lastMsg = messages.value[messages.value.length - 1]
+  const secondLastMsg = messages.value[messages.value.length - 2]
+
+  // 保存最新的用户消息
+  if (secondLastMsg && secondLastMsg.role === 'user') {
+    saveMessage({
+      role: secondLastMsg.role,
+      content: extractContent(secondLastMsg.content),
+      timestamp: secondLastMsg.timestamp || (Date.now() - 1)
+    }).catch(() => {})
+  }
+
+  // 保存最新的 AI 消息（过滤占位符）
   if (lastMsg) {
+    if (lastMsg.content === '__loading__' || lastMsg.content === '（暂无内容）') {
+      return
+    }
     saveMessage({
       role: lastMsg.role,
-      content: lastMsg.content,
+      content: extractContent(lastMsg.content),
       timestamp: lastMsg.timestamp || Date.now()
-    }).catch((e) => console.error('Failed to persist message:', e))
+    }).catch((e) => console.error('Failed to persist ai message:', e))
   }
 }
 
@@ -1298,12 +1321,13 @@ async function onSend(systemMsg = null) {
   try {
     // 获取默认提示词并设置回退逻辑
     const defaults = await getDefaultPrompts()
+    // 注意：getDefaultPrompts() 返回字段为 systemPrompt / personaPrompt / postSystemPrompt
     const systemPrompt =
-      String((await getConfig('ppc.systemPrompt')) || '').trim() || defaults.system_prompt_default
+      String((await getConfig('ppc.systemPrompt')) || '').trim() || defaults.systemPrompt
     const personaText =
-      String((await getConfig('ppc.personaText')) || '').trim() || defaults.persona_prompt_default
+      String((await getConfig('ppc.personaText')) || '').trim() || defaults.personaPrompt
     const postSystemPrompt =
-      String((await getConfig('ppc.postSystemPrompt')) || '').trim() || defaults.post_prompt_default
+      String((await getConfig('ppc.postSystemPrompt')) || '').trim() || defaults.postSystemPrompt
     const userName = String((await getConfig('ppc.userName')) || '').trim()
     const userPersona = String((await getConfig('ppc.userPersonaText')) || '').trim()
 
@@ -1624,11 +1648,11 @@ async function regenerateAt(idx) {
     // 获取提示词并设置回退逻辑
     const defaults = await getDefaultPrompts()
     const systemPrompt =
-      String((await getConfig('ppc.systemPrompt')) || '').trim() || defaults.system_prompt_default
+      String((await getConfig('ppc.systemPrompt')) || '').trim() || defaults.systemPrompt
     const personaText =
-      String((await getConfig('ppc.personaText')) || '').trim() || defaults.persona_prompt_default
+      String((await getConfig('ppc.personaText')) || '').trim() || defaults.personaPrompt
     const postSystemPrompt =
-      String((await getConfig('ppc.postSystemPrompt')) || '').trim() || defaults.post_prompt_default
+      String((await getConfig('ppc.postSystemPrompt')) || '').trim() || defaults.postSystemPrompt
     const userName = String((await getConfig('ppc.userName')) || '').trim()
     const userPersona = String((await getConfig('ppc.userPersonaText')) || '').trim()
 

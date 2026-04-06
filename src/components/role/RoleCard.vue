@@ -69,75 +69,90 @@ defineEmits(['select', 'edit', 'delete', 'export', 'duplicate'])
 .role-card {
   display: flex;
   align-items: center;
-  gap: 16px;
-  padding: 20px;
-  background: rgba(255, 255, 255, 0.95);
-  border-radius: 20px;
-  border: 2px solid transparent;
+  gap: 18px;
+  padding: 24px;
+  background: rgba(255, 255, 255, 0.6);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border-radius: 24px;
+  border: 1px solid rgba(255, 255, 255, 0.8);
   cursor: pointer;
-  transition: all 0.3s ease;
+  transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1);
   position: relative;
   overflow: hidden;
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.03);
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.02), inset 0 0 0 1px rgba(255, 255, 255, 0.2);
 }
 
 .role-card:hover {
-  background: rgba(255, 255, 255, 1);
-  transform: translateY(-3px);
-  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.08);
+  background: rgba(255, 255, 255, 0.85);
+  transform: translateY(-4px) scale(1.01);
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.06), 0 1px 3px rgba(0, 0, 0, 0.04);
 }
 
 .role-card.is-active {
-  border-color: rgba(59, 130, 246, 0.4);
-  background: linear-gradient(135deg, rgba(244, 114, 182, 0.08), rgba(59, 130, 246, 0.08));
+  border: 1px solid rgba(59, 130, 246, 0.5);
+  background: linear-gradient(135deg, rgba(244, 114, 182, 0.1), rgba(59, 130, 246, 0.1));
+  box-shadow: 0 10px 30px rgba(59, 130, 246, 0.15), inset 0 0 0 1px rgba(255, 255, 255, 0.5);
+}
+
+.role-card.is-active::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 6px;
+  height: 100%;
+  background: linear-gradient(to bottom, #f472b6, #3b82f6);
+  border-radius: 20px 0 0 20px;
 }
 
 .role-avatar {
   position: relative;
-  width: 64px;
-  height: 64px;
+  width: 72px;
+  height: 72px;
   flex-shrink: 0;
 }
 
 .role-avatar img {
   width: 100%;
   height: 100%;
-  border-radius: 18px;
+  border-radius: 20px;
   object-fit: cover;
-  border: 3px solid rgba(255, 255, 255, 0.9);
-  box-shadow: 0 6px 16px rgba(244, 114, 182, 0.25);
+  border: 2px solid rgba(255, 255, 255, 0.9);
+  box-shadow: 0 8px 16px rgba(0, 0, 0, 0.08);
 }
 
 .avatar-placeholder {
   width: 100%;
   height: 100%;
-  border-radius: 18px;
-  background: linear-gradient(135deg, #f472b6, #3b82f6);
+  border-radius: 20px;
+  background: linear-gradient(135deg, #f472b6, #818cf8);
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 24px;
+  font-size: 28px;
   font-weight: 700;
   color: white;
   text-transform: uppercase;
-  box-shadow: 0 6px 16px rgba(244, 114, 182, 0.25);
+  box-shadow: 0 8px 16px rgba(244, 114, 182, 0.3);
 }
 
 .active-badge {
   position: absolute;
-  bottom: -2px;
-  right: -2px;
-  width: 26px;
-  height: 26px;
+  bottom: -4px;
+  right: -4px;
+  width: 28px;
+  height: 28px;
   background: linear-gradient(135deg, #10b981, #059669);
   border-radius: 50%;
   display: flex;
   align-items: center;
   justify-content: center;
   color: white;
-  font-size: 12px;
+  font-size: 13px;
   border: 3px solid white;
-  box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3);
+  box-shadow: 0 4px 12px rgba(16, 185, 129, 0.4);
+  z-index: 2;
 }
 
 .role-info {
@@ -149,23 +164,24 @@ defineEmits(['select', 'edit', 'delete', 'export', 'duplicate'])
   display: flex;
   align-items: center;
   gap: 8px;
-  margin-bottom: 4px;
+  margin-bottom: 6px;
 }
 
 .role-name {
-  font-size: 18px;
-  font-weight: 700;
+  font-size: 19px;
+  font-weight: 800;
   color: #1e293b;
+  letter-spacing: -0.02em;
 }
 
 .role-desc {
   font-size: 13px;
   color: #64748b;
-  margin: 0 0 8px 0;
+  margin: 0 0 10px 0;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  line-height: 1.4;
+  line-height: 1.5;
 }
 
 .role-tags {
@@ -176,76 +192,94 @@ defineEmits(['select', 'edit', 'delete', 'export', 'duplicate'])
 
 .tag {
   font-size: 11px;
-  padding: 4px 12px;
-  background: rgba(59, 130, 246, 0.08);
-  color: #3b82f6;
-  border-radius: 10px;
+  padding: 4px 10px;
+  background: rgba(241, 245, 249, 0.8);
+  color: #475569;
+  border-radius: 8px;
   font-weight: 600;
+  border: 1px solid rgba(226, 232, 240, 0.8);
+}
+
+.role-card.is-active .tag {
+  background: rgba(59, 130, 246, 0.1);
+  color: #3b82f6;
+  border-color: rgba(59, 130, 246, 0.2);
 }
 
 .role-actions {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 8px;
   opacity: 0;
-  transition: opacity 0.2s;
+  transform: translateX(10px);
+  transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 .role-card:hover .role-actions {
   opacity: 1;
+  transform: translateX(0);
 }
 
 .action-btn {
-  width: 36px;
-  height: 36px;
+  width: 38px;
+  height: 38px;
   border: none;
   border-radius: 12px;
-  background: rgba(0, 0, 0, 0.03);
+  background: white;
   color: #64748b;
   cursor: pointer;
   transition: all 0.2s;
   display: flex;
   align-items: center;
   justify-content: center;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
 }
 
 .action-btn:hover {
-  background: linear-gradient(135deg, #f472b6, #3b82f6);
+  background: linear-gradient(135deg, #f472b6, #818cf8);
   color: white;
-  transform: scale(0.95);
+  transform: scale(1.05);
+  box-shadow: 0 4px 12px rgba(244, 114, 182, 0.3);
 }
 
 .action-btn.delete:hover {
-  background: linear-gradient(135deg, #ef4444, #dc2626);
+  background: linear-gradient(135deg, #ef4444, #f43f5e);
+  box-shadow: 0 4px 12px rgba(239, 68, 68, 0.3);
 }
 
 @media (max-width: 640px) {
   .role-card {
     padding: 16px;
-    gap: 12px;
+    gap: 14px;
+    border-radius: 20px;
   }
   
   .role-avatar {
-    width: 52px;
-    height: 52px;
+    width: 56px;
+    height: 56px;
   }
   
   .avatar-placeholder {
-    font-size: 18px;
+    font-size: 22px;
   }
   
   .role-name {
-    font-size: 16px;
+    font-size: 17px;
   }
   
   .role-actions {
     opacity: 1;
+    transform: translateX(0);
     flex-direction: row;
+    position: absolute;
+    top: 16px;
+    right: 16px;
   }
   
   .action-btn {
     width: 32px;
     height: 32px;
+    background: rgba(255, 255, 255, 0.8);
   }
 }
 </style>

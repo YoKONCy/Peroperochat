@@ -151,6 +151,17 @@ export function useRoleManager() {
       const json = await invoke('get_config', { key: 'ppc.agents' })
       if (json) {
         const parsed = JSON.parse(json)
+        // 兼容旧版格式：旧版存储的角色数据没有 id 字段，在此补全
+        Object.keys(parsed).forEach(key => {
+          if (!parsed[key].id) {
+            parsed[key].id = key
+          }
+          // 兼容旧版格式：补充默认角色的描述和标签
+          if (DEFAULT_AGENTS[key]) {
+            if (!parsed[key].description) parsed[key].description = DEFAULT_AGENTS[key].description
+            if (!parsed[key].tags || parsed[key].tags.length === 0) parsed[key].tags = DEFAULT_AGENTS[key].tags
+          }
+        })
         Object.keys(roles).forEach(key => delete roles[key])
         Object.assign(roles, parsed)
       } else {
@@ -429,6 +440,17 @@ export async function loadAgents() {
     const json = await invoke('get_config', { key: 'ppc.agents' })
     if (json) {
       const parsed = JSON.parse(json)
+      
+      Object.keys(parsed).forEach(key => {
+        if (!parsed[key].id) {
+          parsed[key].id = key
+        }
+        if (DEFAULT_AGENTS[key]) {
+          if (!parsed[key].description) parsed[key].description = DEFAULT_AGENTS[key].description
+          if (!parsed[key].tags || parsed[key].tags.length === 0) parsed[key].tags = DEFAULT_AGENTS[key].tags
+        }
+      })
+
       for (const k in AGENTS) delete AGENTS[k]
       Object.assign(AGENTS, parsed)
     } else {

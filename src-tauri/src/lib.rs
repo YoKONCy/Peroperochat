@@ -217,6 +217,81 @@ async fn chat_stream(
     Ok(())
 }
 
+// -----------------------------------------------------------------------
+// 安卓系统级闹铃管理 (通过 Kotlin 原生插件桥接 AlarmManager)
+// -----------------------------------------------------------------------
+
+/// 注册系统级精确闹铃（仅安卓生效，桌面端为空操作）
+/// 前端调用此 command 后，安卓系统会在指定时间唤醒 AlarmReceiver 发送通知
+#[tauri::command]
+async fn schedule_alarm(
+    app: AppHandle,
+    reminder_id: i64,
+    trigger_at_ms: i64,
+    task: String,
+    agent_name: String,
+) -> Result<(), String> {
+    #[cfg(target_os = "android")]
+    {
+        use tauri::plugin::PluginHandle;
+        // 通过 Tauri 插件机制调用 Kotlin 侧的 AlarmPlugin.scheduleAlarm
+        let _result = app
+            .plugin::<tauri::plugin::PluginApi<serde_json::Value>>("alarm")
+            .map_err(|e| format!("获取闹铃插件失败: {}", e))?;
+        
+        // 使用 run_on_main_thread 确保在 UI 线程调用 Android API
+        let app_clone = app.clone();
+        app.run_on_main_thread(move || {
+            let payload = serde_json::json!({
+                "reminderId": reminder_id as i32,
+                "triggerAtMs": trigger_at_ms,
+                "task": task,
+                "agentName": agent_name
+            });
+            let _ = app_clone.emit("ppc:schedule-alarm", payload);
+        }).map_err(|e| format!("主线程调度失败: {}", e))?;
+
+        println!("[Alarm] 已请求注册安卓闹铃: id={}, time={}, task={}", reminder_id, trigger_at_ms, task);
+    }
+
+    #[cfg(not(target_os = "android"))]
+    {
+        // 桌面端：闹铃由 Rust 轮询器处理，此处仅打印日志
+        let _ = &app;
+        println!("[Alarm] 桌面端忽略闹铃注册: id={}, task={}", reminder_id, task);
+    }
+
+    Ok(())
+}
+
+/// 取消已注册的系统级闹铃
+#[tauri::command]
+async fn cancel_alarm(
+    app: AppHandle,
+    reminder_id: i64,
+) -> Result<(), String> {
+    #[cfg(target_os = "android")]
+    {
+        let app_clone = app.clone();
+        app.run_on_main_thread(move || {
+            let payload = serde_json::json!({
+                "reminderId": reminder_id as i32
+            });
+            let _ = app_clone.emit("ppc:cancel-alarm", payload);
+        }).map_err(|e| format!("主线程调度失败: {}", e))?;
+
+        println!("[Alarm] 已请求取消安卓闹铃: id={}", reminder_id);
+    }
+
+    #[cfg(not(target_os = "android"))]
+    {
+        let _ = &app;
+        println!("[Alarm] 桌面端忽略闹铃取消: id={}", reminder_id);
+    }
+
+    Ok(())
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
   tauri::Builder::default()
@@ -257,7 +332,9 @@ pub fn run() {
         get_config,
         clear_config,
         fetch_models,
-        chat_stream
+        chat_stream,
+        schedule_alarm,
+        cancel_alarm
     ])
             .run(tauri::generate_context!())
     .expect("error while running tauri application");

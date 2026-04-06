@@ -133,7 +133,7 @@
 </template>
 
 <script setup>
-import { ref, reactive, onMounted, computed, onUnmounted } from 'vue'
+import { ref, reactive, onMounted, onUnmounted } from 'vue'
 import { appMode, setAppMode, saveRemoteConfig } from '../api'
 import RemoteChatView from '../components/remote/RemoteChatView.vue'
 import RemoteStrongholdView from '../components/remote/RemoteStrongholdView.vue'
@@ -167,7 +167,7 @@ const startScan = async () => {
         (decodedText) => {
           handleScanSuccess(decodedText)
         },
-        (errorMessage) => {
+        () => {
           // 忽略扫描过程中的错误
         }
       )
@@ -199,7 +199,7 @@ const handleScanSuccess = async (text) => {
 
       await stopScan()
       handleConnect()
-    } catch (e) {
+    } catch {
       alert('二维码格式错误')
     }
   } else {
@@ -230,7 +230,7 @@ const handleConnect = async () => {
     } else {
       alert('连接失败：请检查地址和令牌是否正确')
     }
-  } catch (e) {
+  } catch {
     alert('连接失败：无法访问服务器，请确保 PC 版 PeroCore 已开启并处于同一网络')
   } finally {
     isConnecting.value = false
@@ -253,7 +253,7 @@ const fetchRemoteStatus = async () => {
       const agents = await res.json()
       activeAgent.value = agents.find((a) => a.is_active)
     }
-  } catch (e) {
+  } catch {
     saveRemoteConfig({ connected: false })
   } finally {
     isFetching.value = false
@@ -487,7 +487,7 @@ onMounted(() => {
 .agent-thumb {
   width: 40px;
   height: 40px;
-  object-cover: cover;
+  object-fit: cover;
 }
 
 .agent-name {

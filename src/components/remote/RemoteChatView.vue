@@ -40,7 +40,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted, nextTick, computed } from 'vue'
+import { ref, onMounted, nextTick } from 'vue'
 import { marked } from 'marked'
 import DOMPurify from 'dompurify'
 
@@ -173,7 +173,9 @@ const sendMessage = async () => {
                 assistantMsg.content += json.content
                 scrollToBottom()
               }
-            } catch (e) {}
+            } catch {
+              // ignore invalid JSON chunk
+            }
           }
         }
       }

@@ -463,6 +463,7 @@ export async function deleteMessagesByTimestamp(timestamp) {
 export async function addReminder(task, timeStr) {
   try {
     const agentId = getActiveAgentId()
+    const agentName = AGENTS[agentId]?.name || 'Pero'
     await invoke('add_reminder', { 
       reminder: {
         task,
@@ -471,6 +472,24 @@ export async function addReminder(task, timeStr) {
         agent_id: agentId
       }
     })
+
+    // 同步注册安卓系统级闹铃（桌面端 Rust 侧会自动忽略）
+    try {
+      const triggerAtMs = new Date(timeStr).getTime()
+      if (!isNaN(triggerAtMs) && triggerAtMs > Date.now()) {
+        // 使用时间戳的低 32 位作为闹铃 ID（避免与其他提醒冲突）
+        const reminderId = triggerAtMs & 0x7FFFFFFF
+        await invoke('schedule_alarm', {
+          reminderId,
+          triggerAtMs,
+          task,
+          agentName
+        })
+        console.log(`[Alarm] 系统闹铃已注册: ${task} @ ${timeStr}`)
+      }
+    } catch (alarmErr) {
+      console.warn('注册系统闹铃失败（非致命）:', alarmErr)
+    }
   } catch (e) {
     console.error('添加提醒失败:', e)
   }
@@ -479,6 +498,7 @@ export async function addReminder(task, timeStr) {
 export async function addRecurringReminder(task, timeStr, recur = 'daily', recurUntil = null) {
   try {
     const agentId = getActiveAgentId()
+    const agentName = AGENTS[agentId]?.name || 'Pero'
     await invoke('add_reminder', {
       reminder: {
         task,
@@ -490,8 +510,41 @@ export async function addRecurringReminder(task, timeStr, recur = 'daily', recur
         recur_until: recurUntil
       }
     })
+
+    // 同步注册安卓系统级闹铃
+    try {
+      const triggerAtMs = new Date(timeStr).getTime()
+      if (!isNaN(triggerAtMs) && triggerAtMs > Date.now()) {
+        const reminderId = triggerAtMs & 0x7FFFFFFF
+        await invoke('schedule_alarm', {
+          reminderId,
+          triggerAtMs,
+          task,
+          agentName
+        })
+      }
+    } catch (alarmErr) {
+      console.warn('注册循环闹铃失败（非致命）:', alarmErr)
+    }
   } catch (e) {
     console.error('添加循环提醒失败:', e)
+  }
+}
+
+// 独立的系统闹铃管理接口
+export async function scheduleSystemAlarm(reminderId, triggerAtMs, task, agentName = 'Pero') {
+  try {
+    await invoke('schedule_alarm', { reminderId, triggerAtMs, task, agentName })
+  } catch (e) {
+    console.warn('注册系统闹铃失败:', e)
+  }
+}
+
+export async function cancelSystemAlarm(reminderId) {
+  try {
+    await invoke('cancel_alarm', { reminderId })
+  } catch (e) {
+    console.warn('取消系统闹铃失败:', e)
   }
 }
 

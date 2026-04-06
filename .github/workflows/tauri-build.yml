@@ -62,10 +62,23 @@ jobs:
       - name: Install dependencies
         run: pnpm install
 
-      - name: Initialize Android project
-        run: pnpm tauri android init --ci
+      - name: Initialize Android project (preserve custom native code)
+        run: |
+          if [ ! -d "src-tauri/gen/android" ]; then
+            echo "Android project not found, initializing..."
+            pnpm tauri android init --ci
+          else
+            echo "Android project already exists, skipping init to preserve custom code"
+          fi
         env:
           CI: true
+
+      - name: Read version from tauri.conf.json
+        id: version
+        run: |
+          VERSION=$(jq -r '.version' src-tauri/tauri.conf.json)
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "Using version: $VERSION"
 
       - name: Build Android APK (aarch64 only, split per ABI)
         run: pnpm tauri android build --apk --split-per-abi --target aarch64
@@ -88,7 +101,7 @@ jobs:
             BUILD_TOOLS=$(ls -d $ANDROID_SDK_ROOT/build-tools/* | sort -r | head -1)
             echo "Using build-tools: $BUILD_TOOLS"
             $BUILD_TOOLS/zipalign -v 4 "$APK_PATH" app-aligned.apk
-            $BUILD_TOOLS/apksigner sign --ks ~/.android/debug.keystore --ks-pass pass:android --key-pass pass:android --out PeroperoChat-v1.2.2-arm64.apk app-aligned.apk
+            $BUILD_TOOLS/apksigner sign --ks ~/.android/debug.keystore --ks-pass pass:android --key-pass pass:android --out PeroperoChat-v${{ steps.version.outputs.version }}-arm64.apk app-aligned.apk
           else
             echo "APK not found!"
             find src-tauri/gen/android -name "*.apk" || true
@@ -99,4 +112,4 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: PeroperoChat-android-arm64
-          path: PeroperoChat-v1.2.2-arm64.apk
+          path: PeroperoChat-v${{ steps.version.outputs.version }}-arm64.apk
