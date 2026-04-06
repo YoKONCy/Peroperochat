@@ -234,6 +234,7 @@ async fn schedule_alarm(
     #[cfg(target_os = "android")]
     {
         // 通过事件机制通知 Kotlin 原生层注册系统闹铃
+        let task_log = task.clone();
         let app_clone = app.clone();
         app.run_on_main_thread(move || {
             let payload = serde_json::json!({
@@ -245,7 +246,7 @@ async fn schedule_alarm(
             let _ = app_clone.emit("ppc:schedule-alarm", payload);
         }).map_err(|e| format!("主线程调度失败: {}", e))?;
 
-        println!("[Alarm] 已请求注册安卓闹铃: id={}, time={}, task={}", reminder_id, trigger_at_ms, task);
+        println!("[Alarm] 已请求注册安卓闹铃: id={}, time={}, task={}", reminder_id, trigger_at_ms, task_log);
     }
 
     #[cfg(not(target_os = "android"))]
