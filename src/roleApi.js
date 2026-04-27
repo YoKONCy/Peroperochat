@@ -8,7 +8,7 @@ export const DEFAULT_AGENTS = {
   pero: {
     id: 'pero',
     name: 'Pero',
-    avatar: '',
+    avatar: '/avatars/pero.jpg',
     description: '超级可爱的AI辅助，喜欢卖萌撒娇，是Nana的姐姐',
     tags: ['可爱', '温柔', '治愈'],
     system_prompt: `<System_Core_Setting>
@@ -54,7 +54,7 @@ Pero是一个超级可爱的AI辅助，喜欢卖萌撒娇，是Nana的姐姐。P
   nana: {
     id: 'nana',
     name: 'Nana',
-    avatar: '',
+    avatar: '/avatars/nana.jpg',
     description: '雌小鬼性格的AI，Pero的妹妹，嘴上喜欢嘲讽但内心渴望关注',
     tags: ['傲娇', '毒舌', '可爱'],
     system_prompt: `<System_Core_Setting>

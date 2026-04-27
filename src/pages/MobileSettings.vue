@@ -66,7 +66,8 @@
                   @click="activeAgentId = id"
                 >
                   <div class="agent-avatar-placeholder">
-                    {{ agent.name.charAt(0).toUpperCase() }}
+                    <img v-if="agent.avatar" :src="agent.avatar" class="agent-avatar-img" :alt="agent.name" />
+                    <span v-else>{{ agent.name.charAt(0).toUpperCase() }}</span>
                   </div>
                   <div class="agent-info">
                     <div class="agent-name">{{ agent.name }}</div>
@@ -698,7 +699,7 @@ async function saveAgentData() {
         }
       })
 
-      localStorage.setItem(`ppc.${id}.waifu.texts`, JSON.stringify(waifuData))
+      await saveConfig(`ppc.${id}.waifu.texts`, JSON.stringify(waifuData))
 
       // If we are editing the active agent, trigger an update immediately
       if (id === activeAgentId.value) {
@@ -1567,6 +1568,14 @@ onMounted(async () => {
   justify-content: center;
   margin-right: 16px;
   box-shadow: 0 2px 6px rgba(0, 0, 0, 0.05);
+  overflow: hidden;
+}
+
+.agent-avatar-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: 14px;
 }
 
 .agent-select-card.active .agent-avatar-placeholder {

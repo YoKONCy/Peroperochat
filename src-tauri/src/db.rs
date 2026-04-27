@@ -95,6 +95,20 @@ pub fn init_db(app: &AppHandle) -> SqlResult<DbState> {
         [],
     )?;
 
+    // 清理已有的重复消息（保留每组中 id 最大的记录），再建唯一索引
+    conn.execute(
+        "DELETE FROM messages WHERE id NOT IN (
+            SELECT MAX(id) FROM messages GROUP BY agent_id, timestamp, role
+        )",
+        [],
+    )?;
+
+    // 防止消息重复插入的唯一索引
+    conn.execute(
+        "CREATE UNIQUE INDEX IF NOT EXISTS idx_msg_unique ON messages(agent_id, timestamp, role)",
+        [],
+    )?;
+
     conn.execute(
         "CREATE TABLE IF NOT EXISTS reminders (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -252,8 +266,9 @@ pub fn clear_memories(state: tauri::State<DbState>, agent_id: String) -> Result<
 #[tauri::command]
 pub fn save_message(state: tauri::State<DbState>, message: ChatMessage) -> Result<i64, String> {
     let conn = state.conn.lock().map_err(|e| e.to_string())?;
+    // 使用 INSERT OR IGNORE 防止重复插入（配合 idx_msg_unique 唯一索引）
     conn.execute(
-        "INSERT INTO messages (role, content, timestamp, agent_id) VALUES (?1, ?2, ?3, ?4)",
+        "INSERT OR IGNORE INTO messages (role, content, timestamp, agent_id) VALUES (?1, ?2, ?3, ?4)",
         params![message.role, message.content, message.timestamp, message.agent_id],
     ).map_err(|e| e.to_string())?;
     Ok(conn.last_insert_rowid())

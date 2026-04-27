@@ -49,7 +49,8 @@
               <el-icon><Menu /></el-icon>
             </div>
             <div class="agent-avatar-mini" :class="agent.id">
-              {{ agent.name[0] }}
+              <img v-if="agent.avatar" :src="agent.avatar" class="avatar-mini-img" :alt="agent.name" />
+              <span v-else>{{ agent.name[0] }}</span>
             </div>
             <div class="agent-info">
               <span class="agent-name">{{ agent.name }}</span>
@@ -83,7 +84,8 @@
             class="avatar-img" 
             :class="[msg.name.toLowerCase(), getBubbleShapeClass(msg.name.toLowerCase())]"
           >
-            {{ msg.name[0] }}
+            <img v-if="getAgentAvatar(msg.name)" :src="getAgentAvatar(msg.name)" class="avatar-real-img" :alt="msg.name" />
+            <span v-else>{{ msg.name[0] }}</span>
           </div>
         </div>
         
@@ -171,6 +173,14 @@ const processingAgent = ref(null) // 当前正在回复的角色名
 
 const showSettings = ref(false)
 const replySettings = ref([])
+
+// 根据角色名获取头像路径
+function getAgentAvatar(name) {
+  if (!name) return null
+  const id = name.toLowerCase()
+  const role = roles[id]
+  return role?.avatar || null
+}
 
 // 获取气泡形状类名
 function getBubbleShapeClass(roleId) {
@@ -804,6 +814,14 @@ async function generateResponse(agentId) {
   font-size: 0.9rem;
   color: white;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+  overflow: hidden;
+}
+
+.avatar-mini-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: 50%;
 }
 
 .agent-avatar-mini.pero {
@@ -877,6 +895,14 @@ async function generateResponse(agentId) {
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
   transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
   border: 3px solid white;
+  overflow: hidden;
+}
+
+.avatar-real-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: 50%;
 }
 
 .avatar-img:hover {

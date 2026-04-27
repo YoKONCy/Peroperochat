@@ -224,6 +224,7 @@ async fn chat_stream(
 /// 注册系统级精确闹铃（仅安卓生效，桌面端为空操作）
 /// 前端调用此 command 后，安卓系统会在指定时间唤醒 AlarmReceiver 发送通知
 #[tauri::command]
+#[allow(unused_variables)]
 async fn schedule_alarm(
     app: AppHandle,
     reminder_id: i64,

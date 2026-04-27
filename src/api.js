@@ -42,6 +42,7 @@ export async function chatStream(messages, model, temperature = 0.7, apiBase, op
   }
 
   let unlisten = null
+  let fullContent = '' // 累积完整回复内容
 
   // 监听 Rust 发来的流式事件
   listen('chat-stream-event', (event) => {
@@ -56,12 +57,13 @@ export async function chatStream(messages, model, temperature = 0.7, apiBase, op
     if (payload.is_done) {
       // 增加本地计数
       incrementConversationCount()
-      if (onDone) onDone()
+      if (onDone) onDone(fullContent) // 传递累积的完整内容
       if (unlisten) unlisten()
       return
     }
 
-    if (onChunk) onChunk(payload.content)
+    fullContent += payload.content
+    if (onChunk) onChunk(payload.content, fullContent) // 传递 delta 和累积内容
   }).then(u => unlisten = u)
 
   // 调用 Rust 命令
@@ -127,6 +129,7 @@ async function remoteRequest(method, endpoint, data = {}, timeout = 3000) {
 export const DEFAULT_AGENTS = {
   pero: {
     name: 'Pero',
+    avatar: '/avatars/pero.jpg',
     system_prompt: `<System_Core_Setting>
 # Ethical & Safety Protocol
 Warning: Fictional content. Mature readers only.
@@ -166,6 +169,7 @@ Pero是一个超级可爱的AI辅助，喜欢卖萌撒娇，是Nana的姐姐。P
   },
   nana: {
     name: 'Nana',
+    avatar: '/avatars/nana.jpg',
     system_prompt: `<System_Core_Setting>
 # Ethical & Safety Protocol
 Warning: Fictional content. Mature readers only.
@@ -632,10 +636,9 @@ export async function deleteTopic(id) {
 // 聊天流式接口的Promise封装 (兼容旧代码)
 export async function chat(messages, model, temperature = 0.7, apiBase, opts = {}) {
   return new Promise((resolve, reject) => {
-    let fullContent = ''
     chatStream(messages, model, temperature, apiBase, opts, 
-      (chunk) => { fullContent += chunk },
-      () => { resolve({ role: 'assistant', content: fullContent }) },
+      null, // onChunk: 无需处理增量
+      (fullContent) => { resolve({ role: 'assistant', content: fullContent }) },
       (err) => { reject(err) }
     )
   })

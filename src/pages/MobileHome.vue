@@ -250,6 +250,7 @@ import {
   getRelevantMemories,
   saveMemory,
   deleteMemoriesByMsgTimestamp,
+  deleteMessagesByTimestamp,
   getDefaultPrompts,
   getActiveAgentId,
   AGENTS,
@@ -1433,20 +1434,25 @@ async function onSend(systemMsg = null) {
     }
 
     if (stream.value) {
-      const final = await chatStream(
-        baseReq,
-        modelName.value,
-        temperature.value,
-        apiBase.value,
-        chatOpts,
-        (_, full) => {
-          messages.value.splice(idx, 1, { role: 'assistant', content: String(full || '') })
-          scrollToBottom() // 流式更新时持续滚动到底部
+      // chatStream 返回取消函数而非 Promise，需要通过回调获取完整内容
+      const final = await new Promise((resolve, reject) => {
+        chatStream(
+          baseReq,
+          modelName.value,
+          temperature.value,
+          apiBase.value,
+          chatOpts,
+          (_, full) => {
+            messages.value.splice(idx, 1, { role: 'assistant', content: String(full || '') })
+            scrollToBottom() // 流式更新时持续滚动到底部
 
-          // [Add] 实时解析状态标签
-          parsePeroStatus(String(full || ''))
-        }
-      )
+            // 实时解析状态标签
+            parsePeroStatus(String(full || ''))
+          },
+          (fullContent) => resolve(fullContent), // onDone：返回完整内容
+          (err) => reject(err)                   // onError：抛出错误
+        )
+      })
       messages.value.splice(idx, 1, {
         role: 'assistant',
         content: String(final || '') || '（暂无内容）',
@@ -1532,7 +1538,7 @@ async function deleteMessageAt(idx) {
               (r) => r.time === data.time && r.task === data.task
             )
             if (rIdx !== -1) {
-              deleteReminder(rIdx) // 使用现有的带通知取消逻辑的函数
+              deleteReminder(reminders.value[rIdx].id) // 传入记录 ID 而非数组索引
             }
           } catch {
             /* ignore */
@@ -1549,7 +1555,7 @@ async function deleteMessageAt(idx) {
               (t) => t.time === data.time && t.topic === data.topic
             )
             if (tIdx !== -1) {
-              deleteTopic(tIdx) // 使用现有的带通知取消逻辑的函数
+              deleteTopic(topics.value[tIdx].id) // 传入记录 ID 而非数组索引
             }
           } catch {
             /* ignore */
@@ -1561,9 +1567,10 @@ async function deleteMessageAt(idx) {
     // 执行删除：由于是按需删除，我们使用 filter 重新构建数组，而不是 splice 级联
     messages.value = messages.value.filter((m, i) => !indicesToDelete.includes(i))
 
-    // 同步删除数据库中的关联记忆
+    // 同步删除数据库中的消息记录和关联记忆
     for (const ts of toDeleteTimestamps) {
-      await deleteMemoriesByMsgTimestamp(ts)
+      await deleteMessagesByTimestamp(ts)       // 删除数据库中的消息
+      await deleteMemoriesByMsgTimestamp(ts)    // 删除关联的记忆条目
     }
 
     // 状态恢复：如果删除了最后的消息，需要根据剩余的最后一条 AI 消息恢复 Pero 的状态
@@ -1574,8 +1581,6 @@ async function deleteMessageAt(idx) {
       // 如果消息全删了，重置状态
       resetPeroState()
     }
-
-    persistMessages()
     // 只有在历史记录面板没打开时才滚动（虽然删除通常在历史面板触发）
     if (!showHistory.value) scrollToBottom()
   } catch {
@@ -1760,24 +1765,29 @@ async function regenerateAt(idx) {
 
     try {
       if (stream.value) {
-        const final = await chatStream(
-          baseReq,
-          modelName.value,
-          temperature.value,
-          apiBase.value,
-          chatOpts,
-          (_, full) => {
-            messages.value.splice(idx, 1, {
-              role: 'assistant',
-              content: String(full || ''),
-              timestamp: originalTimestamp
-            })
-            scrollToBottom() // 流式更新时持续滚动到底部
+        // chatStream 返回取消函数而非 Promise，需要通过回调获取完整内容
+        const final = await new Promise((resolve, reject) => {
+          chatStream(
+            baseReq,
+            modelName.value,
+            temperature.value,
+            apiBase.value,
+            chatOpts,
+            (_, full) => {
+              messages.value.splice(idx, 1, {
+                role: 'assistant',
+                content: String(full || ''),
+                timestamp: originalTimestamp
+              })
+              scrollToBottom() // 流式更新时持续滚动到底部
 
-            // [Add] 实时解析状态标签
-            parsePeroStatus(String(full || ''))
-          }
-        )
+              // 实时解析状态标签
+              parsePeroStatus(String(full || ''))
+            },
+            (fullContent) => resolve(fullContent), // onDone：返回完整内容
+            (err) => reject(err)                   // onError：抛出错误
+          )
+        })
         messages.value.splice(idx, 1, {
           role: 'assistant',
           content: String(final || '') || '（暂无内容）',
