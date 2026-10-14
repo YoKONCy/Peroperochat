@@ -39,6 +39,10 @@ jobs:
 
       - name: Setup Android SDK
         uses: android-actions/setup-android@v3
+        with:
+          # 默认的 tools 包已不可用，显式安装项目所需的 SDK 组件。
+          packages: 'platform-tools platforms;android-36 build-tools;36.0.0'
+          log-accepted-android-sdk-licenses: false
 
       - name: Setup NDK
         id: setup-ndk
@@ -121,7 +125,9 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           name: PeroperoChat v${{ steps.version.outputs.version }}
-          tag_name: ${{ github.ref_name }}
+          # 手动触发时 ref_name 是分支名，发布标签统一使用应用版本。
+          tag_name: v${{ steps.version.outputs.version }}
+          target_commitish: ${{ github.sha }}
           body: |
             ## PeroperoChat v${{ steps.version.outputs.version }}
 
