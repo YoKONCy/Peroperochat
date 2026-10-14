@@ -43,6 +43,7 @@
             :role="editingRole"
             :is-new="isNewRole"
             :templates="roleTemplates"
+            :saving="savingRole"
             @close="closeEditor"
             @save="handleSaveRole"
           />
@@ -80,6 +81,7 @@ const {
 } = useRoleManager()
 
 const showEditor = ref(false)
+const savingRole = ref(false)
 const editingRole = ref(null)
 const isNewRole = ref(false)
 
@@ -107,8 +109,6 @@ function openCreateEditor() {
 }
 
 function openEditEditor(roleId) {
-  console.log('Opening editor for roleId:', roleId)
-  console.log('Role data:', roles[roleId])
   editingRole.value = roles[roleId]
   isNewRole.value = false
   nextTick(() => {
@@ -117,11 +117,14 @@ function openEditEditor(roleId) {
 }
 
 function closeEditor() {
+  if (savingRole.value) return
   showEditor.value = false
   editingRole.value = null
 }
 
 async function handleSaveRole(roleData) {
+  if (savingRole.value) return
+  savingRole.value = true
   try {
     if (isNewRole.value) {
       await createRole(roleData)
@@ -130,10 +133,11 @@ async function handleSaveRole(roleData) {
       await saveRole(roleData)
       ElMessage.success('角色保存成功')
     }
+    savingRole.value = false
     closeEditor()
   } catch (err) {
     ElMessage.error(`保存失败: ${err.message}`)
-  }
+  } finally { savingRole.value = false }
 }
 
 async function handleDeleteRole(roleId) {

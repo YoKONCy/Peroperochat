@@ -41,9 +41,9 @@
 
     <!-- 底部按钮栏 -->
     <div class="inputbar-mini" v-if="!isExpanded">
-      <button class="expand-btn" :disabled="isLoading" @click="expandInput">
+      <button class="expand-btn" :title="isLoading ? '停止回复' : '输入消息'" @click="expandInput">
         <i class="fas fa-comment-dots"></i>
-        <span>{{ isLoading ? '...' : '...' }}</span>
+        <span>{{ isLoading ? '停止' : '...' }}</span>
       </button>
       <div class="mini-tools">
         <button class="tool-btn-mini" @click="showFeatureDrawer = true" title="更多功能">
@@ -224,467 +224,205 @@
 </template>
 
 <script setup>
-import { ref, onMounted, nextTick } from 'vue'
+
+import { ref, watch, onMounted, onBeforeUnmount, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
-// Tauri imports
+import { Promotion } from '@element-plus/icons-vue'
+import { ElMessage } from 'element-plus'
 import { impactFeedback } from '@tauri-apps/plugin-haptics'
-
-const ImpactFeedbackStyle = {
-  Light: 'Light',
-  Medium: 'Medium',
-  Heavy: 'Heavy',
-  Rigid: 'Rigid',
-  Soft: 'Soft'
-}
-import {
-  isPermissionGranted,
-  requestPermission,
-  sendNotification
-} from '@tauri-apps/plugin-notification'
-
+import { listen } from '@tauri-apps/api/event'
 import Live2DWidget from '../components/Live2DWidget.vue'
 import HistoryOverlay from '../components/HistoryOverlay.vue'
-import {
-  chat as chatApi,
-  chatStream,
-  getRelevantMemories,
-  saveMemory,
-  deleteMemoriesByMsgTimestamp,
-  deleteMessagesByTimestamp,
-  getDefaultPrompts,
-  getActiveAgentId,
-  AGENTS,
-  saveMessage,
-  getMessages,
-  getReminders,
-  getTopics,
-  deleteReminder as apiDeleteReminder,
-  updateTopicStatus,
-  deleteTopic as apiDeleteTopic,
-  saveConfig,
-  getConfig,
-  loadActiveAgentId,
-  addReminder,
-  addTopic,
-  setAppMode
-} from '../api'
-import { Promotion } from '@element-plus/icons-vue'
+import { AGENTS, getActiveAgentId } from '../stores/agents'
+import { getReminders, getTopics, deleteReminder as apiDeleteReminder,
+  updateTopicStatus, deleteTopic as apiDeleteTopic, setAppMode } from '../api'
+import { useLocalConversation } from '../stores/conversations'
+import { visibleMessage } from '../utils/messageContent'
 
 const router = useRouter()
+const conversation = useLocalConversation()
+const { messages, isLoading } = conversation
 const text = ref('')
-const isExpanded = ref(false) // 是否展开大输入框
+const isExpanded = ref(false)
 const inputRef = ref(null)
-const messages = ref([])
-const modelName = ref('请先获取模型')
-const apiBase = ref('https://api.openai.com')
-const temperature = ref(0.7)
-const topP = ref(1)
-const frequencyPenalty = ref(0)
-const presencePenalty = ref(0)
-const stream = ref(false)
-const memoryRounds = ref(40)
 const showHistory = ref(false)
-const showTopicList = ref(false) // 是否显示话题列表
-const showFeatureDrawer = ref(false) // 是否显示功能抽屉
-const showReminderDetail = ref(false) // 是否显示任务详情
-const selectedReminder = ref(null) // 当前选中的任务
-let pressTimer = null // 长按定时器
-let isLongPress = false // 是否触发了长按
-const explodingReminders = ref(new Set()) // 正在炸裂的任务气泡索引
-const isTopicExploding = ref(false) // 话题聚合气泡是否正在炸裂
-const chatPreview = ref(null) // 引用聊天预览区域
-const isLoading = ref(false) // 是否正在请求中
-const pendingImage = ref(null) // 待发送的图片 Base64
+const showTopicList = ref(false)
+const showFeatureDrawer = ref(false)
+const showReminderDetail = ref(false)
+const selectedReminder = ref(null)
+const explodingReminders = ref(new Set())
+const isTopicExploding = ref(false)
+const pendingImage = ref(null)
 const fileInputRef = ref(null)
-const sessionId = ref('')
-
-// 定时提醒任务列表 (响应式，需在切换角色时更新)
 const reminders = ref([])
-// 主动话题列表 (响应式，需在切换角色时更新)
 const topics = ref([])
+let pressTimer = null
+let isLongPress = false
+let disposed = false
+let unlistenReminder = null
+let loadVersion = 0
+const timers = new Set()
 
-// 加载当前角色的数据
-const loadAgentData = async () => {
-  try {
-    reminders.value = (await getReminders()) || []
-    topics.value = (await getTopics()) || []
-  } catch (e) {
-    console.error('Failed to load reminders/topics from Rust DB:', e)
-    reminders.value = []
-    topics.value = []
-  }
-
-  // 同时也加载当前角色的聊天记录
-  try {
-    const saved = await getMessages() // api.js 已内置 getActiveAgentId，不支持手动传 string agentId
-    if (Array.isArray(saved)) {
-      messages.value = saved.map((m) => ({
-        role: String(m.role),
-        content: String(m.content || ''),
-        timestamp: m.timestamp // 恢复时间戳用于关联记忆
-      }))
-    } else {
-      messages.value = []
-    }
-  } catch (e) {
-    console.error('Failed to load messages from Rust DB:', e)
-    messages.value = []
-  }
-
-  console.log(`[Storage] Data loaded for ${getActiveAgentId()}`)
-
-  // 滚动到底部
-  nextTick(() => {
-    scrollToBottom()
-  })
+function later(action, delay) {
+  const timer = setTimeout(() => {
+    timers.delete(timer)
+    if (!disposed) action()
+  }, delay)
+  timers.add(timer)
+  return timer
 }
 
-// 监听角色切换事件（来自设置页面的全局事件）
-window.addEventListener('ppc:agent-switched', () => {
-  loadAgentData()
-})
-
-// 初始化加载
-loadAgentData()
-
-// 初始化通知权限
-const initNotifications = async () => {
+async function loadAgentData() {
+  const agentId = getActiveAgentId()
+  const version = ++loadVersion
   try {
-    let permissionGranted = await isPermissionGranted()
-    if (!permissionGranted) {
-      const permission = await requestPermission()
-      permissionGranted = permission === 'granted'
-    }
-    console.log('Notification permission:', permissionGranted)
-  } catch (e) {
-    console.warn('Failed to init notifications:', e)
+    const [, reminderList, topicList] = await Promise.all([
+      conversation.load(), getReminders(agentId), getTopics(agentId),
+    ])
+    if (disposed || version !== loadVersion || agentId !== getActiveAgentId()) return
+    reminders.value = reminderList.filter(item => !item.delivered)
+    topics.value = topicList
+  } catch (error) {
+    if (!disposed) ElMessage.error(error.message)
   }
 }
 
-// 发送系统通知
-const sendSystemNotification = async (title, body) => {
+function expandInput() {
+  if (isLoading.value) { conversation.stop(); return }
+  isExpanded.value = true
+  nextTick(() => inputRef.value?.focus())
+}
+function collapseInput() { isExpanded.value = false }
+function toSettings() { router.push('/settings') }
+function toRemoteHub() { showFeatureDrawer.value = false; setAppMode('remote') }
+function toGameAction() { showFeatureDrawer.value = false; router.push('/game/blackjack') }
+function toGroupChatAction() { showFeatureDrawer.value = false; router.push('/group') }
+function openHistory() { showHistory.value = true }
+
+async function onSend(systemMsg = null) {
+  const ephemeral = typeof systemMsg === 'string'
+  const value = ephemeral ? systemMsg : text.value.trim()
+  const image = ephemeral ? null : pendingImage.value
+  if ((!value && !image) || isLoading.value) return
+  const content = image ? [
+    { type: 'text', text: value || '这张图片里有什么？' },
+    { type: 'image_url', image_url: { url: image } },
+  ] : value
+  const agentId = getActiveAgentId()
+  if (!ephemeral) { text.value = ''; pendingImage.value = null }
+  isExpanded.value = false
   try {
-    let permissionGranted = await isPermissionGranted()
-    if (!permissionGranted) {
-      const permission = await requestPermission()
-      permissionGranted = permission === 'granted'
+    await conversation.send(content, { ephemeral, agentId })
+    if (!disposed && agentId === getActiveAgentId()) await loadAgentData()
+  } catch (error) {
+    if (!disposed && error.code !== 'CANCELLED') ElMessage.error(error.message)
+    if (!ephemeral && !error.persisted && !disposed && !text.value) {
+      text.value = value
+      pendingImage.value = image
     }
-    if (permissionGranted) {
-      sendNotification({ title, body })
-    }
-  } catch (e) {
-    console.error('Failed to send notification:', e)
   }
 }
 
-// 检查提醒任务和主动话题
-function checkReminders() {
+async function regenerateAt(index) {
   if (isLoading.value) return
-
-  const now = new Date().getTime()
-
-  // 1. 检查任务提醒
-  const toTriggerReminder = reminders.value.filter((r) => {
-    const targetTime = new Date(r.time).getTime()
-    const isDue = now >= targetTime
-
-    // 如果任务过期超过 12 小时，视为失效，直接过滤掉
-    if (isDue && now - targetTime > 12 * 60 * 60 * 1000) {
-      console.log(`[Reminder] Task expired (>12h), skipping: ${r.task}`)
-      return false
-    }
-    return isDue
-  })
-
-  // 清理掉那些已经失效（超过12小时）的任务
-  const expiredReminders = reminders.value.filter((r) => {
-    const targetTime = new Date(r.time).getTime()
-    return now > targetTime && now - targetTime > 12 * 60 * 60 * 1000
-  })
-  if (expiredReminders.length > 0) {
-    reminders.value = reminders.value.filter((r) => !expiredReminders.includes(r))
-    // 异步清理数据库
-    expiredReminders.forEach((r) => {
-      if (r.id) apiDeleteReminder(r.id).catch(console.error)
-    })
-  }
-
-  if (toTriggerReminder.length > 0) {
-    const task = toTriggerReminder[0]
-    // 从列表中移除并删除数据库记录
-    reminders.value = reminders.value.filter((r) => r.id !== task.id)
-    if (task.id) apiDeleteReminder(task.id).catch(console.error)
-
-    onSend(
-      `【管理系统提醒：${AGENTS[getActiveAgentId()]?.name || 'Pero'}，你与主人的约定时间已到，请主动提醒主人。约定内容：${task.task}】`
-    )
-
-    // 发送系统级通知 (App环境)
-    sendSystemNotification(`${AGENTS[getActiveAgentId()]?.name || 'Pero'} 的任务提醒`, task.task)
-    return // 优先处理任务
-  }
-
-  // 检查 TOPIC (优化：支持时间簇打包触发)
-  const nowDate = new Date()
-  const triggeredTopics = []
-
-  // 1. 找出所有已到期的话题
-  const dueIndices = []
-  const staleIndices = []
-  topics.value.forEach((t, i) => {
-    const tTime = new Date(t.time)
-    if (tTime <= nowDate) {
-      // 如果话题过期超过 24 小时，视为过时
-      if (nowDate.getTime() - tTime.getTime() > 24 * 60 * 60 * 1000) {
-        staleIndices.push(i)
-      } else {
-        dueIndices.push(i)
-      }
-    }
-  })
-
-  // 自动清理过期超过 24 小时的话题
-  if (staleIndices.length > 0) {
-    console.log(`[Topic] Cleaning ${staleIndices.length} stale topics (>24h)`)
-    // 倒序删除
-    staleIndices
-      .sort((a, b) => b - a)
-      .forEach((i) => {
-        const topic = topics.value[i]
-        if (topic.id) apiDeleteTopic(topic.id).catch(console.error)
-        topics.value.splice(i, 1)
-      })
-  }
-
-  if (dueIndices.length > 0) {
-    // 2. 如果有到期的话题，进一步检查是否有其他话题在未来10分钟内
-    // 逻辑：只要有一个触发，就把所有[已过期]和[未来10分钟内]的话题全部打包
-    const tenMinsLater = new Date(nowDate.getTime() + 10 * 60 * 1000)
-
-    // 重新扫描所有话题，收集要打包的
-    const bundleIndices = []
-    topics.value.forEach((t, i) => {
-      const tTime = new Date(t.time)
-      if (tTime <= tenMinsLater) {
-        bundleIndices.push(i)
-        triggeredTopics.push(t)
-      }
-    })
-
-    // 3. 构建打包消息
-    if (triggeredTopics.length > 0) {
-      const topicListStr = triggeredTopics
-        .map((t) => `- ${t.topic} (原定: ${formatReminderTime(t.time)})`)
-        .join('\n')
-
-      const agentName = AGENTS[getActiveAgentId()]?.name || 'Pero'
-      const prompt = `【管理系统提醒：${agentName}，以下是你之前想找主人聊的话题（已汇总）：\n${topicListStr}\n\n请将这些话题自然地融合在一起，作为一次主动的聊天开场。不要生硬地列举，要用你可爱的语气把它们串联起来！去和主人聊天吧！】`
-
-      onSend(prompt)
-
-      // 4. 从列表中移除已触发的话题 (倒序移除以防索引错位)
-      bundleIndices
-        .sort((a, b) => b - a)
-        .forEach((i) => {
-          const topic = topics.value[i]
-          if (topic.id) apiDeleteTopic(topic.id).catch(console.error)
-          topics.value.splice(i, 1)
-        })
-    }
+  try { await conversation.regenerate(index); await loadAgentData() }
+  catch (error) { if (!disposed && error.code !== 'CANCELLED') ElMessage.error(error.message) }
+}
+function regenerateAndClose(index) { showHistory.value = false; regenerateAt(index) }
+async function deleteMessageAt(index) {
+  try { await conversation.remove(index); await loadAgentData() }
+  catch (error) { ElMessage.error(error.message) }
+}
+async function copyMessage(message) {
+  const value = visibleMessage(message.content)
+  try { await navigator.clipboard.writeText(value) }
+  catch {
+    const area = document.createElement('textarea')
+    area.value = value
+    area.style.position = 'fixed'
+    area.style.opacity = '0'
+    document.body.appendChild(area)
+    area.select()
+    const copied = document.execCommand('copy')
+    area.remove()
+    if (!copied) ElMessage.error('复制失败')
   }
 }
-
-onMounted(async () => {
-  // 初始化 Session ID
-  let sid = await getConfig('ppc.sessionId')
-  if (!sid) {
-    sid = 'm-' + Math.random().toString(36).substring(2, 15)
-    await saveConfig('ppc.sessionId', sid)
-  }
-  sessionId.value = sid
-
-  // 初始化通知
-  initNotifications()
-  // 每 10 秒检查一次提醒
-  setInterval(checkReminders, 10000)
-
-  // 监听来自小游戏或其他组件的对话触发请求
-  window.addEventListener('ppc:trigger-chat', (event) => {
-    const { systemMsg, agentId } = event.detail
-    if (agentId === getActiveAgentId()) {
-      // 重新加载数据以获取最新的 user 消息（由小游戏写入的）
-      loadAgentData()
-      // 触发对话请求
-      onSend(systemMsg)
-    }
-  })
-
-  // 状态恢复：根据最后一条 AI 消息恢复 Pero 的状态
-  const lastAssistantMsg = [...messages.value].reverse().find((m) => m.role === 'assistant')
-  if (lastAssistantMsg) {
-    await parsePeroStatus(lastAssistantMsg.content)
-  }
-})
-
-// 图片处理
-function triggerUpload() {
-  fileInputRef.value?.click()
-}
-
-async function handleImageUpload(e) {
-  const file = e.target.files?.[0]
+function triggerUpload() { fileInputRef.value?.click() }
+async function handleImageUpload(event) {
+  const file = event.target.files?.[0]
   if (!file) return
-
-  if (file.size > 10 * 1024 * 1024) {
-    alert('图片大小不能超过 10MB')
+  if (!file.type.startsWith('image/') || file.size > 10 * 1024 * 1024) {
+    ElMessage.error('请选择不超过 10MB 的图片')
+    event.target.value = ''
     return
   }
-
   const reader = new FileReader()
-  reader.onload = (ev) => {
-    pendingImage.value = ev.target.result
-    // 重置 input 以允许再次选择同一张图
-    e.target.value = ''
-  }
+  reader.onload = () => { if (!disposed) pendingImage.value = reader.result; event.target.value = '' }
+  reader.onerror = () => { ElMessage.error('读取图片失败'); event.target.value = '' }
   reader.readAsDataURL(file)
 }
+function removeImage() { pendingImage.value = null }
 
-function removeImage() {
-  pendingImage.value = null
+async function deleteTopic(id) {
+  try { await apiDeleteTopic(id); topics.value = topics.value.filter(item => item.id !== id) }
+  catch (error) { ElMessage.error(error.message) }
 }
-
-// 删除话题并取消通知
-const deleteTopic = async (id) => {
-  const idx = topics.value.findIndex((t) => t.id === id)
-  if (idx === -1) return
-
-  // Optimistic UI update
-  topics.value.splice(idx, 1)
-
-  // Call backend
-  await apiDeleteTopic(id)
+async function toggleTopicReveal(id) {
+  const topic = topics.value.find(item => item.id === id)
+  if (!topic) return
+  try { await updateTopicStatus(id, !topic.revealed); topic.revealed = !topic.revealed }
+  catch (error) { ElMessage.error(error.message) }
 }
-
-// 切换话题揭晓状态
-function toggleTopicReveal(id) {
-  const idx = topics.value.findIndex((t) => t.id === id)
-  if (idx !== -1) {
-    const newVal = !topics.value[idx].revealed
-    topics.value[idx].revealed = newVal
-    updateTopicStatus(id, newVal)
-  }
+async function deleteReminder(id) {
+  try { await apiDeleteReminder(id); reminders.value = reminders.value.filter(item => item.id !== id) }
+  catch (error) { ElMessage.error(error.message) }
 }
-
-// 处理角色点击事件（增加部位判断）
-const handleWaifuClick = async (event) => {
-  // 简单的部位判断逻辑
+function handleWaifuClick(event) {
   let area = 'general'
-  if (event && event.target) {
+  if (event?.target) {
     const rect = event.target.getBoundingClientRect()
-    const relativeY = (event.clientY - rect.top) / rect.height
-
-    if (relativeY < 0.3) {
-      area = 'head'
-    } else if (relativeY < 0.6) {
-      area = 'chest'
-    } else {
-      area = 'body'
-    }
-    console.log(`[Click] Area detected: ${area} (Y: ${relativeY.toFixed(2)})`)
+    const relativeY = (event.clientY - rect.top) / Math.max(rect.height, 1)
+    area = relativeY < 0.3 ? 'head' : relativeY < 0.6 ? 'chest' : 'body'
   }
-
-  // 触发原本的点击交互逻辑，传递部位信息
   window.dispatchEvent(new CustomEvent('ppc:waifu-click', { detail: { area } }))
 }
-
-// 处理任务气泡长按逻辑
-const handlePressStart = (reminder) => {
-  if (explodingReminders.value.has(reminder.id)) return
-
+function handlePressStart(reminder) {
+  handlePressCancel()
   isLongPress = false
-  pressTimer = setTimeout(() => {
+  pressTimer = later(() => {
     isLongPress = true
     selectedReminder.value = reminder
     showReminderDetail.value = true
-    // 触发重震动反馈
-    impactFeedback(ImpactFeedbackStyle.Heavy).catch(() => {})
+    impactFeedback('Heavy').catch(() => {})
   }, 500)
 }
-
-const handlePressEnd = (id) => {
-  if (pressTimer) {
-    clearTimeout(pressTimer)
-    pressTimer = null
-  }
-  if (!isLongPress) {
-    handleReminderClick(id)
-  }
+function handlePressEnd(id) {
+  handlePressCancel()
+  if (!isLongPress) handleReminderClick(id)
 }
-
-const handlePressCancel = () => {
-  if (pressTimer) {
-    clearTimeout(pressTimer)
-    pressTimer = null
-  }
+function handlePressCancel() {
+  if (pressTimer) { clearTimeout(pressTimer); timers.delete(pressTimer); pressTimer = null }
 }
-
-// 处理任务气泡点击
-const handleReminderClick = async (id) => {
+function handleReminderClick(id) {
   if (explodingReminders.value.has(id)) return
-
-  // 1. 触发震动
-  impactFeedback(ImpactFeedbackStyle.Medium).catch(() => {})
-
-  // 2. 标记正在炸裂
+  impactFeedback('Medium').catch(() => {})
   explodingReminders.value.add(id)
-
-  // 3. 等待动画结束 (300ms)
-  setTimeout(async () => {
-    await deleteReminder(id)
-    explodingReminders.value.delete(id)
-  }, 300)
+  later(async () => { await deleteReminder(id); explodingReminders.value.delete(id) }, 300)
 }
-
-// 处理话题聚合气泡点击
-const handleTopicClick = async () => {
+function handleTopicClick() {
   if (isTopicExploding.value) return
-
-  // 1. 触发震动
-  impactFeedback(ImpactFeedbackStyle.Medium).catch(() => {})
-
-  // 2. 标记正在炸裂
+  impactFeedback('Medium').catch(() => {})
   isTopicExploding.value = true
-
-  // 3. 等待动画结束 (300ms)
-  setTimeout(() => {
-    showTopicList.value = true
-    isTopicExploding.value = false
-  }, 300)
+  later(() => { showTopicList.value = true; isTopicExploding.value = false }, 300)
+}
+function formatReminderTime(value) {
+  if (!value) return '--:--'
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return '--:--'
+  return date.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })
 }
 
-// 删除任务并取消通知
-const deleteReminder = async (id) => {
-  const idx = reminders.value.findIndex((r) => r.id === id)
-  if (idx === -1) return
-
-  // Optimistic UI update
-  reminders.value.splice(idx, 1)
-
-  // Call backend
-  await apiDeleteReminder(id)
-}
-
-// 格式化时间显示
-function formatReminderTime(timeStr) {
-  try {
-    const d = new Date(timeStr)
-    return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
-  } catch {
-    return ''
-  }
-}
-
-// 获取任务气泡样式 (右侧区域)
 function getBubbleStyle(idx) {
   // 调整基础位置偏移，使其更紧凑并位于头像右上角区域
   const baseOffsets = [
@@ -716,1192 +454,30 @@ function getBubbleStyle(idx) {
   }
 }
 
-function regenerateAndClose(idx) {
-  showHistory.value = false
-  regenerateAt(idx)
-}
 
-function persistMessages() {
-  // 提取用户真实文本
-  const extractContent = (content) => {
-    if (typeof content === 'string') return content
-    if (Array.isArray(content)) {
-      const textPart = content.find(c => c.type === 'text')
-      return textPart ? textPart.text : '[图片记录]'
-    }
-    return String(content || '')
-  }
-
-  const lastMsg = messages.value[messages.value.length - 1]
-  const secondLastMsg = messages.value[messages.value.length - 2]
-
-  // 保存最新的用户消息
-  if (secondLastMsg && secondLastMsg.role === 'user') {
-    saveMessage({
-      role: secondLastMsg.role,
-      content: extractContent(secondLastMsg.content),
-      timestamp: secondLastMsg.timestamp || (Date.now() - 1)
-    }).catch(() => {})
-  }
-
-  // 保存最新的 AI 消息（过滤占位符）
-  if (lastMsg) {
-    if (lastMsg.content === '__loading__' || lastMsg.content === '（暂无内容）') {
-      return
-    }
-    saveMessage({
-      role: lastMsg.role,
-      content: extractContent(lastMsg.content),
-      timestamp: lastMsg.timestamp || Date.now()
-    }).catch((e) => console.error('Failed to persist ai message:', e))
-  }
-}
-
-function toSettings() {
-  router.push('/settings')
-}
-function toGroupChat() {
-  router.push('/group')
-}
-function toGame() {
-  router.push('/game/blackjack')
-}
-
-function toRemoteHub() {
-  showFeatureDrawer.value = false
-  setAppMode('remote')
-}
-
-function toGameAction() {
-  showFeatureDrawer.value = false
-  toGame()
-}
-
-function toGroupChatAction() {
-  showFeatureDrawer.value = false
-  toGroupChat()
-}
-
-function openHistory() {
-  showHistory.value = true
-}
-
-function expandInput() {
-  if (isLoading.value) return
-  isExpanded.value = true
-  setTimeout(() => {
-    if (inputRef.value) inputRef.value.focus()
-  }, 300)
-}
-
-function collapseInput() {
-  isExpanded.value = false
-}
-
-// 滚动到底部函数
-function scrollToBottom() {
-  if (chatPreview.value) {
-    setTimeout(() => {
-      chatPreview.value.scrollTop = chatPreview.value.scrollHeight
-    }, 100)
-  }
-}
-
-// 解析并保存记忆
-async function parseAndSaveMemory(text, msgTimestamp = null) {
-  if (!text) return
-  const memoryMatch = text.match(/<MEMORY>([\s\S]*?)<\/MEMORY>/)
-  if (memoryMatch) {
-    try {
-      const content = memoryMatch[1].trim()
-      const memoryData = JSON.parse(content)
-      if (memoryData.content && memoryData.tags) {
-        await saveMemory(memoryData, msgTimestamp)
-        console.log('记忆已保存:', memoryData.content)
-      }
-    } catch (e) {
-      console.error('解析 MEMORY JSON 失败:', e)
-    }
-  }
-}
-
-// 预设未来系统通知（核心：让通知在应用关闭后依然生效）
-const scheduleFutureNotification = async (id, title, body, timeStr) => {
-  // 注意：此函数是为 Capacitor 准备的，当前项目使用 Tauri
-  // 如果需要通知功能，可以使用 @tauri-apps/plugin-notification
-  console.log(`[Notification] 通知已安排: ${title} at ${timeStr}`)
-}
-
-// 解析 Pero 状态标签
-async function parsePeroStatus(content) {
-  if (!content) return
-
-  const agentId = getActiveAgentId()
-
-  // 1. 解析旧版 PEROCUE
-  const perocueMatch = content.match(/<PEROCUE>([\s\S]*?)<\/PEROCUE>/)
-  if (perocueMatch) {
-    try {
-      const rawData = perocueMatch[1].trim()
-      let statusMap
-      try {
-        statusMap = JSON.parse(rawData)
-      } catch {
-        try {
-          statusMap = new Function('return ' + rawData)()
-        } catch {
-          /* ignore */
-        }
-      }
-
-      if (statusMap && statusMap.mood) {
-        const curMood = await getConfig(`ppc.${agentId}.mood`)
-        if (curMood !== statusMap.mood) {
-          await saveConfig(`ppc.${agentId}.mood`, statusMap.mood)
-          window.dispatchEvent(new CustomEvent('ppc:mood', { detail: statusMap.mood }))
-        }
-      }
-      if (statusMap.vibe) {
-        const curVibe = await getConfig(`ppc.${agentId}.vibe`)
-        if (curVibe !== statusMap.vibe) {
-          await saveConfig(`ppc.${agentId}.vibe`, statusMap.vibe)
-          window.dispatchEvent(new CustomEvent('ppc:vibe', { detail: statusMap.vibe }))
-        }
-      }
-      if (statusMap.mind) {
-        const curMind = await getConfig(`ppc.${agentId}.mind`)
-        if (curMind !== statusMap.mind) {
-          await saveConfig(`ppc.${agentId}.mind`, statusMap.mind)
-          window.dispatchEvent(new CustomEvent('ppc:mind', { detail: statusMap.mind }))
-        }
-      }
-    } catch (e) {
-      console.error('解析 PEROCUE JSON 失败:', e)
-    }
-  }
-
-  // 2. 解析新版 CLICK_MESSAGES
-  const clickRegex = /<CLICK_MESSAGES>([\s\S]*?)<\/CLICK_MESSAGES>/
-  const clickMatch = content.match(clickRegex)
-  if (clickMatch) {
-    try {
-      const rawData = clickMatch[1].trim()
-
-      // 支持快捷重置指令
-      if (rawData === 'DEFAULT' || rawData === 'RESET') {
-        saveConfig(`ppc.${agentId}.waifu.texts`, '{}')
-        window.dispatchEvent(new CustomEvent('ppc:waifu-texts-updated', { detail: {} }))
-        console.log(`[Waifu] Click messages reset to default for ${agentId}`)
-        return
-      }
-
-      let data
-      try {
-        data = JSON.parse(rawData)
-      } catch (e) {
-        // Fallback: 尝试解析 JS 对象格式 (例如单引号)
-        try {
-          data = new Function('return ' + rawData)()
-        } catch {
-          console.warn('Failed to parse click messages (JSON & Eval):', e)
-          return
-        }
-      }
-
-      let cur = {}
-      try {
-        const saved = await getConfig(`ppc.${agentId}.waifu.texts`)
-        if (saved) cur = JSON.parse(saved)
-      } catch {
-        /* ignore */
-      }
-
-      const curStr = JSON.stringify(cur)
-
-      if (Array.isArray(data)) {
-        console.log('[Waifu] Parsing CLICK_MESSAGES as Array:', data)
-        if (data.length >= 6) {
-          // 新版 2x3 模式：[头1, 头2, 身1, 身2, 特1, 特2]
-          // 显式映射表，防止逻辑混淆
-          const mapping = [
-            { part: 'head', slot: '01' },
-            { part: 'head', slot: '02' },
-            { part: 'chest', slot: '01' },
-            { part: 'chest', slot: '02' },
-            { part: 'body', slot: '01' }, // 对应 Prompt 中的“身体”/“特殊”映射
-            { part: 'body', slot: '02' }
-          ]
-
-          // 清理旧数据
-          ;['head', 'chest', 'body'].forEach((part) => {
-            for (let i = 1; i <= 20; i++) delete cur[`click_${part}_${String(i).padStart(2, '0')}`]
-          })
-
-          data.forEach((msg, i) => {
-            // 写入通用字段 (兼容)
-            cur[`click_messages_${String(i + 1).padStart(2, '0')}`] = msg
-
-            // 写入部位字段
-            if (i < 6) {
-              const m = mapping[i]
-              cur[`click_${m.part}_${m.slot}`] = msg
-            }
-          })
-        } else {
-          // 兼容旧版数组格式
-          data.forEach((msg, i) => {
-            cur[`click_messages_0${i + 1}`] = msg
-            // 简单的 fallback
-            if (i === 0) cur['click_head_01'] = msg
-            if (i === 1) cur['click_chest_01'] = msg
-            if (i === 2) cur['click_body_01'] = msg
-          })
-        }
-      } else if (data && typeof data === 'object') {
-        console.log('[Waifu] Parsing CLICK_MESSAGES as Object:', data)
-        // 新版部位格式
-        const parts = ['head', 'chest', 'body']
-
-        // 预处理 data keys，支持大小写不敏感及中文映射
-        const lowerData = {}
-        const cnMap = {
-          头部: 'head',
-          胸部: 'chest',
-          身体: 'body',
-          通用: 'general'
-        }
-
-        Object.keys(data).forEach((k) => {
-          if (!k) return
-          let normalizedKey = k.toLowerCase()
-          // 尝试中文映射
-          if (cnMap[k]) normalizedKey = cnMap[k]
-          // 尝试模糊匹配 (e.g. "头部反应" -> "head")
-          else if (k.includes('头')) normalizedKey = 'head'
-          else if (k.includes('胸')) normalizedKey = 'chest'
-          else if (k.includes('身')) normalizedKey = 'body'
-
-          lowerData[normalizedKey] = data[k]
-        })
-
-        parts.forEach((part) => {
-          // 安全检查：确保 lowerData[part] 存在且是数组
-          if (lowerData[part] && Array.isArray(lowerData[part])) {
-            // 1. 清除该部位旧的所有台词 (假设最大 20 条)
-            for (let i = 1; i <= 20; i++) {
-              delete cur[`click_${part}_${String(i).padStart(2, '0')}`]
-            }
-
-            // 2. 写入新台词
-            lowerData[part].forEach((msg, idx) => {
-              if (msg) {
-                cur[`click_${part}_${String(idx + 1).padStart(2, '0')}`] = msg
-              }
-            })
-          }
-        })
-
-        // 同时兼容旧版，如果 object 里有 general 字段或者直接取前几个作为通用
-        if (lowerData.general && Array.isArray(lowerData.general)) {
-          cur.click_messages_01 = lowerData.general[0] || ''
-          cur.click_messages_02 = lowerData.general[1] || ''
-          cur.click_messages_03 = lowerData.general[2] || ''
-        }
-      }
-
-      // 仅在内容真正变化时才更新
-      if (JSON.stringify(cur) !== curStr) {
-        // 使用 Rust Store 保存
-        saveConfig(`ppc.${agentId}.waifu.texts`, JSON.stringify(cur))
-        window.dispatchEvent(new CustomEvent('ppc:waifu-texts-updated', { detail: cur }))
-      } else {
-        console.log('[Waifu] CLICK_MESSAGES content unchanged, skipping update.')
-      }
-    } catch (e) {
-      console.warn('Failed to parse click messages JSON:', e)
-    }
-  }
-
-  // 3. 解析 IDLE_MESSAGES
-  const idleRegex = /<IDLE_MESSAGES>([\s\S]*?)<\/IDLE_MESSAGES>/
-  const idleMatch = content.match(idleRegex)
-  if (idleMatch) {
-    try {
-      const rawData = idleMatch[1].trim()
-
-      // 支持快捷重置指令
-      if (rawData === 'DEFAULT' || rawData === 'RESET') {
-        let cur = {}
-        try {
-          const saved = await getConfig(`ppc.${agentId}.waifu.texts`)
-          if (saved) cur = JSON.parse(saved)
-        } catch {
-          /* ignore */
-        }
-
-        // 仅清除挂机相关的台词
-        for (let i = 1; i <= 20; i++) {
-          delete cur[`idleMessages_${String(i).padStart(2, '0')}`]
-        }
-
-        saveConfig(`ppc.${agentId}.waifu.texts`, JSON.stringify(cur))
-        window.dispatchEvent(new CustomEvent('ppc:waifu-texts-updated', { detail: cur }))
-        return
-      }
-
-      const messages = JSON.parse(rawData)
-      if (Array.isArray(messages) && messages.length > 0) {
-        let cur = {}
-        try {
-          const saved = await getConfig(`ppc.${agentId}.waifu.texts`)
-          if (saved) cur = JSON.parse(saved)
-        } catch {
-          /* ignore */
-        }
-
-        const curStr = JSON.stringify(cur)
-
-        // 1. 清除旧的挂机台词
-        for (let i = 1; i <= 20; i++) {
-          delete cur[`idleMessages_${String(i).padStart(2, '0')}`]
-        }
-
-        // 2. 写入新台词
-        messages.forEach((msg, idx) => {
-          if (msg) {
-            cur[`idleMessages_${String(idx + 1).padStart(2, '0')}`] = msg
-          }
-        })
-
-        if (JSON.stringify(cur) !== curStr) {
-          saveConfig(`ppc.${agentId}.waifu.texts`, JSON.stringify(cur))
-          window.dispatchEvent(new CustomEvent('ppc:waifu-texts-updated', { detail: cur }))
-        } else {
-          console.log('[Waifu] IDLE_MESSAGES content unchanged, skipping update.')
-        }
-      }
-    } catch (e) {
-      console.warn('Failed to parse idle messages JSON:', e)
-    }
-  }
-
-  // 4. 解析 BACK_MESSAGES
-  const backRegex = /<BACK_MESSAGES>([\s\S]*?)<\/BACK_MESSAGES>/
-  const backMatch = content.match(backRegex)
-  if (backMatch) {
-    try {
-      const rawData = backMatch[1].trim()
-      let messages
-      try {
-        messages = JSON.parse(rawData)
-      } catch {
-        try {
-          messages = new Function('return ' + rawData)()
-        } catch {
-          /* ignore */
-        }
-      }
-
-      if (Array.isArray(messages) && messages.length >= 1) {
-        let cur = {}
-        try {
-          const saved = await getConfig(`ppc.${agentId}.waifu.texts`)
-          if (saved) cur = JSON.parse(saved)
-        } catch {
-          /* ignore */
-        }
-
-        const curStr = JSON.stringify(cur)
-        cur.visibilityBack = messages[0]
-
-        if (JSON.stringify(cur) !== curStr) {
-          saveConfig(`ppc.${agentId}.waifu.texts`, JSON.stringify(cur))
-          window.dispatchEvent(new CustomEvent('ppc:waifu-texts-updated', { detail: cur }))
-        } else {
-          console.log('[Waifu] BACK_MESSAGES content unchanged, skipping update.')
-        }
-      }
-    } catch (e) {
-      console.warn('Failed to parse back messages JSON:', e)
-    }
-  }
-
-  // 6. 解析 REMINDER (支持多个标签)
-  const reminderRegex = /<REMINDER>([\s\S]*?)<\/REMINDER>/g
-  let match
-  while ((match = reminderRegex.exec(content)) !== null) {
-    try {
-      const data = JSON.parse(match[1].trim())
-      if (data.time && data.task) {
-        // 添加到提醒列表（去重）
-        const exists = reminders.value.some((r) => r.time === data.time && r.task === data.task)
-        if (!exists) {
-          // 调用后端 API 添加
-          addReminder(data.task, data.time)
-            .then(() => {
-              // 重新加载以获取带 ID 的完整数据
-              return getReminders()
-            })
-            .then((list) => {
-              if (list) reminders.value = list
-            })
-
-          console.log('新提醒已添加:', data)
-          // 立即向系统预设未来通知 (使用当前时间戳生成的临时ID，实际ID由后端生成，这里主要用于日志或临时通知)
-          const tempId = Date.now()
-          const agentNameRemind = AGENTS[getActiveAgentId()]?.name || 'Pero'
-          scheduleFutureNotification(tempId, `${agentNameRemind} 的任务提醒`, data.task, data.time)
-        }
-      }
-    } catch {
-      /* ignore */
-    }
-  }
-
-  // 7. 解析 TOPIC (支持多个标签)
-  const topicRegex = /<TOPIC>([\s\S]*?)<\/TOPIC>/g
-  let tMatch
-  while ((tMatch = topicRegex.exec(content)) !== null) {
-    try {
-      const data = JSON.parse(tMatch[1].trim())
-      if (data.time && data.topic) {
-        // 添加到话题列表（去重）
-        const exists = topics.value.some((t) => t.time === data.time && t.topic === data.topic)
-        if (!exists) {
-          // 调用后端 API 添加
-          addTopic(data.topic, false)
-            .then(() => {
-              return getTopics()
-            })
-            .then((list) => {
-              if (list) topics.value = list
-            })
-
-          console.log('新主动话题已添加:', data)
-          // 立即向系统预设未来通知
-          const tempId = Date.now()
-          const agentName = AGENTS[getActiveAgentId()]?.name || 'Pero'
-          scheduleFutureNotification(tempId, `${agentName} 想找你聊天`, data.topic, data.time)
-        }
-      }
-    } catch {
-      /* ignore */
-    }
-  }
-}
-
-// 清理消息中的隐藏标签
-function cleanMessageContent(text) {
-  if (!text) return ''
-  if (text === '__loading__') return '正在思考...'
-
-  let content = text
-  if (Array.isArray(content)) {
-    content = content.find((c) => c.type === 'text')?.text || ''
-  }
-
-  // 移除所有 XML 标签及其内容 (因为现在使用 NIT 协议，XML 仅用于内部逻辑)
-  // 同时也移除 NIT 调用块，保持历史记录纯净
-  return content
-    .replace(/<([A-Z_]+)>[\s\S]*?<\/\1>/g, '')
-    .replace(/\[\[\[NIT_CALL\]\]\][\s\S]*?\[\[\[NIT_END\]\]\]/g, '')
-    .trim()
-}
-
-// 清理发送给 API 的历史记录，仅保留 PEROCUE (用于后端状态机，可选)，移除其他冗余标签以节省 Token 并防止 Few-shot 干扰
-function cleanHistoryForApi(text) {
-  if (!text) return ''
-
-  let content = text
-  if (Array.isArray(content)) {
-    // 移除图片，仅保留文本部分发送给历史记录（OpenAI 建议历史记录中不带 Base64 以节省空间）
-    content = content.find((c) => c.type === 'text')?.text || ''
-  }
-
-  // 移除大部分 XML 标签，保留 PEROCUE 作为后端状态参考（如果需要）
-  // 注意：NIT 协议块不应在历史记录中传递，LLM 应该根据最新状态生成
-  return content
-    .replace(/<MEMORY>[\s\S]*?<\/MEMORY>/g, '')
-    .replace(/<CLICK_MESSAGES>[\s\S]*?<\/CLICK_MESSAGES>/g, '')
-    .replace(/<IDLE_MESSAGES>[\s\S]*?<\/IDLE_MESSAGES>/g, '')
-    .replace(/<BACK_MESSAGES>[\s\S]*?<\/BACK_MESSAGES>/g, '')
-    .replace(/<REMINDER>[\s\S]*?<\/REMINDER>/g, '')
-    .replace(/<TOPIC>[\s\S]*?<\/TOPIC>/g, '')
-    .replace(/\[\[\[NIT_CALL\]\]\][\s\S]*?\[\[\[NIT_END\]\]\]/g, '')
-    .trim()
-}
-
-// 获取当前环境信息 Prompt (时间、地点、天气)
-async function getEnvPrompt() {
-  const d = new Date()
-  const weekdays = ['星期日', '星期一', '星期二', '星期三', '星期四', '星期五', '星期六']
-  const timeStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}:${String(d.getSeconds()).padStart(2, '0')} ${weekdays[d.getDay()]}`
-
-  const location = (await getConfig('ppc.location')) || '未知地点'
-  const weather = (await getConfig('ppc.weather')) || '未知天气'
-
-  return `[当前环境信息]\n时间: ${timeStr}\n地点: ${location}\n天气: ${weather}`
-}
-
-// 获取当前部位的对应台词
-async function getCurrentBodyLines() {
-  const agentId = getActiveAgentId()
-  let cur = {}
-  try {
-    const saved = await getConfig(`ppc.${agentId}.waifu.texts`)
-    if (saved) cur = JSON.parse(saved)
-  } catch {
-    /* ignore */
-  }
-
-  const lines = {
-    head: [],
-    chest: [],
-    body: []
-  }
-
-  // 提取部位台词 (click_head_01, click_head_02...)
-  for (let i = 1; i <= 20; i++) {
-    const slot = String(i).padStart(2, '0')
-    if (cur[`click_head_${slot}`]) lines.head.push(cur[`click_head_${slot}`])
-    if (cur[`click_chest_${slot}`]) lines.chest.push(cur[`click_chest_${slot}`])
-    if (cur[`click_body_${slot}`]) lines.body.push(cur[`click_body_${slot}`])
-  }
-
-  // 如果没有台词，返回空
-  if (lines.head.length === 0 && lines.chest.length === 0 && lines.body.length === 0) {
-    return null
-  }
-
-  return `[当前交互台词设定]
-头部: ${lines.head.join(' / ') || '无'}
-胸部: ${lines.chest.join(' / ') || '无'}
-身体: ${lines.body.join(' / ') || '无'}`
-}
-
-async function onSend(systemMsg = null) {
-  const t = typeof systemMsg === 'string' ? systemMsg : String(text.value || '').trim()
-  const img = pendingImage.value
-  if (!t && !img && !systemMsg) return
-  if (isLoading.value) return
-
-  // 只有非系统消息才清空输入框和图片
-  if (!systemMsg) {
-    text.value = ''
-    pendingImage.value = null
-  }
-  isLoading.value = true
-
-  const now = Date.now()
-  const user = {
-    role: 'user',
-    content: img
-      ? [
-          { type: 'text', text: t || '这张图片里有什么？' },
-          { type: 'image_url', image_url: { url: img } }
-        ]
-      : t,
-    timestamp: now
-  }
-  messages.value = [
-    ...messages.value,
-    user,
-    { role: 'assistant', content: '__loading__', timestamp: now + 1 }
-  ]
-
-  // 发送消息后折叠
-  isExpanded.value = false
-
-  // 发送“正在思考”状态到 Live2D 气泡
-  const agentName = AGENTS[getActiveAgentId()]?.name || 'Pero'
-  window.dispatchEvent(new CustomEvent('ppc:chat', { detail: `${agentName}正在思考中...` }))
-
-  const idx = messages.value.length - 1
-  persistMessages()
-  scrollToBottom() // 新消息添加后滚动到底部
-  try {
-    // 获取默认提示词并设置回退逻辑
-    const defaults = await getDefaultPrompts()
-    // 注意：getDefaultPrompts() 返回字段为 systemPrompt / personaPrompt / postSystemPrompt
-    const systemPrompt =
-      String((await getConfig('ppc.systemPrompt')) || '').trim() || defaults.systemPrompt
-    const personaText =
-      String((await getConfig('ppc.personaText')) || '').trim() || defaults.personaPrompt
-    const postSystemPrompt =
-      String((await getConfig('ppc.postSystemPrompt')) || '').trim() || defaults.postSystemPrompt
-    const userName = String((await getConfig('ppc.userName')) || '').trim()
-    const userPersona = String((await getConfig('ppc.userPersonaText')) || '').trim()
-
-    // 构建请求消息，添加提示词
-    // 根据设置的记忆轮次截断历史记录（1轮 = 1对消息）
-    const limitCount = memoryRounds.value * 2
-    let reqForApi = messages.value
-      .slice(0, idx)
-      .slice(-limitCount)
-      .map((m) => ({
-        role: m.role,
-        content: m.role === 'assistant' ? cleanHistoryForApi(m.content) : m.content
-      }))
-
-    // 注入当前环境信息
-    reqForApi = [{ role: 'system', content: await getEnvPrompt() }, ...reqForApi]
-
-    // 注入当前部位台词
-    const bodyLines = await getCurrentBodyLines()
-    if (bodyLines) {
-      reqForApi = [{ role: 'system', content: bodyLines }, ...reqForApi]
-    }
-
-    // 检索并注入长期记忆
-    const lastUserText =
-      typeof user.content === 'string'
-        ? user.content
-        : user.content.find((c) => c.type === 'text')?.text || ''
-    const relevantMemories = await getRelevantMemories(lastUserText)
-    if (relevantMemories.length > 0) {
-      const memoryPrompt = `<LONG_TERM_MEMORY>\n${relevantMemories.map((m) => `[${m.realTime || '未知时间'}] ${m.content}`).join('\n')}\n</LONG_TERM_MEMORY>`
-      reqForApi = [{ role: 'system', content: memoryPrompt }, ...reqForApi]
-    }
-
-    // 如果有人设提示词，添加到系统提示词之后或消息开头
-    if (
-      personaText &&
-      !reqForApi.some((m) => typeof m.content === 'string' && m.content.includes(personaText))
-    ) {
-      const systemIndex = reqForApi.findIndex((m) => m.role === 'system')
-      if (systemIndex >= 0) {
-        reqForApi.splice(systemIndex + 1, 0, { role: 'system', content: personaText })
-      } else {
-        reqForApi = [{ role: 'system', content: personaText }, ...reqForApi]
-      }
-    }
-
-    // 如果有系统提示词，添加到消息开头
-    if (
-      systemPrompt &&
-      !reqForApi.some(
-        (m) =>
-          m.role === 'system' && typeof m.content === 'string' && m.content.includes(systemPrompt)
-      )
-    ) {
-      reqForApi = [{ role: 'system', content: systemPrompt }, ...reqForApi]
-    }
-
-    // 如果有用户设定，添加到系统/人设提示词之后
-    if (userName || userPersona) {
-      const userSettingPrompt = `[用户信息]\n姓名: ${userName || '主人'}\n描述: ${userPersona || '暂无描述'}`
-      if (
-        !reqForApi.some(
-          (m) => typeof m.content === 'string' && m.content.includes(userSettingPrompt)
-        )
-      ) {
-        let lastSystemIndex = -1
-        for (let i = 0; i < reqForApi.length; i++) {
-          if (reqForApi[i].role === 'system') lastSystemIndex = i
-          else break // 只在开头的系统消息序列中寻找
-        }
-        reqForApi.splice(lastSystemIndex + 1, 0, { role: 'system', content: userSettingPrompt })
-      }
-    }
-
-    // 如果有后置提示词，添加到用户消息之后
-    if (postSystemPrompt && reqForApi.length > 0) {
-      const lastUserIndex = reqForApi.map((m) => m.role).lastIndexOf('user')
-      if (lastUserIndex >= 0) {
-        const lastUserMsg = reqForApi[lastUserIndex]
-        if (typeof lastUserMsg.content === 'string') {
-          if (!lastUserMsg.content.includes(postSystemPrompt)) {
-            lastUserMsg.content = `${lastUserMsg.content}\n\n${postSystemPrompt}`
-          }
-        } else if (Array.isArray(lastUserMsg.content)) {
-          const textPart = lastUserMsg.content.find((c) => c.type === 'text')
-          if (textPart && !textPart.text.includes(postSystemPrompt)) {
-            textPart.text = `${textPart.text}\n\n${postSystemPrompt}`
-          } else if (!textPart) {
-            lastUserMsg.content.push({ type: 'text', text: postSystemPrompt })
-          }
-        }
-      }
-    }
-
-    const baseReq = reqForApi
-    const chatOpts = {
-      topP: topP.value,
-      frequencyPenalty: frequencyPenalty.value,
-      presencePenalty: presencePenalty.value,
-      source: 'mobile',
-      session_id: sessionId.value
-    }
-
-    if (stream.value) {
-      // chatStream 返回取消函数而非 Promise，需要通过回调获取完整内容
-      const final = await new Promise((resolve, reject) => {
-        chatStream(
-          baseReq,
-          modelName.value,
-          temperature.value,
-          apiBase.value,
-          chatOpts,
-          (_, full) => {
-            messages.value.splice(idx, 1, { role: 'assistant', content: String(full || '') })
-            scrollToBottom() // 流式更新时持续滚动到底部
-
-            // 实时解析状态标签
-            parsePeroStatus(String(full || ''))
-          },
-          (fullContent) => resolve(fullContent), // onDone：返回完整内容
-          (err) => reject(err)                   // onError：抛出错误
-        )
-      })
-      messages.value.splice(idx, 1, {
-        role: 'assistant',
-        content: String(final || '') || '（暂无内容）',
-        timestamp: messages.value[idx].timestamp
-      })
-      await parsePeroStatus(String(final || ''))
-      await parseAndSaveMemory(String(final || ''), messages.value[idx].timestamp)
-
-      // 发送聊天事件到 Live2D 气泡
-      const cleanContent = cleanMessageContent(String(final || ''))
-      window.dispatchEvent(new CustomEvent('ppc:chat', { detail: cleanContent }))
-
-      persistMessages()
-      scrollToBottom() // 最终消息更新后滚动到底部
-    } else {
-      const r = await chatApi(baseReq, modelName.value, temperature.value, apiBase.value, chatOpts)
-      messages.value.splice(idx, 1, {
-        role: 'assistant',
-        content: String(r?.content || '') || '（暂无内容）',
-        timestamp: messages.value[idx].timestamp
-      })
-      await parsePeroStatus(String(r?.content || ''))
-      await parseAndSaveMemory(String(r?.content || ''), messages.value[idx].timestamp)
-
-      // 发送聊天事件到 Live2D 气泡
-      const cleanContent = cleanMessageContent(String(r?.content || ''))
-      window.dispatchEvent(new CustomEvent('ppc:chat', { detail: cleanContent }))
-
-      persistMessages()
-      scrollToBottom() // 消息更新后滚动到底部
-    }
-  } catch (e) {
-    const m = e?.response?.data?.detail || e?.message || '请求失败'
-    messages.value.splice(idx, 1, { role: 'assistant', content: `错误：${m}` })
-    persistMessages()
-  } finally {
-    text.value = ''
-    isLoading.value = false
-  }
-}
-
-// 删除消息函数（按需删除：仅删除选中的消息及其关联的 AI 回复轮次，不再强制级联删除后续内容）
-async function deleteMessageAt(idx) {
-  try {
-    if (idx < 0 || idx >= messages.value.length) return
-
-    // 确定要删除的索引范围
-    let indicesToDelete = [idx]
-
-    // 如果点击的是用户消息，且下一条是 AI 回复，则成对删除
-    if (
-      messages.value[idx].role === 'user' &&
-      idx + 1 < messages.value.length &&
-      messages.value[idx + 1].role === 'assistant'
-    ) {
-      indicesToDelete.push(idx + 1)
-    }
-    // 如果点击的是 AI 回复，且前一条是用户消息，则成对删除
-    else if (
-      messages.value[idx].role === 'assistant' &&
-      idx > 0 &&
-      messages.value[idx - 1].role === 'user'
-    ) {
-      indicesToDelete.unshift(idx - 1)
-    }
-
-    // 收集要删除的时间戳，用于同步删除记忆
-    const toDeleteTimestamps = indicesToDelete
-      .map((i) => messages.value[i].timestamp)
-      .filter(Boolean)
-
-    // 修复 Bug：同步清理已触发但尚未手动删除的提醒和话题
-    indicesToDelete.forEach((i) => {
-      const msg = messages.value[i]
-      if (msg.role === 'assistant') {
-        // 检查并清理 Reminder
-        const reminderRegex = /<REMINDER>([\s\S]*?)<\/REMINDER>/g
-        let rMatch
-        while ((rMatch = reminderRegex.exec(msg.content)) !== null) {
-          try {
-            const data = JSON.parse(rMatch[1].trim())
-            const rIdx = reminders.value.findIndex(
-              (r) => r.time === data.time && r.task === data.task
-            )
-            if (rIdx !== -1) {
-              deleteReminder(reminders.value[rIdx].id) // 传入记录 ID 而非数组索引
-            }
-          } catch {
-            /* ignore */
-          }
-        }
-
-        // 检查并清理 Topic
-        const topicRegex = /<TOPIC>([\s\S]*?)<\/TOPIC>/g
-        let tMatch
-        while ((tMatch = topicRegex.exec(msg.content)) !== null) {
-          try {
-            const data = JSON.parse(tMatch[1].trim())
-            const tIdx = topics.value.findIndex(
-              (t) => t.time === data.time && t.topic === data.topic
-            )
-            if (tIdx !== -1) {
-              deleteTopic(topics.value[tIdx].id) // 传入记录 ID 而非数组索引
-            }
-          } catch {
-            /* ignore */
-          }
-        }
-      }
-    })
-
-    // 执行删除：由于是按需删除，我们使用 filter 重新构建数组，而不是 splice 级联
-    messages.value = messages.value.filter((m, i) => !indicesToDelete.includes(i))
-
-    // 同步删除数据库中的消息记录和关联记忆
-    for (const ts of toDeleteTimestamps) {
-      await deleteMessagesByTimestamp(ts)       // 删除数据库中的消息
-      await deleteMemoriesByMsgTimestamp(ts)    // 删除关联的记忆条目
-    }
-
-    // 状态恢复：如果删除了最后的消息，需要根据剩余的最后一条 AI 消息恢复 Pero 的状态
-    const lastAssistantMsg = [...messages.value].reverse().find((m) => m.role === 'assistant')
-    if (lastAssistantMsg) {
-      parsePeroStatus(lastAssistantMsg.content)
-    } else if (messages.value.length === 0) {
-      // 如果消息全删了，重置状态
-      resetPeroState()
-    }
-    // 只有在历史记录面板没打开时才滚动（虽然删除通常在历史面板触发）
-    if (!showHistory.value) scrollToBottom()
-  } catch {
-    // 忽略错误
-  }
-}
-
-// 重置 Pero 状态
-async function resetPeroState() {
-  const agentId = getActiveAgentId()
-  await saveConfig(`ppc.${agentId}.waifu.texts`, '')
-  await saveConfig(`ppc.${agentId}.mood`, '')
-  await saveConfig(`ppc.${agentId}.energy`, '')
-  await saveConfig(`ppc.${agentId}.vibe`, '')
-  await saveConfig(`ppc.${agentId}.mind`, '')
-  window.dispatchEvent(new CustomEvent('ppc:waifu-texts-updated', { detail: {} }))
-  window.dispatchEvent(new CustomEvent('ppc:mood', { detail: '' }))
-  window.dispatchEvent(new CustomEvent('ppc:vibe', { detail: '' }))
-  window.dispatchEvent(new CustomEvent('ppc:mind', { detail: '' }))
-}
-
-// 复制消息函数
-async function copyMessage(m) {
-  const t = cleanMessageContent(String(m?.content || ''))
-  try {
-    await navigator.clipboard.writeText(t)
-    // 可以添加一个提示，告诉用户复制成功
-    console.log('消息已复制到剪贴板')
-  } catch {
-    try {
-      const ta = document.createElement('textarea')
-      ta.value = t
-      ta.style.position = 'fixed'
-      ta.style.opacity = '0'
-      document.body.appendChild(ta)
-      ta.select()
-      document.execCommand('copy')
-      document.body.removeChild(ta)
-      console.log('消息已复制到剪贴板（备用方法）')
-    } catch {
-      console.error('复制失败')
-    }
-  }
-}
-
-// 重新生成消息函数
-async function regenerateAt(idx) {
-  try {
-    const msg = messages.value[idx]
-    if (!msg || msg.role !== 'assistant' || isLoading.value) return
-
-    isLoading.value = true
-    // 确保索引有效
-    if (idx < 0 || idx >= messages.value.length) return
-
-    // 设置加载状态
-    const originalTimestamp = msg.timestamp || Date.now()
-    messages.value.splice(idx, 1, {
-      role: 'assistant',
-      content: '__loading__',
-      timestamp: originalTimestamp
-    })
-
-    // 发送“正在思考”状态到 Live2D 气泡
-    const agentNameRegen = AGENTS[getActiveAgentId()]?.name || 'Pero'
-    window.dispatchEvent(new CustomEvent('ppc:chat', { detail: `${agentNameRegen}正在思考中...` }))
-
-    scrollToBottom() // 滚动到底部显示加载状态
-
-    // 获取提示词并设置回退逻辑
-    const defaults = await getDefaultPrompts()
-    const systemPrompt =
-      String((await getConfig('ppc.systemPrompt')) || '').trim() || defaults.systemPrompt
-    const personaText =
-      String((await getConfig('ppc.personaText')) || '').trim() || defaults.personaPrompt
-    const postSystemPrompt =
-      String((await getConfig('ppc.postSystemPrompt')) || '').trim() || defaults.postSystemPrompt
-    const userName = String((await getConfig('ppc.userName')) || '').trim()
-    const userPersona = String((await getConfig('ppc.userPersonaText')) || '').trim()
-
-    // 构建请求消息，添加提示词
-    // 根据设置的记忆轮次截断历史记录（1轮 = 1对消息）
-    const limitCount = memoryRounds.value * 2
-    let baseReq = messages.value.slice(0, idx).slice(-limitCount)
-
-    // 注入当前时间
-    baseReq = [{ role: 'system', content: await getEnvPrompt() }, ...baseReq]
-
-    // 注入当前部位台词
-    const bodyLines = await getCurrentBodyLines()
-    if (bodyLines) {
-      baseReq = [{ role: 'system', content: bodyLines }, ...baseReq]
-    }
-
-    // 检索并注入长期记忆（获取上一条用户消息作为检索词）
-    const lastUserMsgText =
-      typeof baseReq
-        .slice()
-        .reverse()
-        .find((m) => m.role === 'user')?.content === 'string'
-        ? baseReq
-            .slice()
-            .reverse()
-            .find((m) => m.role === 'user')?.content
-        : baseReq
-            .slice()
-            .reverse()
-            .find((m) => m.role === 'user')
-            ?.content?.find((c) => c.type === 'text')?.text || ''
-    const relevantMemories = await getRelevantMemories(lastUserMsgText || '')
-    if (relevantMemories.length > 0) {
-      const memoryPrompt = `<LONG_TERM_MEMORY>\n${relevantMemories.map((m) => `[${m.realTime || '未知时间'}] ${m.content}`).join('\n')}\n</LONG_TERM_MEMORY>`
-      baseReq = [{ role: 'system', content: memoryPrompt }, ...baseReq]
-    }
-
-    // 如果有人设提示词，添加到系统提示词之后或消息开头
-    if (
-      personaText &&
-      !baseReq.some((m) => typeof m.content === 'string' && m.content.includes(personaText))
-    ) {
-      const systemIndex = baseReq.findIndex((m) => m.role === 'system')
-      if (systemIndex >= 0) {
-        baseReq.splice(systemIndex + 1, 0, { role: 'system', content: personaText })
-      } else {
-        baseReq = [{ role: 'system', content: personaText }, ...baseReq]
-      }
-    }
-
-    // 如果有系统提示词，添加到消息开头
-    if (
-      systemPrompt &&
-      !baseReq.some(
-        (m) =>
-          m.role === 'system' && typeof m.content === 'string' && m.content.includes(systemPrompt)
-      )
-    ) {
-      baseReq = [{ role: 'system', content: systemPrompt }, ...baseReq]
-    }
-
-    // 如果有用户设定，添加到系统/人设提示词之后
-    if (userName || userPersona) {
-      const userSettingPrompt = `[用户信息]\n姓名: ${userName || '主人'}\n描述: ${userPersona || '暂无描述'}`
-      if (
-        !baseReq.some((m) => typeof m.content === 'string' && m.content.includes(userSettingPrompt))
-      ) {
-        let lastSystemIndex = -1
-        for (let i = 0; i < baseReq.length; i++) {
-          if (baseReq[i].role === 'system') lastSystemIndex = i
-          else break
-        }
-        baseReq.splice(lastSystemIndex + 1, 0, { role: 'system', content: userSettingPrompt })
-      }
-    }
-
-    // 如果有后置提示词，添加到用户消息之后
-    if (postSystemPrompt && baseReq.length > 0) {
-      const lastUserIndex = baseReq.map((m) => m.role).lastIndexOf('user')
-      if (lastUserIndex >= 0) {
-        const lastUserMsg = baseReq[lastUserIndex]
-        if (typeof lastUserMsg.content === 'string') {
-          if (!lastUserMsg.content.includes(postSystemPrompt)) {
-            lastUserMsg.content = `${lastUserMsg.content}\n\n${postSystemPrompt}`
-          }
-        } else if (Array.isArray(lastUserMsg.content)) {
-          const textPart = lastUserMsg.content.find((c) => c.type === 'text')
-          if (textPart && !textPart.text.includes(postSystemPrompt)) {
-            textPart.text = `${textPart.text}\n\n${postSystemPrompt}`
-          } else if (!textPart) {
-            lastUserMsg.content.push({ type: 'text', text: postSystemPrompt })
-          }
-        }
-      }
-    }
-
-    const chatOpts = {
-      topP: topP.value,
-      frequencyPenalty: frequencyPenalty.value,
-      presencePenalty: presencePenalty.value,
-      source: 'mobile',
-      session_id: sessionId.value
-    }
-
-    try {
-      if (stream.value) {
-        // chatStream 返回取消函数而非 Promise，需要通过回调获取完整内容
-        const final = await new Promise((resolve, reject) => {
-          chatStream(
-            baseReq,
-            modelName.value,
-            temperature.value,
-            apiBase.value,
-            chatOpts,
-            (_, full) => {
-              messages.value.splice(idx, 1, {
-                role: 'assistant',
-                content: String(full || ''),
-                timestamp: originalTimestamp
-              })
-              scrollToBottom() // 流式更新时持续滚动到底部
-
-              // 实时解析状态标签
-              parsePeroStatus(String(full || ''))
-            },
-            (fullContent) => resolve(fullContent), // onDone：返回完整内容
-            (err) => reject(err)                   // onError：抛出错误
-          )
-        })
-        messages.value.splice(idx, 1, {
-          role: 'assistant',
-          content: String(final || '') || '（暂无内容）',
-          timestamp: originalTimestamp
-        })
-        await parsePeroStatus(String(final || ''))
-        await parseAndSaveMemory(String(final || ''), originalTimestamp)
-
-        // 发送聊天事件到 Live2D 气泡
-        window.dispatchEvent(
-          new CustomEvent('ppc:chat', { detail: cleanMessageContent(String(final || '')) })
-        )
-
-        persistMessages()
-        scrollToBottom() // 最终消息更新后滚动到底部
-      } else {
-        const r = await chatApi(
-          baseReq,
-          modelName.value,
-          temperature.value,
-          apiBase.value,
-          chatOpts
-        )
-        messages.value.splice(idx, 1, {
-          role: 'assistant',
-          content: String(r?.content || '') || '（暂无内容）',
-          timestamp: originalTimestamp
-        })
-        await parsePeroStatus(String(r?.content || ''))
-        await parseAndSaveMemory(String(r?.content || ''), originalTimestamp)
-
-        // 发送聊天事件到 Live2D 气泡
-        window.dispatchEvent(
-          new CustomEvent('ppc:chat', { detail: cleanMessageContent(String(r?.content || '')) })
-        )
-
-        persistMessages()
-        scrollToBottom() // 消息更新后滚动到底部
-      }
-    } catch (error) {
-      console.error('重新生成失败:', error)
-      messages.value.splice(idx, 1, { role: 'assistant', content: '重新生成失败，请重试' })
-      persistMessages()
-    } finally {
-      isLoading.value = false
-    }
-  } catch (error) {
-    console.error('重新生成出错:', error)
-    isLoading.value = false
-  }
-}
-
+watch(() => getActiveAgentId(), () => {
+  text.value = ''
+  pendingImage.value = null
+  loadAgentData()
+})
+function onAgentUpdated() { loadAgentData() }
 onMounted(async () => {
-  // Load Active Agent ID
-  await loadActiveAgentId()
-
-  // 自动迁移提示词限制
-  const savedPostPrompt = await getConfig('ppc.postSystemPrompt')
-  const oldLimit = '只说1~2句话，字数控制在15-40字左右'
-  const newLimit = '说2~5句话，字数控制在50-150字左右'
-  if (savedPostPrompt && savedPostPrompt.includes(oldLimit)) {
-    console.log('[Migration] Updating Pero response limit to 2-5 sentences...')
-    await saveConfig('ppc.postSystemPrompt', savedPostPrompt.replace(oldLimit, newLimit))
-  }
-
-  const base = (await getConfig('ppc.apiBase')) || apiBase.value
-  const model = (await getConfig('ppc.modelName')) || modelName.value
-
-  let ms = null
+  window.addEventListener('ppc:agent-switched', onAgentUpdated)
+  await loadAgentData()
   try {
-    const msStr = await getConfig('ppc.modelSettings')
-    if (msStr) ms = JSON.parse(msStr)
-  } catch {
-    // 解析失败，使用默认值
-  }
-
-  if (base) apiBase.value = base
-  if (model) modelName.value = model
-  if (ms && typeof ms === 'object') {
-    if (ms.temperature !== undefined) temperature.value = Number(ms.temperature)
-    if (ms.topP !== undefined) topP.value = Number(ms.topP)
-    if (ms.frequencyPenalty !== undefined) frequencyPenalty.value = Number(ms.frequencyPenalty)
-    if (ms.presencePenalty !== undefined) presencePenalty.value = Number(ms.presencePenalty)
-    if (ms.stream !== undefined) stream.value = !!ms.stream
-    if (ms.memoryRounds !== undefined) memoryRounds.value = Number(ms.memoryRounds)
-  }
-  // 组件挂载后滚动到底部
-  setTimeout(scrollToBottom, 300)
-
-  // 如果启用了远程服务器，尝试同步最近的历史记录
-  const remoteEnabled = (await getConfig('ppc.remoteEnabled')) === 'true'
-  const remoteUrl = await getConfig('ppc.remoteUrl')
-
-  if (remoteEnabled && remoteUrl && sessionId.value) {
-    console.log('正在从远程服务器同步历史记录...')
-    fetch(`${remoteUrl.replace(/\/$/, '')}/api/history/mobile/${sessionId.value}`)
-      .then((res) => res.json())
-      .then((data) => {
-        if (Array.isArray(data) && data.length > 0) {
-          // 这里的策略是：如果本地没消息，或者远程消息更多，则使用远程的
-          // 或者简单的合并？这里先采用“如果本地为空则同步”的保守策略，避免覆盖用户当前的本地对话
-          if (messages.value.length === 0) {
-            messages.value = data.map((m) => ({
-              role: m.role,
-              content: m.content,
-              timestamp: m.timestamp ? new Date(m.timestamp).getTime() : Date.now()
-            }))
-            persistMessages()
-            scrollToBottom()
-          }
-        }
-      })
-      .catch((err) => console.warn('同步历史记录失败:', err))
-  }
+    const unlisten = await listen('ppc:reminder-due', () => loadAgentData())
+    if (disposed) unlisten()
+    else unlistenReminder = unlisten
+  } catch (error) { console.warn('提醒状态监听失败：', error) }
+})
+onBeforeUnmount(() => {
+  disposed = true
+  loadVersion++
+  handlePressCancel()
+  for (const timer of timers) clearTimeout(timer)
+  timers.clear()
+  unlistenReminder?.()
+  window.removeEventListener('ppc:agent-switched', onAgentUpdated)
 })
 </script>
 

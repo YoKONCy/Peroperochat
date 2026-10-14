@@ -199,10 +199,11 @@
 </template>
 
 <script setup>
-import { ref, reactive, onMounted, watch } from 'vue'
+import { ref, reactive, computed, onMounted, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 
 const props = defineProps({
+  saving: { type: Boolean, default: false },
   role: {
     type: Object,
     default: null
@@ -220,7 +221,7 @@ const props = defineProps({
 const emit = defineEmits(['close', 'save'])
 
 const activeTab = ref('basic')
-const isSaving = ref(false)
+const isSaving = computed(() => props.saving)
 const avatarInput = ref(null)
 const newTag = ref('')
 
@@ -279,12 +280,10 @@ function resetForm() {
 }
 
 onMounted(() => {
-  console.log('RoleEditor mounted')
   resetForm()
 })
 
 watch(() => [props.role, props.isNew], () => {
-  console.log('props changed, resetting form')
   resetForm()
 }, { deep: true })
 
@@ -342,7 +341,8 @@ function applyTemplate(template) {
   ElMessage.success(`已应用「${template.name}」模板`)
 }
 
-async function handleSave() {
+function handleSave() {
+  if (isSaving.value) return
   if (!formData.id.trim()) {
     ElMessage.error('请输入角色 ID')
     activeTab.value = 'basic'
@@ -354,15 +354,8 @@ async function handleSave() {
     return
   }
   
-  isSaving.value = true
-  try {
-    emit('save', { ...formData })
-    ElMessage.success('角色保存成功')
-  } catch (err) {
-    ElMessage.error(`保存失败: ${err.message}`)
-  } finally {
-    isSaving.value = false
-  }
+  // 保存结果由父页面等待后端事务后展示，事件发出不等于保存成功。
+  emit('save', { ...formData })
 }
 </script>
 

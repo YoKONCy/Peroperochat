@@ -1,220 +1,34 @@
 use tauri::{AppHandle, Emitter, Manager};
 use rusqlite::params;
 use chrono::Local;
-use crate::db::DbState;
-use crate::db::Reminder;
-use tauri_plugin_store::StoreExt;
-use serde::{Deserialize, Serialize};
-use reqwest::Client;
-use futures::StreamExt;
+use crate::db::{DbState, Reminder};
 
 mod db;
+mod local;
 
-
-// 定义消息结构 - 支持多模态内容（文本 + 图片）
-// content 可以是字符串，也可以是数组格式（OpenAI 多模态格式）
-#[derive(Debug, Serialize, Deserialize)]
-pub struct ChatMessage {
-    role: String,
-    #[serde(deserialize_with = "deserialize_content")]
-    content: serde_json::Value,
-}
-
-// 自定义反序列化函数：将字符串转换为 JSON Value，同时支持数组格式
-fn deserialize_content<'de, D>(deserializer: D) -> Result<serde_json::Value, D::Error>
-where
-    D: serde::Deserializer<'de>,
-{
-    let value = serde_json::Value::deserialize(deserializer)?;
-    Ok(value)
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-pub struct ChatRequest {
-    model: String,
-    messages: Vec<ChatMessage>,
-    temperature: f32,
-    api_base: String,
-    api_key: String,
-}
-
-// 定义流式响应的数据结构
-#[derive(Clone, Serialize)]
-struct StreamPayload {
-    content: String,
-    is_done: bool,
-    error: Option<String>,
+#[tauri::command]
+async fn save_api_key(app: AppHandle, key: String) -> Result<(), local::types::ChatError> {
+    local::identity::set_config(&app, "api_key", key.trim())
 }
 
 #[tauri::command]
-async fn save_api_key(app: AppHandle, key: String) -> Result<(), String> {
-    let store = app.store("data/settings.json").map_err(|e| e.to_string())?;
-    store.set("api_key", serde_json::json!(key));
-    store.save().map_err(|e| e.to_string())?;
-    Ok(())
+async fn get_api_key(app: AppHandle) -> Result<String, local::types::ChatError> {
+    local::identity::config(&app, "api_key")
 }
 
 #[tauri::command]
-async fn get_api_key(app: AppHandle) -> Result<String, String> {
-    let store = app.store("data/settings.json").map_err(|e| e.to_string())?;
-    if let Some(val) = store.get("api_key") {
-        if let Some(k) = val.as_str() {
-            return Ok(k.to_string());
-        }
-    }
-    Ok("".to_string())
-}
-
-
-#[tauri::command]
-async fn save_config(app: AppHandle, key: String, value: String) -> Result<(), String> {
-    let store = app.store("data/settings.json").map_err(|e| e.to_string())?;
-    store.set(key, serde_json::json!(value));
-    store.save().map_err(|e| e.to_string())?;
-    Ok(())
+async fn save_config(app: AppHandle, key: String, value: String) -> Result<(), local::types::ChatError> {
+    local::identity::set_config(&app, &key, &value)
 }
 
 #[tauri::command]
-async fn get_config(app: AppHandle, key: String) -> Result<String, String> {
-    let store = app.store("data/settings.json").map_err(|e| e.to_string())?;
-    if let Some(val) = store.get(key) {
-        if let Some(v) = val.as_str() {
-            return Ok(v.to_string());
-        }
-    }
-    Ok("".to_string())
+async fn get_config(app: AppHandle, key: String) -> Result<String, local::types::ChatError> {
+    local::identity::config(&app, &key)
 }
 
 #[tauri::command]
-async fn clear_config(app: AppHandle) -> Result<(), String> {
-    let store = app.store("data/settings.json").map_err(|e| e.to_string())?;
-    store.clear();
-    store.save().map_err(|e| e.to_string())?;
-    Ok(())
-}
-
-#[tauri::command]
-async fn fetch_models(api_base: String, api_key: String) -> Result<serde_json::Value, String> {
-    let client = Client::new();
-    let mut url = api_base.trim_end_matches('/').to_string();
-    if !url.ends_with("/v1") {
-        url.push_str("/v1");
-    }
-    url.push_str("/models");
-
-    let res = client.get(&url)
-        .header("Authorization", format!("Bearer {}", api_key))
-        .send()
-        .await
-        .map_err(|e| e.to_string())?;
-
-    if !res.status().is_success() {
-        return Err(format!("Request failed with status: {}", res.status()));
-    }
-
-    let json: serde_json::Value = res.json().await.map_err(|e| e.to_string())?;
-    Ok(json)
-}
-
-#[tauri::command]
-async fn chat_stream(
-    app: AppHandle,
-    request: ChatRequest,
-) -> Result<(), String> {
-    let client = Client::new();
-    
-    // 获取 API Key (优先使用请求中的，如果没有则从 Store 读取)
-    let mut api_key = request.api_key.clone();
-    if api_key.is_empty() {
-         if let Ok(store) = app.store("data/settings.json") {
-             if let Some(val) = store.get("api_key") {
-                 if let Some(k) = val.as_str() {
-                     api_key = k.to_string();
-                 }
-             }
-         }
-    }
-
-    if api_key.is_empty() {
-        return Err("API Key is missing (please set it in settings)".to_string());
-    }
-
-    // 处理 API Base URL，确保格式正确
-    let mut url = request.api_base.trim_end_matches('/').to_string();
-    if !url.ends_with("/v1") {
-        url.push_str("/v1");
-    }
-    url.push_str("/chat/completions");
-
-    // 构造请求体
-    let body = serde_json::json!({
-        "model": request.model,
-        "messages": request.messages,
-        "temperature": request.temperature,
-        "stream": true, // 强制开启流式
-    });
-
-    println!("Sending request to: {}", url);
-
-    // 发起请求
-    let res = client.post(&url)
-        .header("Authorization", format!("Bearer {}", api_key))
-        .header("Content-Type", "application/json")
-        .json(&body)
-        .send()
-        .await
-        .map_err(|e| e.to_string())?;
-
-    if !res.status().is_success() {
-        return Err(format!("API Request failed with status: {}", res.status()));
-    }
-
-    // 处理流式响应
-    let mut stream = res.bytes_stream();
-    
-    // 在异步任务中处理流，避免阻塞主线程
-    tauri::async_runtime::spawn(async move {
-        while let Some(item) = stream.next().await {
-            match item {
-                Ok(bytes) => {
-                    let chunk = String::from_utf8_lossy(&bytes);
-                    // 解析 SSE 格式 (data: {...})
-                    for line in chunk.lines() {
-                        if line.starts_with("data: ") {
-                            let data = &line[6..];
-                            if data == "[DONE]" {
-                                let _ = app.emit("chat-stream-event", StreamPayload {
-                                    content: "".into(),
-                                    is_done: true,
-                                    error: None,
-                                });
-                                break;
-                            }
-                            
-                            if let Ok(json) = serde_json::from_str::<serde_json::Value>(data) {
-                                if let Some(content) = json["choices"][0]["delta"]["content"].as_str() {
-                                    let _ = app.emit("chat-stream-event", StreamPayload {
-                                        content: content.to_string(),
-                                        is_done: false,
-                                        error: None,
-                                    });
-                                }
-                            }
-                        }
-                    }
-                }
-                Err(e) => {
-                    let _ = app.emit("chat-stream-event", StreamPayload {
-                        content: "".into(),
-                        is_done: true,
-                        error: Some(e.to_string()),
-                    });
-                }
-            }
-        }
-    });
-
-    Ok(())
+async fn fetch_models(api_base: String, api_key: String) -> Result<serde_json::Value, local::types::ChatError> {
+    local::provider::list_models(&api_base, &api_key).await
 }
 
 // -----------------------------------------------------------------------
@@ -293,32 +107,24 @@ pub fn run() {
   tauri::Builder::default()
     .setup(|app| {
         // 初始化数据库
-        let db_state = db::init_db(app.handle()).expect("failed to init db");
+        let db_state = db::init_db(app.handle())?;
         app.manage(db_state);
 
+        local::initialize(app.handle()).map_err(|error| error.message)?;
         // 启动后台提醒轮询器
         start_background_reminder_poller(app.handle().clone());
+        local::environment::start(app.handle().clone());
         Ok(())
     })
+    .manage(local::runtime::ChatRuntime::default())
     .plugin(tauri_plugin_shell::init())
     .plugin(tauri_plugin_notification::init())
     .plugin(tauri_plugin_haptics::init())
-    .plugin(tauri_plugin_store::Builder::default().build())
     .invoke_handler(tauri::generate_handler![
-        db::add_memory,
         db::get_memories,
         db::delete_memory,
-        db::delete_memories_by_msg_timestamp,
-        db::clear_memories,
-        db::get_relevant_memories,
-        db::save_message,
-        db::get_messages,
-        db::clear_messages,
-        db::delete_message_by_timestamp,
-        db::add_reminder,
         db::get_reminders,
         db::delete_reminder,
-        db::add_topic,
         db::get_topics,
         db::update_topic_status,
         db::delete_topic,
@@ -326,9 +132,24 @@ pub fn run() {
         get_api_key, 
         save_config,
         get_config,
-        clear_config,
         fetch_models,
-        chat_stream,
+        local::local_agents,
+        local::local_delete_agent,
+        local::local_snapshot,
+        local::local_delete_message,
+        local::local_cancel_chat,
+        local::local_chat,
+        local::group::local_group_chat,
+        local::group::local_group_settings,
+        local::identity::local_role_action,
+        local::settings::local_save_settings,
+        local::identity::local_character_projection,
+        local::blackjack::local_blackjack_snapshot,
+        local::blackjack::local_blackjack_play,
+        local::identity::local_save_model_preferences,
+        local::backup::local_export_data,
+        local::backup::local_import_data,
+        local::backup::local_reset_data,
         schedule_alarm,
         cancel_alarm
     ])

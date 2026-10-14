@@ -136,55 +136,21 @@ function loadWidget(config) {
     sessionStorage.setItem("waifu-text", priority)
     const tips = document.getElementById("waifu-tips")
     if (!tips) return
-    tips.innerHTML = text
+    tips.textContent = text
     tips.classList.remove("waifu-tips-active")
     void tips.offsetWidth // trigger reflow
     tips.classList.add("waifu-tips-active")
     messageTimer = setTimeout(() => { sessionStorage.removeItem("waifu-text"); tips.classList.remove("waifu-tips-active") }, timeout)
   }
 
-  // 监听角色切换事件并同步台词
-  window.addEventListener("ppc:agent-switched", (e) => {
-    const agentId = e.detail && e.detail.agentId
-    if (agentId) {
-        console.log(`[WaifuTips] Agent switched to: ${agentId}, reloading custom texts.`)
-        
-        // 1. 从本地存储重新加载该角色的自定义台词，实现真正的动态切换
-        try {
-          let saved = localStorage.getItem(`ppc.${agentId}.waifu.texts`)
-          // 兼容性回退：如果是 pero 且没有新版数据，尝试读取旧版全局数据
-          if (!saved && agentId === 'pero') {
-              saved = localStorage.getItem('ppc.waifu.texts')
-          }
-
-          if (saved) {
-            window.WAIFU_TEXTS = JSON.parse(saved)
-          } else {
-            window.WAIFU_TEXTS = {} // 如果没有自定义，重置为空，触发回退机制
-          }
-        } catch (err) {
-          window.WAIFU_TEXTS = {}
-        }
-
-        // 2. 显示欢迎语
-        const T = window.WAIFU_TEXTS || {}
-        let welcome = T.welcome || T.welcome_message
-        
-        if (!welcome) {
-             // Fallback to hardcoded defaults if no custom text found
-             welcome = (agentId === 'nana') ? "哈？杂鱼主人，你怎么又把我换回来了？" : "锵锵！Pero 酱回来啦！"
-        }
-        
-        // 如果是数组，随机取一条
-        if (Array.isArray(welcome)) {
-            welcome = welcome[Math.floor(Math.random() * welcome.length)]
-        } else if (typeof welcome === 'object' && welcome.message) {
-             // Handle structured welcome object if needed
-             welcome = welcome.message
-        }
-        
-        showMessage(welcome, 4000, 10)
-    }
+  // 只消费 Rust 已投影的角色数据，角色切换不再回读浏览器存储。
+  window.addEventListener("ppc:character-projected", ({ detail }) => {
+    if (!detail || detail.agentId !== window.WAIFU_GET_AGENT_ID?.()) return
+    window.WAIFU_TEXTS = detail.texts
+    window.PPC_LIVE2D_CONFIG = { modelId: detail.modelId, modelTexturesId: detail.modelTexturesId, activeAgent: detail.agentId }
+    const welcome = detail.texts.welcome
+    showMessage(typeof welcome === 'object' && !Array.isArray(welcome) ? welcome?.message : welcome, 4000, 10)
+    loadModel(Number(detail.modelId) || 0, Number(detail.modelTexturesId) || 0, undefined, false)
   })
 
   // 监听台词实时更新事件
@@ -197,12 +163,8 @@ function loadWidget(config) {
   })
 
   ;(function initModel() {
-    let modelId = localStorage.getItem("modelId"), modelTexturesId = localStorage.getItem("modelTexturesId")
-    if (modelId === null) {
-      modelId = 0; modelTexturesId = 0
-    } else {
-      modelId = parseInt(modelId); modelTexturesId = parseInt(modelTexturesId)
-    }
+    let modelId = Number(window.PPC_LIVE2D_CONFIG?.modelId) || 0
+    let modelTexturesId = Number(window.PPC_LIVE2D_CONFIG?.modelTexturesId) || 0
     if (useCDN) {
       if (!modelList) {
         loadModelList().then(() => {
@@ -214,17 +176,17 @@ function loadWidget(config) {
               modelTexturesId = 0
             }
           }
-          loadModel(modelId, modelTexturesId)
+          loadModel(modelId, modelTexturesId, undefined, false)
         })
       } else {
         if (isNaN(modelId) || modelId >= modelList.models.length) {
           modelId = 0; modelTexturesId = 0
         }
-        loadModel(modelId, modelTexturesId)
+        loadModel(modelId, modelTexturesId, undefined, false)
       }
     } else {
       if (isNaN(modelId)) { modelId = 1; modelTexturesId = 53 }
-      loadModel(modelId, modelTexturesId)
+      loadModel(modelId, modelTexturesId, undefined, false)
     }
     window.addEventListener("click", event => {
       const C = window.WAIFU_CONFIG || { click: [] }
@@ -244,24 +206,7 @@ function loadWidget(config) {
                    
                    console.log(`[WaifuTips] Clicked area: ${area} (Y: ${relativeY.toFixed(2)})`)
 
-                 let agentId = 'pero'
-                 if (typeof window.WAIFU_GET_AGENT_ID === 'function') {
-                     agentId = window.WAIFU_GET_AGENT_ID()
-                 } else {
-                     agentId = localStorage.getItem('ppc.activeAgent') || 'pero'
-                 }
-
-                 // [Fix] 强制同步一次最新数据，防止缓存不一致
-                 try {
-                    const saved = localStorage.getItem(`ppc.${agentId}.waifu.texts`)
-                    // 兼容性回退
-                    if (!saved && agentId === 'pero') {
-                        const fallback = localStorage.getItem('ppc.waifu.texts')
-                        if (fallback) window.WAIFU_TEXTS = JSON.parse(fallback)
-                    } else if (saved) {
-                        window.WAIFU_TEXTS = JSON.parse(saved)
-                    }
-                 } catch (e) { console.warn('[WaifuTips] Sync texts failed', e) }
+                 const agentId = window.WAIFU_GET_AGENT_ID?.() || 'pero'
 
                  const allLines = window.WAIFU_INTERACTION_LINES
                  const T = window.WAIFU_TEXTS || {}
@@ -382,12 +327,11 @@ function loadWidget(config) {
     })
   }
 
-  async function loadModel(modelId, modelTexturesId, message) {
-    localStorage.setItem("modelId", modelId)
-    localStorage.setItem("modelTexturesId", modelTexturesId)
-    if (window.PPC_SAVE_MODEL_SETTINGS) {
-        window.PPC_SAVE_MODEL_SETTINGS(modelId, modelTexturesId)
-    }
+  async function loadModel(modelId, modelTexturesId, message, persist = true) {
+    const agentId = window.WAIFU_GET_AGENT_ID?.() || 'pero'
+    if (persist && window.PPC_SAVE_MODEL_SETTINGS) await window.PPC_SAVE_MODEL_SETTINGS(modelId, modelTexturesId, agentId)
+    if (agentId !== window.WAIFU_GET_AGENT_ID?.()) return
+    window.PPC_LIVE2D_CONFIG = { ...(window.PPC_LIVE2D_CONFIG || {}), modelId, modelTexturesId, activeAgent: agentId }
     showMessage(message, 4000, 10)
     const ok = await ensureLoadFn()
     if (!ok || typeof window.loadlive2d !== "function") { try { console.warn("loadlive2d unavailable") } catch (_) {}; return }
@@ -405,11 +349,11 @@ function loadWidget(config) {
     const T = window.WAIFU_TEXTS || {}
     if (useCDN && !modelList) await loadModelList();
     
-    let modelId = parseInt(localStorage.getItem("modelId") || "0")
-    let modelTexturesId = parseInt(localStorage.getItem("modelTexturesId") || "0")
+    let modelId = Number(window.PPC_LIVE2D_CONFIG?.modelId) || 0
+    let modelTexturesId = Number(window.PPC_LIVE2D_CONFIG?.modelTexturesId) || 0
     
     // 获取当前角色的 fallback 文本
-    let agentId = localStorage.getItem('ppc.activeAgent') || 'pero'
+    let agentId = window.WAIFU_GET_AGENT_ID?.() || 'pero'
     const allLines = window.WAIFU_INTERACTION_LINES
     const fallbackOther = (allLines && allLines[agentId] && allLines[agentId].other) || {}
     const successText = T.randTexturesSuccess || fallbackOther.randTexturesSuccess || "我的新衣服好看嘛？"
@@ -420,18 +364,18 @@ function loadWidget(config) {
       const maxTextures = modelList.model_textures[modelId] || 1;
       modelTexturesId++;
       if (modelTexturesId >= maxTextures) modelTexturesId = 0;
-      loadModel(modelId, modelTexturesId, successText)
+      await loadModel(modelId, modelTexturesId, successText)
     }
     else { fetch(`${apiPath}rand_textures/?id=${modelId}-${modelTexturesId}`).then(response => response.json()).then(result => { if (result.textures.id === 1 && (modelTexturesId === 1 || modelTexturesId === 0)) showMessage(failText, 4000, 10); else loadModel(modelId, result.textures.id, successText) }) }
   }
 
   async function loadOtherModel() {
-    let modelId = parseInt(localStorage.getItem("modelId") || "0")
+    let modelId = Number(window.PPC_LIVE2D_CONFIG?.modelId) || 0
     if (useCDN) { 
       if (!modelList) await loadModelList(); 
       if (isNaN(modelId) || modelId >= modelList.models.length) modelId = 0;
       const index = (++modelId >= modelList.models.length) ? 0 : modelId; 
-      loadModel(index, 0, modelList.messages[index]) 
+      await loadModel(index, 0, modelList.messages[index])
     }
     else { fetch(`${apiPath}switch/?id=${modelId}`).then(response => response.json()).then(result => { loadModel(result.model.id, 0, result.model.message) }) }
   }

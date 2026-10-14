@@ -2555,7 +2555,7 @@ checksum = "9b4f627cb1b25917193a259e49bdad08f671f8d9708acfd5fe0a8c1455d87220"
 
 [[package]]
 name = "peroperochat"
-version = "1.3.1"
+version = "1.3.3"
 dependencies = [
  "chrono",
  "futures",
@@ -2568,7 +2568,6 @@ dependencies = [
  "tauri-plugin-haptics",
  "tauri-plugin-notification",
  "tauri-plugin-shell",
- "tauri-plugin-store",
  "tokio",
  "uuid",
 ]
@@ -4095,22 +4094,6 @@ dependencies = [
  "tauri-plugin",
  "thiserror 2.0.18",
  "tokio",
-]
-
-[[package]]
-name = "tauri-plugin-store"
-version = "2.4.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5ca1a8ff83c269b115e98726ffc13f9e548a10161544a92ad121d6d0a96e16ea"
-dependencies = [
- "dunce",
- "serde",
- "serde_json",
- "tauri",
- "tauri-plugin",
- "thiserror 2.0.18",
- "tokio",
- "tracing",
 ]
 
 [[package]]

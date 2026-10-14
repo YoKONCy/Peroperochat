@@ -73,7 +73,7 @@
         </div>
       </div>
 
-      <div v-for="(msg, index) in displayedMessages" :key="index" :class="[
+      <div v-for="msg in displayedMessages" :key="msg.id" :class="[
         'message-row', 
         msg.role === 'user' ? 'user-row' : 'agent-row',
         msg.name ? msg.name.toLowerCase() + '-msg' : ''
@@ -82,9 +82,9 @@
         <div class="avatar" v-if="msg.role !== 'user'">
           <div 
             class="avatar-img" 
-            :class="[msg.name.toLowerCase(), getBubbleShapeClass(msg.name.toLowerCase())]"
+            :class="[msg.name.toLowerCase(), getBubbleShapeClass(msg.agentId)]"
           >
-            <img v-if="getAgentAvatar(msg.name)" :src="getAgentAvatar(msg.name)" class="avatar-real-img" :alt="msg.name" />
+            <img v-if="getAgentAvatar(msg.agentId)" :src="getAgentAvatar(msg.agentId)" class="avatar-real-img" :alt="msg.name" />
             <span v-else>{{ msg.name[0] }}</span>
           </div>
         </div>
@@ -96,17 +96,17 @@
             :class="[
               msg.role === 'user' ? 'user-bubble' : 'agent-bubble',
               msg.name ? msg.name.toLowerCase() + '-bubble' : '',
-              msg.name ? getBubbleShapeClass(msg.name.toLowerCase()) : ''
+              msg.name ? getBubbleShapeClass(msg.agentId) : ''
             ]"
-            :style="msg.name ? getBubbleStyle(msg.name.toLowerCase()) : {}"
+            :style="msg.name ? getBubbleStyle(msg.agentId) : {}"
           >
-            <div class="sender-name" v-if="msg.role !== 'user'" :style="getNameStyle(msg.name.toLowerCase())">
+            <div class="sender-name" v-if="msg.role !== 'user'" :style="getNameStyle(msg.agentId)">
               {{ msg.name }}
             </div>
             <div class="bubble-content markdown-body" v-html="renderMarkdown(msg.content)"></div>
           </div>
           <div class="message-actions">
-            <div class="action-btn delete" @click="deleteMessage(index)">
+            <div class="action-btn delete" @click="deleteMessage(msg.id)">
               <el-icon><Delete /></el-icon>
             </div>
           </div>
@@ -142,7 +142,7 @@
           @input="adjustTextareaHeight"
           ref="textareaRef"
         ></textarea>
-        <button class="send-btn" @click="sendMessage" :disabled="!!processingAgent || !input.trim()">
+        <button class="send-btn" @click="sendMessage" :disabled="!!processingAgent || isLoading || !input.trim()">
           <el-icon><Promotion /></el-icon>
         </button>
       </div>
@@ -151,36 +151,36 @@
 </template>
 
 <script setup>
-import { ref, onMounted, nextTick, watch, computed } from 'vue'
+import { ref, onMounted, onBeforeUnmount, nextTick, watch, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { ArrowLeft, Promotion, Delete, Operation, Menu, ArrowUp } from '@element-plus/icons-vue'
 import { marked } from 'marked'
 import DOMPurify from 'dompurify'
 import { ElMessageBox, ElMessage } from 'element-plus'
-import { getRelevantMemories, saveMemory, getConfig, saveConfig, chat } from '../api'
+import { localInvoke } from '../services/localChat'
+import { useLocalConversation } from '../stores/conversations'
+import { visibleMessage } from '../utils/messageContent'
 import { useRoleManager, getRoleTheme } from '../composables/useRoleManager'
 
 const router = useRouter()
 
 const { roles, roleList, loadRoles } = useRoleManager()
 
-const messages = ref([])
+const conversation = useLocalConversation('group')
+const { messages, isLoading, processingAgentId } = conversation
+let disposed = false
+onBeforeUnmount(() => { disposed = true })
 const displayCount = ref(30) // 初始渲染30条
 const input = ref('')
 const chatListRef = ref(null)
 const textareaRef = ref(null)
-const processingAgent = ref(null) // 当前正在回复的角色名
+const processingAgent = computed(() => roles[processingAgentId.value]?.name || null)
 
 const showSettings = ref(false)
 const replySettings = ref([])
 
-// 根据角色名获取头像路径
-function getAgentAvatar(name) {
-  if (!name) return null
-  const id = name.toLowerCase()
-  const role = roles[id]
-  return role?.avatar || null
-}
+// 按稳定角色身份读取展示资源，名称仅用于显示。
+function getAgentAvatar(id) { return roles[id]?.avatar || null }
 
 // 获取气泡形状类名
 function getBubbleShapeClass(roleId) {
@@ -243,7 +243,6 @@ function handleDrop(index) {
   if (draggedIndex === null) return
   const item = replySettings.value.splice(draggedIndex, 1)[0]
   replySettings.value.splice(index, 0, item)
-  saveConfig('ppc.group.replySettings', JSON.stringify(replySettings.value))
 }
 
 // 移动端触摸支持
@@ -276,20 +275,26 @@ function handleTouchEnd(e) {
   touchStartIndex.value = null
 }
 
-watch(replySettings, (newVal) => {
-  saveConfig('ppc.group.replySettings', JSON.stringify(newVal))
+let settingsReady = false
+let settingsWrites = Promise.resolve()
+let settingsError = null
+watch(replySettings, value => {
+  if (!settingsReady) return
+  const members = value.map(({ id, enabled }) => ({ id, enabled }))
+  settingsWrites = settingsWrites.then(async () => {
+    await localInvoke('local_group_settings', { members })
+    settingsError = null
+  }).catch(error => { settingsError = error; if (!disposed) ElMessage.error(error.message) })
 }, { deep: true })
-
-// 监听角色变化，更新 replySettings 中的名称
-watch(roleList, (newRoleList) => {
-  const roleMap = new Map(newRoleList.map(r => [r.id, r]))
-  replySettings.value.forEach(setting => {
-    const role = roleMap.get(setting.id)
-    if (role) {
-      setting.name = role.name
-    }
-  })
-}, { deep: true })
+watch(roleList, async () => {
+  settingsReady = false
+  try {
+    await settingsWrites
+    replySettings.value = await localInvoke('local_group_settings')
+    await nextTick()
+  } catch (error) { if (!disposed) ElMessage.error(error.message) }
+  finally { settingsReady = true }
+})
 
 function adjustTextareaHeight() {
   const el = textareaRef.value
@@ -298,24 +303,14 @@ function adjustTextareaHeight() {
   el.style.height = (el.scrollHeight) + 'px'
 }
 
-function deleteMessage(index) {
-  ElMessageBox.confirm(
-    '确定要删除这条消息吗？',
-    '提示',
-    {
-      confirmButtonText: '删除',
-      cancelButtonText: '取消',
-      type: 'warning',
-      customClass: 'ppc-message-box'
-    }
-  ).then(() => {
-    messages.value.splice(index, 1)
-    ElMessage({
-      type: 'success',
-      message: '删除成功',
-      duration: 1500
+async function deleteMessage(messageId) {
+  try {
+    await ElMessageBox.confirm('确定要删除这条消息吗？', '提示', {
+      confirmButtonText: '删除', cancelButtonText: '取消', type: 'warning', customClass: 'ppc-message-box',
     })
-  }).catch(() => {})
+    await conversation.removeById(messageId, false)
+    ElMessage.success('删除成功')
+  } catch (error) { if (error instanceof Error) ElMessage.error(error.message) }
 }
 
 function goHome() {
@@ -323,10 +318,7 @@ function goHome() {
 }
 
 function renderMarkdown(text) {
-  if (!text) return ''
-  // 移除元数据标签 (改为白名单模式，防止误伤)
-  const clean = text.replace(/<(PEROCUE|MEMORY|IDLE_MESSAGES|CLICK_MESSAGES|BACK_MESSAGES|REMINDER|TOPIC)>[\s\S]*?<\/\1>/g, '').trim()
-  return DOMPurify.sanitize(marked.parse(clean))
+  return DOMPurify.sanitize(marked.parse(visibleMessage(text)))
 }
 
 function scrollToBottom() {
@@ -337,243 +329,32 @@ function scrollToBottom() {
   })
 }
 
-// 解析并保存记忆
-async function parseAndSaveMemory(text, msgTimestamp = null, agentId) {
-  if (!text) return
-  const memoryMatch = text.match(/<MEMORY>([\s\S]*?)<\/MEMORY>/)
-  if (memoryMatch) {
-    try {
-      const content = memoryMatch[1].trim()
-      const memoryData = JSON.parse(content)
-      if (memoryData.content && memoryData.tags) {
-        await saveMemory(memoryData, msgTimestamp, agentId)
-        console.log(`[Group] ${agentId} memory saved:`, memoryData.content)
-      }
-    } catch (e) {
-      console.error('[Group] Failed to parse MEMORY JSON:', e)
-    }
-  }
-}
-
-// 加载角色和群聊历史
 onMounted(async () => {
-  // 加载所有角色
-  await loadRoles()
-
-  // 加载群聊消息历史
-  const saved = await getConfig('ppc.group.messages')
-  if (saved) {
-    try {
-      messages.value = JSON.parse(saved)
-      scrollToBottom()
-    } catch { /* ignore */ }
-  }
-
-  // 加载回复设置
-  const savedSettings = await getConfig('ppc.group.replySettings')
-  if (savedSettings) {
-    try {
-      replySettings.value = JSON.parse(savedSettings)
-    } catch { /* ignore */ }
-  }
-
-  // 如果没有保存的回复设置，初始化一个（默认包含所有存在的角色）
-  if (replySettings.value.length === 0) {
-    replySettings.value = roleList.value.map(role => ({
-      id: role.id,
-      name: role.name,
-      enabled: true
-    }))
-  } else {
-    // 确保回复设置中的角色都存在，并添加可能的新角色
-    const existingIds = new Set(roleList.value.map(r => r.id))
-    const settingIds = new Set(replySettings.value.map(s => s.id))
-    
-    // 添加新增的角色
-    roleList.value.forEach(role => {
-      if (!settingIds.has(role.id)) {
-        replySettings.value.push({
-          id: role.id,
-          name: role.name,
-          enabled: true
-        })
-      }
-    })
-    
-    // 移除不存在的角色
-    replySettings.value = replySettings.value.filter(s => existingIds.has(s.id))
-  }
+  try {
+    await loadRoles()
+    await conversation.load()
+    replySettings.value = await localInvoke('local_group_settings')
+    await nextTick()
+    settingsReady = true
+    scrollToBottom()
+  } catch (error) { if (!disposed) ElMessage.error(error.message) }
 })
 
-// 保存群聊历史
-watch(messages, (newVal, oldVal) => {
-  saveConfig('ppc.group.messages', JSON.stringify(newVal))
-  // 只有当消息增加时才滚动到底部（比如发送新消息或收到回复）
-  if (newVal.length > (oldVal ? oldVal.length : 0)) {
-    scrollToBottom()
-  }
-}, { deep: true })
+// 消息只从本地后端投影恢复，视图监听不再写入配置。
+watch(() => messages.value.length, () => nextTick(scrollToBottom))
 
 async function sendMessage() {
-  const text = input.value.trim()
-  if (!text || processingAgent.value) return
-  
-  // 1. 添加用户消息
-  messages.value.push({
-    role: 'user',
-    name: 'User',
-    content: text,
-    timestamp: Date.now()
-  })
+  const value = input.value.trim()
+  if (!value || isLoading.value) return
   input.value = ''
-  nextTick(() => {
-    adjustTextareaHeight()
-  })
-  
-  // 2. 触发群聊回复逻辑 (遵循用户配置的顺序和启用状态)
-  const agentsToReply = replySettings.value
-    .filter(a => a.enabled)
-    .map(a => a.id)
-  
-  for (const agentId of agentsToReply) {
-    await generateResponse(agentId)
-  }
-}
-
-// 获取指定 Agent 当前部位的对应台词
-async function getCurrentBodyLines(agentId) {
-  let cur = {}
+  nextTick(adjustTextareaHeight)
   try {
-    const saved = await getConfig(`ppc.${agentId}.waifu.texts`)
-    if (saved) cur = JSON.parse(saved)
-  } catch { /* ignore */ }
-
-  const lines = {
-    head: [],
-    chest: [],
-    body: []
-  }
-
-  // 提取部位台词 (click_head_01, click_head_02...)
-  for (let i = 1; i <= 20; i++) {
-    const slot = String(i).padStart(2, '0')
-    if (cur[`click_head_${slot}`]) lines.head.push(cur[`click_head_${slot}`])
-    if (cur[`click_chest_${slot}`]) lines.chest.push(cur[`click_chest_${slot}`])
-    if (cur[`click_body_${slot}`]) lines.body.push(cur[`click_body_${slot}`])
-  }
-
-  // 如果没有台词，返回空
-  if (lines.head.length === 0 && lines.chest.length === 0 && lines.body.length === 0) {
-    return null
-  }
-
-  return `[当前交互台词设定]
-头部: ${lines.head.join(' / ') || '无'}
-胸部: ${lines.chest.join(' / ') || '无'}
-身体: ${lines.body.join(' / ') || '无'}`
-}
-
-// 获取当前环境信息 Prompt (时间、地点、天气)
-async function getEnvPrompt() {
-  const d = new Date()
-  const weekdays = ['星期日', '星期一', '星期二', '星期三', '星期四', '星期五', '星期六']
-  const timeStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}:${String(d.getSeconds()).padStart(2, '0')} ${weekdays[d.getDay()]}`
-  
-  const location = await getConfig('ppc.location') || '未知地点'
-  const weather = await getConfig('ppc.weather') || '未知天气'
-  
-  return `[当前环境信息]\n时间: ${timeStr}\n地点: ${location}\n天气: ${weather}`
-}
-
-async function generateResponse(agentId) {
-  processingAgent.value = roles[agentId]?.name
-  
-  try {
-    const config = roles[agentId]
-    
-    // 构造 Prompt
-    // 0. 获取记忆
-    let memoryContext = ''
-    try {
-      // 获取最后一条用户消息的内容作为检索上下文
-      const lastUserMsg = messages.value.slice().reverse().find(m => m.role === 'user')
-      if (lastUserMsg) {
-        const mems = await getRelevantMemories(lastUserMsg.content, 5, agentId)
-        if (mems && mems.length > 0) {
-          memoryContext = '\n<RelevantMemories>\n' + 
-            mems.map(m => `- ${m.content} (Tags: ${m.tags.join(',')})`).join('\n') + 
-            '\n</RelevantMemories>'
-        }
-      }
-    } catch (e) {
-      console.warn('Memory retrieval failed:', e)
-    }
-
-    // 1. 系统提示词
-    const otherAgents = Object.values(roles)
-      .filter(a => a.name !== config.name)
-      .map(a => a.name)
-      .join('、')
-    
-    // 获取当前部位台词
-    const bodyLines = await getCurrentBodyLines(agentId)
-    const bodyLinesPrompt = bodyLines ? `\n${bodyLines}\n` : ''
-
-    // 获取环境信息
-    const envPrompt = await getEnvPrompt()
-    
-    // 获取用户信息
-    const userName = await getConfig('ppc.userName') || ''
-    const userPersona = await getConfig('ppc.userPersonaText') || ''
-    const userSettingPrompt = (userName || userPersona) 
-      ? `\n[用户信息]\n姓名: ${userName || '主人'}\n描述: ${userPersona || '暂无描述'}\n`
-      : ''
-
-    const systemPrompt = config.persona_prompt + '\n' + config.system_prompt + memoryContext + bodyLinesPrompt + '\n' + envPrompt + userSettingPrompt + '\n' + `
-<Output_Constraint>
-回复要求:
-1. 你的名字是 ${config.name}。
-2. 你正在大家庭的群聊中，成员包括你、${otherAgents}和主人。
-3. 请根据上下文回复用户或其他人的话。
-4. 最好控制在3句话，30字以内，保持简短；将行为动作用括号“（）”包裹来表示。
-</Output_Constraint>
-`
-    // 2. 历史记录转换 (Perspective Shifting)
-    const history = messages.value.map(m => {
-      if (m.name.toLowerCase() === agentId) {
-        return { role: 'assistant', content: m.content }
-      } else {
-        // 其他人都是 user，带上前缀
-        const prefix = m.role === 'user' ? '' : `[${m.name}]: `
-        return { role: 'user', content: prefix + m.content }
-      }
-    })
-
-    const fullMessages = [
-      { role: 'system', content: systemPrompt },
-      ...history.slice(-60) // 取最近60条，增加上下文长度
-    ]
-
-    // 3. 调用 API
-    // 注意：这里没有流式，简单等待
-    // 为了更好的体验，可以使用 chatStream，这里简化用 chat
-    const response = await chat(fullMessages, null, 0.7)
-    
-    // 4. 添加回复
-    messages.value.push({
-      role: 'assistant',
-      name: config.name,
-      content: response.content,
-      timestamp: Date.now()
-    })
-    
-    // 5. 保存记忆
-    await parseAndSaveMemory(response.content, Date.now(), agentId)
-    
-  } catch (e) {
-    console.error(`[Group] ${agentId} failed to respond:`, e)
-  } finally {
-    processingAgent.value = null
+    await settingsWrites
+    if (settingsError) throw settingsError
+    await conversation.sendGroup(value)
+  } catch (error) {
+    if (!disposed && error.code !== 'CANCELLED') ElMessage.error(error.message)
+    if (!error.persisted && !input.value) input.value = value
   }
 }
 </script>

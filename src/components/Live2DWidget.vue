@@ -87,11 +87,13 @@
 </template>
 
 <script setup>
+import { visibleMessage } from '../utils/messageContent'
 import { ref, onMounted, onBeforeUnmount } from 'vue'
-import axios from 'axios'
+import { listen } from '@tauri-apps/api/event'
+import { localInvoke } from '../services/localChat'
 import { marked } from 'marked'
 import DOMPurify from 'dompurify'
-import { getActiveAgentId, AGENTS, getRecentMemories, getConfig, saveConfig } from '../api'
+import { getActiveAgentId, AGENTS } from '../api'
 import { INTERACTION_LINES } from '../constants/interaction'
 
 // Markdown 渲染
@@ -103,17 +105,7 @@ function renderMarkdown(text) {
 }
 
 // 清理消息中的隐藏标签
-function cleanMessageContent(text) {
-  if (!text) return ''
-  if (text === '__loading__') return '正在思考...'
-  
-  // 移除所有 XML 标签及其内容
-  return text
-    .replace(/<(nit(?:-[0-9a-fA-F]{4})?)>[\s\S]*?<\/\1>/gi, '')
-    .replace(/<([A-Z_]+)>[\s\S]*?<\/\1>/g, '')
-    .replace(/\[\[\[NIT_CALL\]\]\][\s\S]*?\[\[\[NIT_END\]\]\]/g, '')
-    .trim()
-}
+function cleanMessageContent(content) { return visibleMessage(content) }
 
 function ensureFontAwesome() {
   const exists = Array.from(document.querySelectorAll('link[rel="stylesheet"]')).some(l => String(l.href || '').includes('fontawesome'))
@@ -131,7 +123,7 @@ function loadAutoload() {
     const s = document.createElement('script')
     s.src = '/live2d-widget/autoload.js'
     s.onload = () => { window.__live2d_autoload_loaded = true; resolve() }
-    s.onerror = () => reject(new Error('autoload.js failed'))
+    s.onerror = () => reject(new Error('角色组件加载失败'))
     document.body.appendChild(s)
   })
 }
@@ -154,13 +146,14 @@ function moveWidgetIntoPanel() {
       waifu.style.bottom = '0'
       waifu.style.left = '0'
       waifu.style.position = 'relative'
-    } catch (e) { console.warn('Failed to append waifu to panel:', e) }
+      waifu.style.display = ''
+    } catch (e) { console.warn('挂载角色面板失败：', e) }
   }
   
   if (!waifu && canvas && !panel.contains(canvas)) {
     try {
       panel.appendChild(canvas)
-    } catch (e) { console.warn('Failed to append canvas to panel:', e) }
+    } catch (e) { console.warn('挂载角色画布失败：', e) }
   }
   
   if (canvas) {
@@ -170,13 +163,14 @@ function moveWidgetIntoPanel() {
       canvas.style.display = 'block'
       canvas.style.willChange = 'transform, opacity'
       canvas.style.transform = 'translateZ(0)' // 强制开启 GPU 加速
-    } catch (e) { console.warn('Failed to style canvas:', e) }
+    } catch (e) { console.warn('设置角色画布样式失败：', e) }
   }
 }
 
 let observer = null
 let tick = null
-let envRefreshTick = null
+let unlistenEnvironment = null
+let environmentTimestamp = 0
 const currentTime = ref('')
 const currentDate = ref('')
 const locationText = ref('')
@@ -200,7 +194,7 @@ async function loadOutfits() {
       outfitList.value = await res.json()
     }
   } catch (e) {
-    console.error('Failed to load outfits:', e)
+    console.error('加载服装列表失败：', e)
   }
 }
 
@@ -211,49 +205,50 @@ function openOutfitDrawer() {
   }
 }
 
-function changeOutfit(outfit) {
+async function changeOutfit(outfit) {
   const match = outfit.id.match(/index_(\d+)\.json/)
   if (match) {
     const textureId = parseInt(match[1])
     try {
       if (window.WaifuWidget && typeof window.WaifuWidget.loadModel === 'function') {
-        window.WaifuWidget.loadModel(0, textureId, `换上新衣服啦：${outfit.name}`)
+        await window.WaifuWidget.loadModel(0, textureId, `换上新衣服啦：${outfit.name}`)
         outfitDrawerVisible.value = false
       }
     } catch (e) {
-      console.error('Failed to change outfit:', e)
+      console.error('切换服装失败：', e)
     }
   }
 }
 
-async function loadRecentMemories() {
+function applyEnvironment(value) {
+  if (disposed || !value || value.fetchedAt < environmentTimestamp) return
+  environmentTimestamp = value.fetchedAt
+  locationText.value = value.location
+  weatherText.value = value.weather
+}
+
+async function loadRecentMemories(event) {
   try {
-    const memories = await getRecentMemories(10)
-    const tags = []
-    const seenTags = new Set()
-    
-    memories.forEach(m => {
-      (m.tags || []).forEach(t => {
-        if (!seenTags.has(t) && tags.length < 8) {
-          seenTags.add(t)
-          tags.push({
-            id: Math.random().toString(36),
-            tag: t,
-            style: {
-              left: `${Math.random() * 80 + 5}%`,
-              top: `${Math.random() * 60 + 10}%`,
-              animationDelay: `${Math.random() * 5}s`,
-              animationDuration: `${10 + Math.random() * 10}s`,
-              opacity: 0.1 + Math.random() * 0.15
-            }
-          })
-        }
-      })
-    })
-    recentMemories.value = tags
-  } catch (e) {
-    console.error('Failed to load recent memories:', e)
-  }
+    const agentId = getActiveAgentId()
+    const state = await localInvoke('local_character_projection', { agentId })
+    if (disposed || agentId !== getActiveAgentId()) return
+    moodText.value = state.mood || '软萌中'
+    mindText.value = state.mind || `"${AGENTS[agentId]?.name || 'Pero'}要永远跟主人在一起！"`
+    vibeText.value = state.vibe || '--'
+    // 角色变化时整体替换台词投影，避免较短的新台词列表残留旧条目。
+    window.WAIFU_TEXTS = state.texts
+    window.PPC_LIVE2D_CONFIG = { modelId: state.modelId, modelTexturesId: state.modelTexturesId, activeAgent: state.agentId, waifuTexts: state.texts }
+    if (event?.type === 'ppc:agent-switched') window.dispatchEvent(new CustomEvent('ppc:character-projected', { detail: state }))
+    applyEnvironment(state.environment)
+    recentMemories.value = state.memoryTags.map(tag => ({
+      id: tag, tag,
+      style: {
+        left: `${Math.random() * 80 + 5}%`, top: `${Math.random() * 60 + 10}%`,
+        animationDelay: `${Math.random() * 5}s`, animationDuration: `${10 + Math.random() * 10}s`,
+        opacity: 0.1 + Math.random() * 0.15,
+      },
+    }))
+  } catch (error) { console.error('加载角色展示数据失败：', error) }
 }
 
 function showChatBubble(text) {
@@ -279,8 +274,9 @@ function updateTime() {
   currentTime.value = now.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', hour12: false })
   currentDate.value = now.toLocaleDateString('zh-CN', { month: 'long', day: 'numeric', weekday: 'long' })
 }
-function onSwitchModel() {
-  try { if (window.WaifuWidget && typeof window.WaifuWidget.loadOtherModel === 'function') window.WaifuWidget.loadOtherModel() } catch { /* ignore */ }
+async function onSwitchModel() {
+  try { await window.WaifuWidget?.loadOtherModel() }
+  catch (error) { console.warn('切换角色模型失败：', error) }
 }
 
 const onMood = e => { try { moodText.value = String(e.detail || '').trim() || '软萌中' } catch { /* ignore */ } }
@@ -289,119 +285,60 @@ const onVibe = e => { try { vibeText.value = String(e.detail || '').trim() || '-
 const onChat = e => { try { showChatBubble(String(e.detail || '').trim()) } catch { /* ignore */ } }
 const onWaifuMessage = e => { try { showChatBubble(String(e.detail.text || '').trim()) } catch { /* ignore */ } }
 
-async function fetchLocationAndWeather(force = false) {
-  try {
-    const CACHE_KEY = 'ppc.env.last_fetch'
-    const CACHE_EXPIRE = 30 * 60 * 1000 // 30 分钟缓存
-    const lastFetch = Number(await getConfig(CACHE_KEY) || 0)
-    const nowTimestamp = Date.now()
-
-    // 如果不是强制更新，且在缓存时间内，则直接跳过
-    if (!force && (nowTimestamp - lastFetch < CACHE_EXPIRE)) {
-      console.log('Using cached location and weather data')
-      return
-    }
-
-    // 1. 获取地理位置
-    let city = ''
-    let lat = null
-    let lon = null
-    
+let disposed = false
+let widgetMountTimer = null
+function onTextsUpdated(e) {
     try {
-      // 尝试 ipapi.co
-      const locRes = await axios.get('https://ipapi.co/json/')
-      if (locRes.data && locRes.data.city) {
-        city = locRes.data.city
-        lat = locRes.data.latitude
-        lon = locRes.data.longitude
+      const newTexts = e.detail
+      if (newTexts) {
+        window.WAIFU_TEXTS = newTexts
+        console.log('Live2D 台词已更新')
       }
-    } catch {
-      try {
-        // 备用方案: ipwho.is
-        const locRes2 = await axios.get('https://ipwho.is/')
-        if (locRes2.data && locRes2.data.city) {
-          city = locRes2.data.city
-          lat = locRes2.data.latitude
-          lon = locRes2.data.longitude
-        }
-      } catch {
-        console.warn('All location APIs failed')
-      }
+    } catch (err) {
+      console.warn('Live2D 台词更新失败：', err)
     }
-
-    if (city) {
-      locationText.value = city
-      await saveConfig('ppc.location', city)
-    }
-
-    // 2. 获取天气 (使用更稳定的 Open-Meteo API)
-    if (lat !== null && lon !== null) {
-      try {
-        const weatherRes = await axios.get(`https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current_weather=true&timezone=auto`)
-        if (weatherRes.data && weatherRes.data.current_weather) {
-          const cw = weatherRes.data.current_weather
-          const temp = Math.round(cw.temperature)
-          const code = cw.weathercode
-          
-          // 简单的天气代码映射
-          const weatherMap = {
-            0: '晴朗',
-            1: '大部晴朗', 2: '多云', 3: '阴天',
-            45: '雾', 48: '雾',
-            51: '毛毛雨', 53: '毛毛雨', 55: '毛毛雨',
-            61: '小雨', 63: '中雨', 65: '大雨',
-            71: '小雪', 73: '中雪', 75: '大雪',
-            80: '阵雨', 81: '阵雨', 82: '阵雨',
-            95: '雷阵雨', 96: '雷阵雨', 99: '雷阵雨'
-          }
-          
-          const desc = weatherMap[code] || '天气晴'
-          const weatherString = `${desc} ${temp}°C`
-          weatherText.value = weatherString
-          await saveConfig('ppc.weather', weatherString)
-          
-          // 更新最后抓取时间戳
-          await saveConfig(CACHE_KEY, String(Date.now()))
-        }
-      } catch (weaErr) {
-        console.warn('Weather API failed:', weaErr)
-      }
-    }
-  } catch (e) {
-    console.warn('fetchLocationAndWeather global error:', e)
-  }
 }
-
+function onStatusUpdated(e) {
+    const status = e.detail
+    moodText.value = status.mood || '--'
+    vibeText.value = status.vibe || '--'
+    mindText.value = status.mind || ''
+    loadRecentMemories() // 对话更新时同步刷新记忆气泡
+}
 onMounted(async () => {
   ensureFontAwesome()
+  // 暴露配置给全局 waifu-tips.js 使用
+  window.WAIFU_INTERACTION_LINES = INTERACTION_LINES
+  window.WAIFU_GET_AGENT_ID = getActiveAgentId
 
-  // 1. 预加载配置 (从 Rust Store)，注入到全局供 waifu-tips.js 使用
-  try {
-    const agentId = await getActiveAgentId() || 'pero' // Ensure we get the latest
-    const [modelId, modelTexturesId, savedTexts, activeAgent] = await Promise.all([
-      getConfig('ppc.modelId'),
-      getConfig('ppc.modelTexturesId'),
-      getConfig(`ppc.${agentId}.waifu.texts`),
-      getConfig('ppc.activeAgent')
-    ])
-
-    window.PPC_LIVE2D_CONFIG = {
-      modelId: modelId,
-      modelTexturesId: modelTexturesId,
-      activeAgent: activeAgent || 'pero',
-      waifuTexts: savedTexts ? JSON.parse(savedTexts) : null
-    }
-    
-    // 如果有预加载的文本，直接设置到 WAIFU_TEXTS
-    if (window.PPC_LIVE2D_CONFIG.waifuTexts) {
-      window.WAIFU_TEXTS = { ...(window.WAIFU_TEXTS || {}), ...window.PPC_LIVE2D_CONFIG.waifuTexts }
-    }
-  } catch (e) {
-    console.warn('Failed to preload Live2D config:', e)
+  // 暴露模型保存接口
+  window.PPC_SAVE_MODEL_SETTINGS = async (modelId, modelTexturesId, agentId = getActiveAgentId()) => {
+    try {
+      await localInvoke('local_save_model_preferences', {
+        agentId, modelId, textureId: modelTexturesId,
+      })
+    } catch (error) { console.warn('保存模型显示偏好失败：', error); throw error }
   }
 
+  try {
+    unlistenEnvironment = await listen('local-environment-event', ({ payload }) => applyEnvironment(payload))
+    if (disposed) { unlistenEnvironment(); unlistenEnvironment = null; return }
+    const agentId = getActiveAgentId()
+    const state = await localInvoke('local_character_projection', { agentId })
+    if (disposed || agentId !== getActiveAgentId()) return
+    window.PPC_LIVE2D_CONFIG = {
+      modelId: state.modelId, modelTexturesId: state.modelTexturesId,
+      activeAgent: state.agentId, waifuTexts: state.texts,
+    }
+    window.WAIFU_TEXTS = state.texts
+    applyEnvironment(state.environment)
+  } catch (error) { console.warn('预加载角色展示配置失败：', error) }
+
+  if (disposed) return
   try { await loadAutoload() } catch { /* ignore */ }
-  setTimeout(() => {
+  if (disposed) return
+  widgetMountTimer = setTimeout(() => {
+    if (disposed) return
     if (!document.getElementById('waifu') && typeof window.initWidget === 'function') {
       try { window.initWidget({ waifuPath: '/live2d-widget/waifu-texts.json', cdnPath: '/live2d-widget/' }) } catch { /* ignore */ }
     }
@@ -410,77 +347,32 @@ onMounted(async () => {
   observer = new MutationObserver(() => moveWidgetIntoPanel())
   observer.observe(document.body, { childList: true, subtree: true })
   updateTime()
-  fetchLocationAndWeather()
-  try {
-    const agentId = getActiveAgentId()
-    const loc = await getConfig('ppc.location')
-    if (loc) locationText.value = loc
-    const wet = await getConfig('ppc.weather')
-    if (wet) weatherText.value = wet
-    const m = String(await getConfig(`ppc.${agentId}.mood`) || '').trim()
-    if (m) moodText.value = m
-    const md = String(await getConfig(`ppc.${agentId}.mind`) || '').trim()
-    if (md) mindText.value = md
-    const vb = String(await getConfig(`ppc.${agentId}.vibe`) || '').trim()
-    if (vb) vibeText.value = vb
-  } catch { /* ignore */ }
-  tick = setInterval(() => { updateTime() }, 1000)
-  
-  // 每 30 分钟尝试刷新一次环境信息 (fetchLocationAndWeather 内部有缓存逻辑)
-  envRefreshTick = setInterval(() => { fetchLocationAndWeather() }, 30 * 60 * 1000)
-  
+  if (disposed) return
+  tick = setInterval(updateTime, 1000)
+
   window.addEventListener('ppc:mood', onMood)
   window.addEventListener('ppc:mind', onMind)
   window.addEventListener('ppc:vibe', onVibe)
   window.addEventListener('ppc:chat', onChat)
   window.addEventListener('waifu-message', onWaifuMessage)
   
-  // 监听并应用台词更新
-  window.addEventListener('ppc:waifu-texts-updated', (e) => {
-    try {
-      const newTexts = e.detail
-      if (newTexts) {
-        window.WAIFU_TEXTS = { ...(window.WAIFU_TEXTS || {}), ...newTexts }
-        console.log('[Live2D] Texts updated dynamically')
-      }
-    } catch (err) {
-      console.warn('Failed to update waifu texts:', err)
-    }
-  })
+  window.addEventListener('ppc:waifu-texts-updated', onTextsUpdated)
 
-  // 暴露配置给全局 waifu-tips.js 使用
-  window.WAIFU_INTERACTION_LINES = INTERACTION_LINES
-  window.WAIFU_GET_AGENT_ID = getActiveAgentId
-  
-  // 暴露模型保存接口
-  window.PPC_SAVE_MODEL_SETTINGS = async (modelId, modelTexturesId) => {
-    try {
-        const agentId = getActiveAgentId() || 'pero'
-        await saveConfig(`ppc.${agentId}.modelId`, String(modelId))
-        await saveConfig(`ppc.${agentId}.modelTexturesId`, String(modelTexturesId))
-        // 同时保存到全局作为最后使用的默认值
-        await saveConfig('ppc.modelId', String(modelId))
-        await saveConfig('ppc.modelTexturesId', String(modelTexturesId))
-    } catch (e) { console.warn('Failed to save model settings to Rust:', e) }
-  }
+  window.addEventListener('ppc:pero-status-updated', onStatusUpdated)
 
-  // 初始加载本地存储的自定义台词 (已在 onMounted 顶部处理，这里仅做事件绑定和 cleanup)
-  
-  window.addEventListener('ppc:pero-status-updated', (e) => {
-    const status = e.detail
-    moodText.value = status.mood || '--'
-    vibeText.value = status.vibe || '--'
-    mindText.value = status.mind || ''
-    loadRecentMemories() // 对话更新时同步刷新记忆气泡
-  })
-
+  window.addEventListener('ppc:agent-switched', loadRecentMemories)
   loadRecentMemories()
 })
 
 onBeforeUnmount(() => {
+  disposed = true
+  clearTimeout(widgetMountTimer)
+  window.removeEventListener('ppc:waifu-texts-updated', onTextsUpdated)
+  window.removeEventListener('ppc:pero-status-updated', onStatusUpdated)
   try { if (observer) observer.disconnect() } catch { /* ignore */ }
   try { if (tick) clearInterval(tick) } catch { /* ignore */ }
-  try { if (envRefreshTick) clearInterval(envRefreshTick) } catch { /* ignore */ }
+  unlistenEnvironment?.()
+  window.removeEventListener('ppc:agent-switched', loadRecentMemories)
   try { if (chatTimer) clearTimeout(chatTimer) } catch { /* ignore */ }
   window.removeEventListener('ppc:mood', onMood)
   window.removeEventListener('ppc:mind', onMind)

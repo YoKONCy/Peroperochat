@@ -482,6 +482,7 @@
 <script setup>
 import { ref, computed, onMounted, watch } from 'vue'
 import { invoke } from '@tauri-apps/api/core'
+import { localInvoke } from '../services/localChat'
 import { useRouter } from 'vue-router'
 import { ElMessageBox, ElMessage } from 'element-plus'
 import {
@@ -489,12 +490,10 @@ import {
   AGENTS,
   getActiveAgentId,
   setActiveAgentId,
-  saveApiKey,
   getApiKey,
   getAllMemories,
   deleteMemory as apiDeleteMemory,
   getConfig,
-  saveConfig,
   saveAgent,
   deleteAgent,
   exportAllData,
@@ -663,6 +662,7 @@ async function handleDeleteAgent(id) {
 }
 
 async function saveAgentData() {
+  try {
   if (!editingAgentForm.value.name) return ElMessage.warning('请输入角色名称')
 
   let id = editingAgentIdRaw.value.trim()
@@ -672,52 +672,15 @@ async function saveAgentData() {
     if (AGENTS[id]) return ElMessage.warning('该角色ID已存在')
   }
 
-  // Process idle messages
-  const idleMsgs = editingAgentForm.value.idle_messages_text
-    ? editingAgentForm.value.idle_messages_text
-        .split('\n')
-        .map((s) => s.trim())
-        .filter(Boolean)
-    : []
-
-  const finalData = JSON.parse(JSON.stringify(editingAgentForm.value))
-  finalData.idle_messages = idleMsgs
-  delete finalData.idle_messages_text // Clean up temporary field
-
-  const success = await saveAgent(id, finalData)
+  const success = await saveAgent(id, { ...editingAgentForm.value }, isNewAgent.value)
   if (success) {
-    // Sync to waifu-tips.js via localStorage
-    try {
-      const waifuData = {
-        welcome: editingAgentForm.value.welcome_message
-      }
-      // Map idle messages to waifu-tips format
-      idleMsgs.forEach((msg, idx) => {
-        if (idx < 50) {
-          // Limit to 50 messages
-          waifuData[`idleMessages_${String(idx + 1).padStart(2, '0')}`] = msg
-        }
-      })
-
-      await saveConfig(`ppc.${id}.waifu.texts`, JSON.stringify(waifuData))
-
-      // If we are editing the active agent, trigger an update immediately
-      if (id === activeAgentId.value) {
-        window.dispatchEvent(
-          new CustomEvent('ppc:agent-switched', {
-            detail: { agentId: id }
-          })
-        )
-      }
-    } catch (e) {
-      console.warn('Failed to sync waifu texts:', e)
-    }
-
     ElMessage.success('保存成功')
     showAgentEditor.value = false
   } else {
     ElMessage.error('保存失败')
   }
+
+  } catch (error) { ElMessage.error(error.message || '保存失败') }
 }
 
 const providerDefaults = {
@@ -766,16 +729,8 @@ function handleProviderChange(val) {
 
 // Watch active agent change (Global Switch)
 watch(activeAgentId, async (newVal) => {
-  await setActiveAgentId(newVal)
-
-  // 触发全局事件通知 Live2D 角色已切换，以便同步更新台词
-  window.dispatchEvent(
-    new CustomEvent('ppc:agent-switched', {
-      detail: { agentId: newVal }
-    })
-  )
-
-  ElMessage.success(`已切换为 ${AGENTS[newVal].name}`)
+  try { await setActiveAgentId(newVal) }
+  catch (error) { ElMessage.error(error.message) }
 })
 
 const modelName = ref('请先获取模型')
@@ -870,33 +825,32 @@ async function getStoreConfig(k, def) {
     return v
   }
 }
-async function saveStoreConfig(k, v) {
-  const val = typeof v === 'object' ? JSON.stringify(v) : String(v)
-  await saveConfig(k, val)
-}
-
 async function applySettings() {
-  await saveStoreConfig('ppc.modelName', modelName.value)
-  await saveStoreConfig('ppc.apiBase', apiBase.value)
-  // API Key 单独处理
-  await saveApiKey(apiKey.value)
-  ElMessage.success('API配置已保存')
+  try {
+    await localInvoke('local_save_settings', { section: 'api', values: {
+      model: modelName.value, base: apiBase.value, key: apiKey.value,
+    } })
+    ElMessage.success('API配置已保存')
+  } catch (error) { ElMessage.error(error.message || '保存失败') }
 }
 
 async function applyModelSettings() {
-  await saveStoreConfig('ppc.modelSettings', {
-    temperature: Number(temperature.value),
-    topP: Number(topP.value),
-    stream: !!stream.value,
-    memoryRounds: Number(memoryRounds.value)
-  })
-  ElMessage.success('已保存')
+  try {
+    await localInvoke('local_save_settings', { section: 'model', values: {
+      temperature: temperature.value, topP: topP.value,
+      stream: stream.value, memoryRounds: memoryRounds.value,
+    } })
+    ElMessage.success('已保存')
+  } catch (error) { ElMessage.error(error.message || '保存失败') }
 }
 
 async function applyUserSettings() {
-  await saveStoreConfig('ppc.userPersonaText', String(userPersonaText.value || ''))
-  await saveStoreConfig('ppc.userName', String(userName.value || ''))
-  ElMessage.success('已保存')
+  try {
+    await localInvoke('local_save_settings', { section: 'user', values: {
+      name: userName.value, persona: userPersonaText.value,
+    } })
+    ElMessage.success('已保存')
+  } catch (error) { ElMessage.error(error.message || '保存失败') }
 }
 
 async function fetchModels() {
@@ -1002,7 +956,7 @@ async function handleImportAllData(event) {
   if (!file) return
 
   try {
-    const { value } = await ElMessageBox.confirm(
+    await ElMessageBox.confirm(
       '导入数据将覆盖当前所有数据，确定要继续吗？',
       '确认导入',
       {
@@ -1011,11 +965,6 @@ async function handleImportAllData(event) {
         type: 'warning'
       }
     )
-
-    if (!value) {
-      event.target.value = ''
-      return
-    }
 
     const loading = ElMessage({ message: '正在导入数据...', duration: 0 })
 

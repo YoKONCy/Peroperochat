@@ -17,7 +17,7 @@
             <p>暂无对话记录</p>
           </div>
           <!-- 默认只显示前 50 条，点击“显示更多”后全部显示 -->
-          <div v-for="(m, i) in (showAll ? messages.slice().reverse() : messages.slice().reverse().slice(0, 50))" :key="messages.length - 1 - i" :class="['row', m.role]">
+          <div v-for="(m, i) in (showAll ? messages.slice().reverse() : messages.slice().reverse().slice(0, 50))" :key="m.id || messages.length - 1 - i" :class="['row', m.role]">
             <div class="row-header">
               <span class="role-tag">{{ m.role === 'user' ? '我' : (AGENTS[getActiveAgentId()]?.name || 'Pero') }}</span>
               <span class="time">{{ formatTime(m.timestamp) }}</span>
@@ -32,7 +32,7 @@
                 </template>
               </div>
               <div v-else>
-                 <div v-if="!m.showRaw" v-html="renderMarkdown(m.content)"></div>
+                 <div v-if="!rawIds.has(m.id)" v-html="renderMarkdown(m.content)"></div>
                  <pre v-else class="raw-text-view">{{ m.content }}</pre>
               </div>
             </div>
@@ -41,7 +41,7 @@
                 <button class="tool-btn" @click="$emit('copy', m)"><el-icon size="14"><CopyDocument /></el-icon></button>
               </el-tooltip>
               <el-tooltip content="查看原始文本" placement="top" :hide-after="1000" v-if="m.role === 'assistant'">
-                <button :class="['tool-btn', { active: m.showRaw }]" @click="m.showRaw = !m.showRaw"><el-icon size="14"><Document /></el-icon></button>
+                <button :class="['tool-btn', { active: rawIds.has(m.id) }]" @click="toggleRaw(m.id)"><el-icon size="14"><Document /></el-icon></button>
               </el-tooltip>
               <el-tooltip content="重新生成" placement="top" v-if="m.role === 'assistant'">
                 <button class="tool-btn" @click="$emit('regenerate', messages.length - 1 - i)"><el-icon size="14"><Refresh /></el-icon></button>
@@ -66,6 +66,7 @@
 </template>
 
 <script setup>
+import { visibleMessage } from '../utils/messageContent'
 import { ref } from 'vue'
 import { Delete, Refresh, CopyDocument, Close, MessageBox, ArrowDown, Document } from '@element-plus/icons-vue'
 import { marked } from 'marked'
@@ -81,6 +82,11 @@ defineProps({
 
 defineEmits(['close', 'delete', 'regenerate', 'copy'])
 const showAll = ref(false)
+const rawIds = ref(new Set())
+function toggleRaw(id) {
+  if (rawIds.value.has(id)) rawIds.value.delete(id)
+  else rawIds.value.add(id)
+}
 
 // 图片预览逻辑
 function previewImage(url) {
@@ -103,22 +109,7 @@ function formatTime(ts) {
 }
 
 // 清理消息中的隐藏标签
-function cleanMessageContent(text) {
-  if (!text) return ''
-  if (text === '__loading__') {
-    const agentId = getActiveAgentId()
-    const agentName = AGENTS[agentId]?.name || 'Pero'
-    return `${agentName}正在思考...`
-  }
-  
-  // 移除所有 XML 标签及其内容 (因为现在使用 NIT 协议，XML 仅用于内部逻辑)
-  // 同时也移除 NIT 调用块，保持历史记录纯净
-  return text
-    .replace(/<(nit(?:-[0-9a-fA-F]{4})?)>[\s\S]*?<\/\1>/gi, '')
-    .replace(/<([A-Z_]+)>[\s\S]*?<\/\1>/g, '')
-    .replace(/\[\[\[NIT_CALL\]\]\][\s\S]*?\[\[\[NIT_END\]\]\]/g, '')
-    .trim()
-}
+function cleanMessageContent(content) { return visibleMessage(content) }
 
 </script>
 

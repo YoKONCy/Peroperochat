@@ -1,6 +1,6 @@
 [package]
 name = "peroperochat"
-version = "1.3.2"
+version = "1.3.3"
 description = "Your better friend"
 authors = ["you"]
 edition = "2021"
@@ -22,7 +22,6 @@ tokio = { version = "1", features = ["full"] }
 futures = "0.3"
 tauri-plugin-haptics = "2.3.2"
 tauri-plugin-notification = "2.3.3"
-tauri-plugin-store = "2.4.2"
 rusqlite = { version = "0.32", features = ["bundled"] }
 uuid = { version = "1.10", features = ["v4", "serde"] }
 chrono = { version = "0.4", features = ["serde", "clock"] }

@@ -14,7 +14,8 @@ self.addEventListener('activate', (event) => {
 
 self.addEventListener('fetch', (event) => {
   const req = event.request
-  if (req.method !== 'GET') return
+  const requestUrl = new URL(req.url)
+  if (req.method !== 'GET' || requestUrl.origin !== self.location.origin || requestUrl.pathname.startsWith('/api/') || req.headers.has('Authorization')) return
   event.respondWith((async () => {
     try {
       const url = new URL(req.url)

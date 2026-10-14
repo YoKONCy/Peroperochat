@@ -6,16 +6,9 @@
 </template>
 
 <script setup>
-import { onMounted } from 'vue'
-import { loadActiveAgentId, loadAgents, appMode } from './api'
-import RemoteHubView from './pages/RemoteHubView.vue'
-
-onMounted(async () => {
-  await Promise.all([
-    loadActiveAgentId(), // 预加载当前角色ID缓存
-    loadAgents()         // 加载所有角色配置
-  ])
-})
+import { appMode } from './api'
+import { defineAsyncComponent } from 'vue'
+const RemoteHubView = defineAsyncComponent(() => import('./pages/RemoteHubView.vue'))
 </script>
 
 <style>

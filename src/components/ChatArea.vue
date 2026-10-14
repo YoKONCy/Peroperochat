@@ -77,12 +77,12 @@
 </template>
 
 <script setup>
+import { visibleMessage } from '../utils/messageContent'
 import { ref, watch, nextTick } from 'vue'
 import { Refresh, Edit, Delete, DocumentCopy, Loading } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 import { marked } from 'marked'
 import DOMPurify from 'dompurify'
-import { getActiveAgentId, AGENTS } from '../api'
 const props = defineProps({ messages: { type: Array, default: () => [] }, progressText: { type: String, default: '' } })
 const emit = defineEmits(['send','regenerate','edit','delete'])
 const text = ref('')
@@ -101,21 +101,7 @@ function formatContent(t) {
 }
 
 // 清理消息中的隐藏标签
-function cleanMessageContent(text) {
-  if (!text) return ''
-  if (text === '__loading__') {
-    const agentId = getActiveAgentId()
-    const agentName = AGENTS[agentId]?.name || 'Pero'
-    return `${agentName}正在思考...`
-  }
-  
-  // 移除所有 XML 标签及其内容 (包括 NIT 2.0 的小写标签)
-  return text
-    .replace(/<(nit(?:-[0-9a-fA-F]{4})?)>[\s\S]*?<\/\1>/gi, '')
-    .replace(/<([A-Z_]+)>[\s\S]*?<\/\1>/g, '')
-    .replace(/\[\[\[NIT_CALL\]\]\][\s\S]*?\[\[\[NIT_END\]\]\]/g, '')
-    .trim()
-}
+function cleanMessageContent(content) { return visibleMessage(content) }
 function onKeydownEnter(e) {
   if (e && e.shiftKey) return
   if (e) e.preventDefault()

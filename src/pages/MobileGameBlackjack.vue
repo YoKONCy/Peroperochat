@@ -64,183 +64,88 @@
     <!-- 底部操作栏 -->
     <div class="action-bar">
       <template v-if="gameState === 'ready'">
-        <button class="action-btn primary" @click="startGame">开始发牌</button>
+        <button class="action-btn primary" @click="startGame" :disabled="busy">开始发牌</button>
       </template>
       
       <template v-if="gameState === 'playing'">
-        <button class="action-btn hit" @click="hit">要牌 (Hit)</button>
-        <button class="action-btn stand" @click="stand">停牌 (Stand)</button>
+        <button class="action-btn hit" @click="hit" :disabled="busy">要牌 (Hit)</button>
+        <button class="action-btn stand" @click="stand" :disabled="busy">停牌 (Stand)</button>
       </template>
 
       <template v-if="gameState === 'finished'">
-        <button class="action-btn primary" @click="resetGame">再来一局</button>
+        <button class="action-btn primary" @click="resetGame" :disabled="busy">再来一局</button>
       </template>
     </div>
   </div>
 </template>
 
 <script setup>
-import { ref, computed } from 'vue'
+import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
 import { useRouter } from 'vue-router'
+import { ElMessage } from 'element-plus'
 import { AGENTS, getActiveAgentId } from '../api'
+import { localInvoke, localChat } from '../services/localChat'
+import { projectNativeTurn } from '../stores/conversations'
+import { visibleMessage } from '../utils/messageContent'
 
 const router = useRouter()
-const activeAgentId = ref(getActiveAgentId())
-const agentName = computed(() => AGENTS[activeAgentId.value]?.name || 'Pero')
-
-// 游戏状态: ready, playing, finished
-const gameState = ref('ready')
-const deck = ref([])
-const playerHand = ref([])
-const dealerHand = ref([])
-const statusMessage = ref('')
+const activeAgentId = getActiveAgentId()
+const agentName = computed(() => AGENTS[activeAgentId]?.name || 'Pero')
+const game = ref(null)
+const busy = ref(true)
 const settlementText = ref('')
+const gameState = computed(() => game.value?.gameState || 'ready')
+const playerHand = computed(() => game.value?.playerHand || [])
+const dealerHand = computed(() => game.value?.dealerHand || [])
+const playerScore = computed(() => game.value?.playerScore || 0)
+const dealerScore = computed(() => game.value?.dealerScore || 0)
+const statusMessage = computed(() => game.value?.statusMessage || '')
+let disposed = false
+onBeforeUnmount(() => { disposed = true })
 
-// 牌面显示映射
-const suits = ['♠', '♥', '♣', '♦']
-const values = ['A', '2', '3', '4', '5', '6', '7', '8', '9', '10', 'J', 'Q', 'K']
+onMounted(async () => {
+  try { game.value = await localInvoke('local_blackjack_snapshot', { agentId: activeAgentId }) }
+  catch (error) { if (!disposed) ElMessage.error(error.message) }
+  finally { busy.value = false }
+})
 
-function createDeck() {
-  const d = []
-  for (const suit of suits) {
-    for (const value of values) {
-      d.push({ suit, value, hidden: false })
-    }
-  }
-  return d.sort(() => Math.random() - 0.5)
-}
+function getCardDisplay(card) { return `${card.suit}${card.value}` }
+function goHome() { router.push('/') }
+function closeSettlement() { settlementText.value = '' }
 
-function getCardValue(card) {
-  if (['J', 'Q', 'K'].includes(card.value)) return 10
-  if (card.value === 'A') return 11
-  return parseInt(card.value)
-}
-
-function calculateScore(hand) {
-  let score = 0
-  let aces = 0
-  for (const card of hand) {
-    if (card.hidden) continue
-    score += getCardValue(card)
-    if (card.value === 'A') aces += 1
-  }
-  while (score > 21 && aces > 0) {
-    score -= 10
-    aces -= 1
-  }
-  return score
-}
-
-const playerScore = computed(() => calculateScore(playerHand.value))
-const dealerScore = computed(() => calculateScore(dealerHand.value))
-
-function getCardDisplay(card) {
-  return `${card.suit}${card.value}`
-}
-
-function goHome() {
-  router.push('/')
-}
-
-function startGame() {
-  deck.value = createDeck()
-  playerHand.value = [deck.value.pop(), deck.value.pop()]
-  dealerHand.value = [deck.value.pop(), { ...deck.value.pop(), hidden: true }]
-  gameState.value = 'playing'
-  statusMessage.value = ''
+async function act(action) {
+  if (busy.value) return
+  busy.value = true
   settlementText.value = ''
-  
-  // 检查开局 BlackJack
-  if (playerScore.value === 21) {
-    stand()
-  }
-}
-
-function hit() {
-  playerHand.value.push(deck.value.pop())
-  if (playerScore.value > 21) {
-    endGame('bust')
-  }
-}
-
-async function stand() {
-  // 庄家回合
-  dealerHand.value[1].hidden = false // 翻开底牌
-  
-  while (dealerScore.value < 17) {
-    dealerHand.value.push(deck.value.pop())
-    await new Promise(r => setTimeout(r, 500)) // 模拟发牌延迟
-  }
-
-  if (dealerScore.value > 21) {
-    endGame('win', '庄家爆牌了！')
-  } else if (dealerScore.value > playerScore.value) {
-    endGame('lose')
-  } else if (dealerScore.value < playerScore.value) {
-    endGame('win')
-  } else {
-    endGame('draw')
-  }
-}
-
-async function endGame(result, reason = '') {
-  gameState.value = 'finished'
-  let prompt = ''
-  
-  if (result === 'bust') {
-    statusMessage.value = '你爆牌了！(>_<)'
-    prompt = `用户爆牌输了`
-  } else if (result === 'win') {
-    statusMessage.value = reason || '你赢了！🎉'
-    prompt = `用户赢了`
-  } else if (result === 'lose') {
-    statusMessage.value = '你输了...'
-    prompt = `用户输了（你赢了）`
-  } else {
-    statusMessage.value = '平局'
-    prompt = `平局`
-  }
-
-  // 触发 AI 点评
   try {
-    const agentNameVal = agentName.value
-    
-    // 构造更明确的管理系统提醒
-    const gameResultMsg = `【管理系统提醒：${agentNameVal}，用户刚刚和你玩了一局21点。结果是：${prompt}。具体点数：用户 ${playerScore.value} 点，你（${agentNameVal}） ${dealerScore.value} 点。请以此为契机，用你一贯的语气和用户聊两句。】`
-    
-    // 发送全局事件，通知 MobileHome 有新消息需要处理
-    // MobileHome 的 onSend 会负责将此消息存入 messages 并触发 AI 回复
-    window.dispatchEvent(new CustomEvent('ppc:trigger-chat', { 
-      detail: { 
-        systemMsg: gameResultMsg,
-        agentId: activeAgentId.value
-      } 
-    }))
-
-    // 监听 AI 的回复
-    const handleAiReply = (event) => {
-      const reply = event.detail
-      if (reply && !reply.includes('正在思考中')) {
-        settlementText.value = reply
-        window.removeEventListener('ppc:chat', handleAiReply)
-      }
+    const result = await localChat.turn({
+      threadId: `desktop:${activeAgentId}`, agentId: activeAgentId,
+      gameId: action === 'start' ? crypto.randomUUID() : game.value.id,
+      action, revision: game.value?.revision || 0,
+    }, {
+      command: 'local_blackjack_play',
+      onEvent(event) {
+        if (disposed) return
+        if (event.kind === 'game') game.value = JSON.parse(event.content)
+        if (event.kind === 'started') settlementText.value = `${agentName.value} 正在思考点评...`
+      },
+    })
+    projectNativeTurn(result.turn)
+    if (disposed) return
+    game.value = result.game
+    settlementText.value = result.commentError?.message || (result.turn ? visibleMessage(result.turn.message.content) : '')
+  } catch (error) {
+    if (!disposed) {
+      settlementText.value = error.message || '操作暂时失败，请稍后重试'
+      try { game.value = await localInvoke('local_blackjack_snapshot', { agentId: activeAgentId }) }
+      catch (refreshError) { console.error('恢复牌局失败：', refreshError) }
     }
-    window.addEventListener('ppc:chat', handleAiReply)
-
-    // 为了在游戏界面也有即时反馈，我们可以展示一个简单的提示
-    settlementText.value = `${agentNameVal} 正在思考点评...`
-  } catch (e) {
-    console.error('Failed to trigger game comment', e)
-  }
+  } finally { busy.value = false }
 }
-
-function resetGame() {
-  startGame()
-}
-
-function closeSettlement() {
-  settlementText.value = ''
-}
+const startGame = () => act('start')
+const hit = () => act('hit')
+const stand = () => act('stand')
+const resetGame = startGame
 </script>
 
 <style scoped>

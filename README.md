@@ -17,6 +17,8 @@
 
 </div>
 
+当前单机模式正按 infOS 的职责边界收敛为本地纯聊天运行时。架构、迁移方式及尚未完成的验证见 [单机架构说明](docs/STANDALONE_ARCHITECTURE.md)。本文后续旧版功能介绍不代表后台保活、系统终止后的提醒或远程连接已验收。
+
 ---
 
 📋 **目录 / Table of Contents**
@@ -94,7 +96,7 @@ graph TD
 - **后端**: Rust, Tauri v2 Mobile
 - **数据库**: Rusqlite (SQLite)
 - **插件**: 
-  - `@tauri-apps/plugin-store`: 配置持久化
+  - SQLite：配置、角色状态与聊天事实的统一持久化
   - `@tauri-apps/plugin-notification`: 系统通知
   - `@tauri-apps/plugin-shell`: 系统命令执行
   - `@tauri-apps/plugin-haptics`: 触感反馈

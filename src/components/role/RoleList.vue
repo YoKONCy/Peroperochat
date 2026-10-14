@@ -124,12 +124,10 @@ async function handleDelete(roleId) {
 
 function handleExport(roleId) {
   emit('export', roleId)
-  ElMessage.success('角色配置已导出')
 }
 
 function handleDuplicate(roleId) {
   emit('duplicate', roleId)
-  ElMessage.success('角色已复制')
 }
 
 function triggerImport() {
@@ -142,7 +140,6 @@ async function handleImport(e) {
   
   try {
     emit('import', file)
-    ElMessage.success('角色导入成功')
   } catch (err) {
     ElMessage.error(`导入失败: ${err.message}`)
   }
