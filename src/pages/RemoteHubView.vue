@@ -1,20 +1,8 @@
 <template>
-  <div class="remote-hub pixel-font">
-    <!-- 背景装饰：流动的像素点 -->
-    <div class="pixel-bg"></div>
+  <div class="remote-hub" :style="viewportStyle">
 
     <!-- 顶部状态栏 -->
-    <div class="remote-header pixel-border-sm">
-      <div class="status-indicator">
-        <div :class="['status-dot', appMode.remoteConfig.connected ? 'online' : 'offline']"></div>
-        <span>{{
-          appMode.remoteConfig.connected ? '已连接到 PeroCore' : '远程模式 (未连接)'
-        }}</span>
-      </div>
-      <button class="pixel-btn exit-btn" @click="handleExitRemote">
-        <i class="fas fa-power-off"></i> 退出
-      </button>
-    </div>
+    <CompanionHeader title="远程连接" :subtitle="appMode.remoteConfig.connected ? '已连接到 PeroCore' : '未连接'" back-label="返回房间" @back="handleExitRemote" />
 
     <!-- 连接面板 (未连接时显示) -->
     <div v-if="!appMode.remoteConfig.connected" class="connection-panel">
@@ -39,7 +27,7 @@
               {{ isConnecting ? '连接中...' : '连接到本体' }}
             </button>
             <button class="pixel-btn scan-btn" @click="startScan" title="扫码连接">
-              <i class="fas fa-qrcode"></i>
+              <RoomIcon name="scan" />
             </button>
           </div>
         </div>
@@ -51,22 +39,22 @@
     <div v-else class="remote-main">
       <div class="hub-grid">
         <!-- 单聊模式入口 -->
-        <div class="hub-card chat-card pixel-border" @click="activeView = 'chat'">
+        <button class="hub-card chat-card pixel-border" @click="activeView = 'chat'">
           <div class="card-icon">
-            <i class="fas fa-comment-dots"></i>
+            <RoomIcon name="chat" />
           </div>
           <div class="card-title">远程对话</div>
           <div class="card-desc">与当前活跃角色聊天</div>
-        </div>
+        </button>
 
         <!-- 据点模式入口 -->
-        <div class="hub-card stronghold-card pixel-border" @click="activeView = 'stronghold'">
+        <button class="hub-card stronghold-card pixel-border" @click="activeView = 'stronghold'">
           <div class="card-icon">
-            <i class="fas fa-fort-awesome"></i>
+            <RoomIcon name="group" />
           </div>
           <div class="card-title">远程据点</div>
           <div class="card-desc">管理据点成员与群聊</div>
-        </div>
+        </button>
       </div>
 
       <!-- 底部控制面板 -->
@@ -82,8 +70,8 @@
             <div class="agent-status">在线</div>
           </div>
         </div>
-        <button class="pixel-btn-icon" @click="fetchRemoteStatus">
-          <i class="fas fa-sync-alt" :class="{ 'fa-spin': isFetching }"></i>
+        <button class="pixel-btn-icon" aria-label="刷新远程状态" @click="fetchRemoteStatus">
+          <RoomIcon name="refresh" :class="{ 'is-spinning': isFetching }" />
         </button>
       </div>
     </div>
@@ -91,12 +79,7 @@
     <!-- 全屏视图：对话/据点 (覆盖层) -->
     <Transition name="slide-up">
       <div v-if="activeView" class="remote-overlay">
-        <div class="overlay-header">
-          <button class="back-btn" @click="activeView = null">
-            <i class="fas fa-chevron-left"></i> 返回枢纽
-          </button>
-          <div class="overlay-title">{{ activeView === 'chat' ? '远程对话' : '远程据点' }}</div>
-        </div>
+        <CompanionHeader :title="activeView === 'chat' ? '远程对话' : '远程据点'" back-label="返回远程连接" @back="activeView = null" />
 
         <!-- 这里挂载具体的远程视图 -->
         <div class="overlay-content">
@@ -120,8 +103,8 @@
         <div class="scan-container pixel-border">
           <div class="scan-header">
             <span>正在扫码...</span>
-            <button class="close-btn" @click="stopScan">
-              <i class="fas fa-times"></i>
+            <button class="close-btn" aria-label="关闭扫码" @click="stopScan">
+              <RoomIcon name="close" />
             </button>
           </div>
           <div id="qr-reader" class="qr-reader"></div>
@@ -138,6 +121,10 @@ import { appMode, setAppMode, saveRemoteConfig } from '../api'
 import RemoteChatView from '../components/remote/RemoteChatView.vue'
 import RemoteStrongholdView from '../components/remote/RemoteStrongholdView.vue'
 import { Html5Qrcode } from 'html5-qrcode'
+import CompanionHeader from '../components/companion/CompanionHeader.vue'
+import RoomIcon from '../components/companion/RoomIcon.vue'
+import { useRoomViewport } from '../composables/useRoomViewport'
+const { viewportStyle } = useRoomViewport()
 
 const config = reactive({
   url: appMode.remoteConfig.url || '',
@@ -268,335 +255,41 @@ onMounted(() => {
 </script>
 
 <style scoped>
-.remote-hub {
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background: #1a1a1a;
-  color: #fff;
-  z-index: 1000;
-  display: flex;
-  flex-direction: column;
-}
-
-.pixel-bg {
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background-image: radial-gradient(#333 1px, transparent 0);
-  background-size: 20px 20px;
-  z-index: -1;
-  opacity: 0.5;
-}
-
-/* 像素风格组件 */
-.pixel-border {
-  border: 4px solid #fff;
-  box-shadow:
-    0 4px 0 rgba(0, 0, 0, 0.5),
-    4px 0 0 rgba(0, 0, 0, 0.5),
-    4px 4px 0 rgba(0, 0, 0, 0.5);
-  background: #222;
-}
-
-.pixel-border-sm {
-  border: 2px solid #fff;
-  background: #333;
-}
-
-.pixel-btn {
-  padding: 10px 20px;
-  border: 4px solid #fff;
-  background: #555;
-  color: #fff;
-  cursor: pointer;
-  transition: all 0.1s;
-  box-shadow: 2px 2px 0 #000;
-}
-
-.pixel-btn:active {
-  transform: translate(2px, 2px);
-  box-shadow: 0 0 0 #000;
-}
-
-.pixel-btn:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-.pixel-input {
-  width: 100%;
-  padding: 10px;
-  border: 4px solid #fff;
-  background: #000;
-  color: #0f0;
-  outline: none;
-}
-
-.remote-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 10px 15px;
-}
-
-.status-indicator {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  font-size: 14px;
-}
-
-.status-dot {
-  width: 12px;
-  height: 12px;
-  border: 2px solid #fff;
-}
-
-.status-dot.online {
-  background: #0f0;
-}
-.status-dot.offline {
-  background: #f00;
-}
-
-.connection-panel {
-  flex: 1;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 20px;
-}
-
-.pixel-card {
-  width: 100%;
-  max-width: 400px;
-  padding: 20px;
-  border: 4px solid #fff;
-  background: #333;
-}
-
-.pixel-title {
-  text-align: center;
-  margin-bottom: 20px;
-  color: #0ff;
-  text-transform: uppercase;
-}
-
-.input-group {
-  margin-bottom: 15px;
-}
-
-.input-group label {
-  display: block;
-  margin-bottom: 5px;
-  font-size: 12px;
-}
-
-.connect-btn {
-  flex: 1;
-  background: #0088ff;
-  font-weight: bold;
-}
-
-.scan-btn {
-  width: 50px;
-  background: #f59e0b;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 20px;
-}
-
-.btn-row {
-  display: flex;
-  gap: 10px;
-}
-
-.hint {
-  font-size: 10px;
-  color: #aaa;
-  margin-top: 15px;
-  text-align: center;
-}
-
-.remote-main {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  padding: 20px;
-}
-
-.hub-grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 20px;
-  flex: 1;
-}
-
-.hub-card {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  text-align: center;
-  padding: 20px;
-  cursor: pointer;
-  transition: transform 0.2s;
-}
-
-.hub-card:active {
-  transform: scale(0.95);
-}
-
-.card-icon {
-  font-size: 40px;
-  margin-bottom: 15px;
-  color: #0ff;
-}
-
-.card-title {
-  font-size: 18px;
-  font-weight: bold;
-  margin-bottom: 5px;
-}
-
-.card-desc {
-  font-size: 10px;
-  color: #aaa;
-}
-
-.remote-footer {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 15px;
-  margin-top: 20px;
-}
-
-.current-agent {
-  display: flex;
-  align-items: center;
-  gap: 15px;
-}
-
-.agent-thumb {
-  width: 40px;
-  height: 40px;
-  object-fit: cover;
-}
-
-.agent-name {
-  font-weight: bold;
-}
-.agent-status {
-  font-size: 10px;
-  color: #0f0;
-}
-
-/* 全屏覆盖层 */
-.remote-overlay {
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background: #111;
-  z-index: 1100;
-  display: flex;
-  flex-direction: column;
-}
-
-.overlay-header {
-  padding: 15px;
-  background: #222;
-  border-bottom: 2px solid #fff;
-  display: flex;
-  align-items: center;
-  gap: 20px;
-}
-
-.back-btn {
-  background: none;
-  border: none;
-  color: #fff;
-  font-family: inherit;
-  cursor: pointer;
-}
-
-.overlay-title {
-  font-weight: bold;
-}
-
-.overlay-content {
-  flex: 1;
-  overflow: hidden;
-}
-
-/* 扫码相关样式 */
-.scan-overlay {
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background: rgba(0, 0, 0, 0.9);
-  z-index: 2000;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 20px;
-}
-
-.scan-container {
-  width: 100%;
-  max-width: 400px;
-  background: #222;
-  display: flex;
-  flex-direction: column;
-}
-
-.scan-header {
-  padding: 15px;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  border-bottom: 2px solid #fff;
-  font-weight: bold;
-}
-
-.close-btn {
-  background: none;
-  border: none;
-  color: #fff;
-  font-size: 20px;
-  cursor: pointer;
-}
-
-.qr-reader {
-  width: 100%;
-  background: #000;
-  overflow: hidden;
-}
-
-.scan-hint {
-  padding: 15px;
-  text-align: center;
-  font-size: 12px;
-  color: #aaa;
-}
-
-/* 动画 */
-.slide-up-enter-active,
-.slide-up-leave-active {
-  transition: transform 0.3s ease;
-}
-.slide-up-enter-from,
-.slide-up-leave-to {
-  transform: translateY(100%);
-}
+.remote-hub { position: fixed; inset: var(--room-top, 0px) 0 auto; height: var(--room-height, 100dvh); display: flex; flex-direction: column; background: var(--room-page); overflow-y: auto; }
+.connection-panel { width: min(calc(100% - 32px), 520px); margin: 40px auto; }
+.pixel-card { padding: 28px; border: 1px solid var(--room-line); border-radius: 18px; background: var(--room-surface); }
+.pixel-title { font-size: 18px; font-weight: 600; margin: 0 0 26px; color: var(--room-ink); }
+.input-group { display: flex; flex-direction: column; gap: 10px; margin-bottom: 22px; }
+.input-group label { color: var(--room-ink); font-size: 13px; }
+.pixel-input { width: 100%; min-height: 44px; padding: 11px 13px; border: 1px solid var(--room-line); border-radius: 10px; background: var(--room-surface); color: var(--room-ink); font-size: 14px; outline: none; }
+.pixel-input:focus { border-color: var(--room-accent); box-shadow: 0 0 0 3px var(--room-accent-soft); }
+.btn-row { display: flex; gap: 10px; }
+.pixel-btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 42px; padding: 11px 16px; border: 1px solid var(--room-line); border-radius: 10px; background: var(--room-surface); color: var(--room-ink); }
+.connect-btn { flex: 1; background: var(--room-accent); border-color: transparent; color: white !important; }
+.scan-btn { width: 44px; padding: 10px; }
+.hint, .scan-hint { font-size: 12px; color: var(--room-muted); line-height: 1.7; margin: 18px 0 0; }
+.remote-main { width: min(calc(100% - 32px), 800px); margin: 32px auto; }
+.hub-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+.hub-card { padding: 30px 24px; border: 1px solid var(--room-line); border-radius: 16px; background: var(--room-surface); text-align: left; }
+.hub-card:hover { border-color: var(--room-accent); }
+.card-icon { display: grid; place-items: center; width: 42px; height: 42px; border-radius: 12px; background: var(--room-accent-soft); color: var(--room-accent); margin-bottom: 24px; }
+.card-title { font-size: 17px; font-weight: 600; }
+.card-desc { margin-top: 9px; font-size: 12px; color: var(--room-muted); line-height: 1.7; }
+.remote-footer { display: flex; align-items: center; justify-content: space-between; padding: 18px; border: 1px solid var(--room-line); border-radius: 15px; background: var(--room-surface); margin-top: 18px; }
+.current-agent { display: flex; align-items: center; gap: 12px; }
+.agent-thumb { width: 40px; height: 44px; border-radius: 12px; object-fit: cover; }
+.agent-name { font-size: 13px; font-weight: 500; }
+.agent-status { margin-top: 5px; font-size: 11px; color: var(--room-muted); }
+.pixel-btn-icon, .close-btn { display: grid; place-items: center; width: 38px; height: 38px; border: 0; border-radius: 10px; background: var(--room-subtle); color: var(--room-muted); }
+.remote-overlay { position: absolute; inset: 0; z-index: 100; display: flex; flex-direction: column; background: var(--room-page); }
+.overlay-content { flex: 1; min-height: 0; overflow: hidden; }
+.scan-overlay { position: absolute; inset: 0; z-index: 200; display: flex; align-items: center; justify-content: center; padding: 20px; background: #202c4255; }
+.scan-container { width: min(100%, 400px); max-height: 100%; overflow-y: auto; padding: 22px; border: 1px solid var(--room-line); border-radius: 18px; background: var(--room-surface); }
+.scan-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; font-size: 15px; font-weight: 500; }
+.qr-reader { width: 100%; border-radius: 12px; overflow: hidden; }
+.slide-up-enter-active, .slide-up-leave-active, .fade-enter-active, .fade-leave-active { transition: opacity .2s; }
+.slide-up-enter-from, .slide-up-leave-to, .fade-enter-from, .fade-leave-to { opacity: 0; }
+.is-spinning { animation: remote-spin 1s linear infinite; }
+@keyframes remote-spin { to { transform: rotate(360deg); } }
+@media (max-width: 480px) { .hub-grid { grid-template-columns: 1fr; } .pixel-card { padding: 22px; } .pixel-input { font-size: 16px; } }
 </style>

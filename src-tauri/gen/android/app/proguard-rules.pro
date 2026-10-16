@@ -19,3 +19,8 @@
 # If you keep the line number information, uncomment this to
 # hide the original source file name.
 #-renamesourcefileattribute SourceFile
+
+# 原生提醒的类名用于 Tauri 反射和 JNI 符号匹配，发布压缩时保持稳定。
+-keep class com.peroperochat.mobile.ReminderBridge { *; }
+-keep class com.peroperochat.mobile.ReminderPlugin { *; }
+-keep class com.peroperochat.mobile.ReminderSyncArgs { *; }

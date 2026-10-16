@@ -1,18 +1,6 @@
 <template>
-  <div class="role-manager">
-    <div class="page-header">
-      <button class="back-btn" @click="goBack">
-        <i class="fas fa-arrow-left"></i>
-      </button>
-      <h1>角色管理</h1>
-      <div class="header-actions">
-        <el-tooltip content="导出全部" placement="bottom">
-          <button class="header-btn" @click="exportAllRoles">
-            <i class="fas fa-file-export"></i>
-          </button>
-        </el-tooltip>
-      </div>
-    </div>
+  <CompanionPage title="角色管理" subtitle="每位伙伴都有自己的设定" @back="goBack">
+    <template #actions><button class="room-secondary-button" @click="exportAllRoles"><RoomIcon name="download" />导出全部</button></template>
     
     <div class="main-content">
       <div v-if="isLoading" class="loading-state">
@@ -35,9 +23,7 @@
       />
     </div>
     
-    <Transition name="slide">
-      <div v-if="showEditor" class="editor-overlay" @click.self="closeEditor">
-        <div class="editor-panel">
+    <RoomDrawer v-if="showEditor" :title="isNewRole ? '创建角色' : `编辑 ${editingRole?.name || '角色'}`" subtitle="角色资料与对话设定" :tone="activeRoleId === 'nana' ? 'nana' : 'pero'" variant="editor" :busy="savingRole" @close="closeEditor">
           <RoleEditor
             :key="isNewRole ? 'new' : editingRole?.id"
             :role="editingRole"
@@ -47,10 +33,8 @@
             @close="closeEditor"
             @save="handleSaveRole"
           />
-        </div>
-      </div>
-    </Transition>
-  </div>
+    </RoomDrawer>
+  </CompanionPage>
 </template>
 
 <script setup>
@@ -61,6 +45,9 @@ import { Loading } from '@element-plus/icons-vue'
 import { useRoleManager } from '../composables/useRoleManager'
 import RoleList from '../components/role/RoleList.vue'
 import RoleEditor from '../components/role/RoleEditor.vue'
+import CompanionPage from '../components/companion/CompanionPage.vue'
+import RoomDrawer from '../components/companion/RoomDrawer.vue'
+import RoomIcon from '../components/companion/RoomIcon.vue'
 
 const router = useRouter()
 
@@ -198,162 +185,6 @@ onMounted(async () => {
 </script>
 
 <style scoped>
-.role-manager {
-  min-height: 100vh;
-  background: linear-gradient(135deg, #fdf2f8 0%, #f0f9ff 100%);
-  display: flex;
-  flex-direction: column;
-  padding-bottom: env(safe-area-inset-bottom);
-}
-
-.page-header {
-  display: flex;
-  align-items: center;
-  gap: 16px;
-  padding: 18px 24px;
-  background: rgba(255, 255, 255, 0.6);
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
-  border-bottom: 1px solid rgba(255, 255, 255, 0.8);
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.02);
-  z-index: 10;
-}
-
-.back-btn {
-  width: 44px;
-  height: 44px;
-  border: 1px solid rgba(255, 255, 255, 0.8);
-  border-radius: 14px;
-  background: rgba(255, 255, 255, 0.6);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.02);
-  color: #1e293b;
-  cursor: pointer;
-  transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 16px;
-}
-
-.back-btn:hover {
-  background: white;
-  transform: translateX(-2px);
-  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.05);
-}
-
-.page-header h1 {
-  flex: 1;
-  margin: 0;
-  font-size: 20px;
-  font-weight: 800;
-  color: #1e293b;
-  letter-spacing: -0.02em;
-}
-
-.header-actions {
-  display: flex;
-  gap: 10px;
-}
-
-.header-btn {
-  width: 44px;
-  height: 44px;
-  border: 1px solid rgba(255, 255, 255, 0.8);
-  border-radius: 14px;
-  background: rgba(255, 255, 255, 0.6);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.02);
-  color: #1e293b;
-  cursor: pointer;
-  transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
-}
-
-.header-btn:hover {
-  background: white;
-  color: #818cf8;
-  border-color: #818cf8;
-  transform: translateY(-2px);
-  box-shadow: 0 8px 20px rgba(129, 140, 248, 0.15);
-}
-
-.main-content {
-  flex: 1;
-  padding: 20px;
-  overflow-y: auto;
-}
-
-.loading-state {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  height: 300px;
-  gap: 16px;
-  color: #94a3b8;
-}
-
-.editor-overlay {
-  position: fixed;
-  inset: 0;
-  background: rgba(0, 0, 0, 0.5);
-  backdrop-filter: blur(4px);
-  -webkit-backdrop-filter: blur(4px);
-  z-index: 1000;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 20px;
-}
-
-.editor-panel {
-  width: 100%;
-  max-width: 800px;
-  max-height: 90vh;
-  border-radius: 24px;
-  overflow: hidden;
-  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.15);
-}
-
-.slide-enter-active,
-.slide-leave-active {
-  transition: all 0.3s ease;
-}
-
-.slide-enter-active .editor-panel,
-.slide-leave-active .editor-panel {
-  transition: all 0.3s ease;
-}
-
-.slide-enter-from,
-.slide-leave-to {
-  opacity: 0;
-}
-
-.slide-enter-from .editor-panel,
-.slide-leave-to .editor-panel {
-  transform: translateY(20px) scale(0.95);
-}
-
-@media (max-width: 768px) {
-  .page-header {
-    padding: 12px 16px;
-  }
-  
-  .page-header h1 {
-    font-size: 18px;
-  }
-  
-  .main-content {
-    padding: 16px;
-  }
-  
-  .editor-overlay {
-    padding: 0;
-  }
-  
-  .editor-panel {
-    max-width: 100%;
-    max-height: 100vh;
-    border-radius: 0;
-  }
-}
+.main-content { min-height: 200px; }
+.loading-state { display: flex; align-items: center; justify-content: center; gap: 12px; min-height: 240px; color: var(--room-muted); font-size: 13px; }
 </style>

@@ -48,6 +48,26 @@ pub fn snapshot_in(conn: &Connection) -> ChatResult<Value> {
     Ok(Value::Object(values))
 }
 
+pub fn update_builtin_personas(conn:&mut Connection)->ChatResult<()> {
+    conn.execute_batch("CREATE TABLE IF NOT EXISTS local_config_migrations(version INTEGER PRIMARY KEY);")?;
+    let tx=conn.transaction()?;
+    let updated:bool=tx.query_row("SELECT EXISTS(SELECT 1 FROM local_config_migrations WHERE version=2)",[],|r|r.get(0))?;
+    if updated {return Ok(());}
+    let config=snapshot_in(&tx)?;
+    let defaults:Value=serde_json::from_str(include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/../shared/defaultAgents.json")))
+        .map_err(|_|ChatError::new("INVALID_CONFIG","默认角色配置无效"))?;
+    if config["ppc.agents"].as_str().is_some_and(|raw|!raw.trim().is_empty()) {
+        let mut agents=agents_from(&config)?;
+        // 按本次人设更新要求，仅替换这两个已有角色的正文，后续用户编辑不再被启动流程覆盖。
+        for id in ["pero","nana"] {
+            if let Some(agent)=agents.get_mut(id) {agent["persona_prompt"]=defaults[id]["persona_prompt"].clone();}
+        }
+        set_value_in(&tx,"ppc.agents",&json!(agents.to_string()))?;
+    }
+    tx.execute("INSERT INTO local_config_migrations(version) VALUES(2)",[])?;
+    tx.commit()?;Ok(())
+}
+
 pub fn snapshot(app: &AppHandle) -> ChatResult<Value> {
     let db = app.state::<DbState>();
     let conn = db_lock(&db)?;
@@ -103,6 +123,12 @@ pub fn normalize_agents(mut value: Value) -> ChatResult<Value> {
             return Err(ChatError::new("INVALID_CONFIG", "角色名称不能为空或过长"));
         }
         fields.insert("id".into(), json!(id));
+        // 旧角色记录可能未保存头像，只补缺失字段，保留用户指定的头像及显式空值。
+        if !fields.contains_key("avatar") {
+            if let Some(path)=match id.as_str() {"pero"=>Some("/avatars/pero.jpg"),"nana"=>Some("/avatars/nana.jpg"),_=>None} {
+                fields.insert("avatar".into(),json!(path));
+            }
+        }
         for key in ["system_prompt", "persona_prompt", "post_system_prompt"] {
             if fields.get(key).is_some_and(|v| !v.is_string()) {
                 return Err(ChatError::new("INVALID_CONFIG", "角色提示词必须是文本"));
@@ -146,7 +172,7 @@ pub fn save_agent_in(conn: &mut Connection, id: &str, mut agent: Value, create: 
 }
 
 #[tauri::command]
-pub fn local_role_action(app: AppHandle, runtime: tauri::State<super::runtime::ChatRuntime>,
+pub async fn local_role_action(app: AppHandle, runtime: tauri::State<'_,super::runtime::ChatRuntime>,
     action: String, agent: Option<Value>, id: Option<String>, data: Option<String>) -> ChatResult<Value> {
     let _lease = runtime.maintenance()?;
     let db = app.state::<DbState>();
@@ -166,6 +192,8 @@ pub fn local_role_action(app: AppHandle, runtime: tauri::State<super::runtime::C
     }
     if action == "duplicate" { agent["name"] = json!(format!("{} (副本)",agent["name"].as_str().unwrap_or("角色"))); }
     let agents = save_agent_in(&mut conn,&target,agent,action != "save")?;
+    drop(conn);
+    if let Err(error)=super::reminder_platform::synchronize(&app) {eprintln!("角色变更后的系统提醒同步等待恢复：{}",error.message);}
     Ok(json!({"agents":agents,"agentId":target}))
 }
 
@@ -193,7 +221,7 @@ fn state_from(config:&Value, agent_id:&str)->ChatResult<Value> {
     let get=|suffix:&str|config[format!("ppc.{agent_id}.{suffix}")].as_str().unwrap_or("").to_owned();
     let mut texts=serde_json::from_str::<Value>(&get("waifu.texts")).ok().filter(Value::is_object).unwrap_or(json!({}));
     if texts.get("welcome").is_none() { texts["welcome"]=agent.get("welcome_message").cloned().unwrap_or(json!("")); }
-    if let Some(lines)=agent["idle_messages"].as_array() {
+    if let Some(lines)=agent["idle_messages"].as_array().filter(|_|texts.get("idleMessages").is_none()) {
         for (index,line) in lines.iter().take(50).enumerate() {
             let key=format!("idleMessages_{:02}",index+1);
             if texts.get(&key).is_none() { texts[key]=line.clone(); }
@@ -216,40 +244,14 @@ pub fn local_character_projection(app:AppHandle, agent_id:String)->ChatResult<Va
         result[suffix]=config.get(format!("ppc.{agent_id}.{suffix}")).and_then(Value::as_str)
             .filter(|s| !s.is_empty()).or_else(||config[format!("ppc.{suffix}")].as_str()).unwrap_or("").into();
     }
-    let mut stmt=conn.prepare("SELECT tags FROM memories WHERE agent_id=?1 ORDER BY timestamp DESC,id DESC LIMIT 10")?;
-    let rows=stmt.query_map([&agent_id],|r|r.get::<_,String>(0))?;
+    let memories=match db.diary.query(&conn,&agent_id,&super::diary::Query {limit:10,..Default::default()}) {
+        Ok(entries)=>entries,Err(error)=> {eprintln!("角色投影暂不加载日记：{}",error.message);result["diaryUnavailable"]=json!(true);Vec::new()}
+    };
     let mut tags=Vec::<String>::new();
-    for row in rows {
-        for tag in serde_json::from_str::<Vec<String>>(&row?).unwrap_or_default() {
-            if tags.len()<8 && !tag.trim().is_empty() && !tags.contains(&tag) { tags.push(tag); }
-        }
-    }
+    for memory in memories { for tag in memory.tags { if tags.len()<8 && !tag.trim().is_empty() && !tags.contains(&tag) { tags.push(tag); } } }
     result["memoryTags"]=json!(tags);
     result["environment"]=super::environment::projection(&config);
     Ok(result)
 }
 
-fn bounded(settings: &Value, key: &str, fallback: f64, min: f64, max: f64) -> f64 {
-    settings.get(key).and_then(Value::as_f64).filter(|v| v.is_finite()).unwrap_or(fallback).clamp(min,max)
-}
-
-pub fn model_settings(config: &Value) -> ChatResult<ModelSettings> {
-    let get = |key: &str| config.get(key).and_then(Value::as_str).unwrap_or("").to_owned();
-    let raw = get("ppc.modelSettings");
-    let settings = if raw.trim().is_empty() { json!({}) } else {
-        serde_json::from_str::<Value>(&raw).map_err(|_| ChatError::new("INVALID_CONFIG", "模型参数配置损坏，请重新保存设置"))?
-    };
-    let base = get("ppc.apiBase");
-    let key = get("api_key");
-    Ok(ModelSettings {
-        base: if base.trim().is_empty() { "https://api.openai.com".into() } else { base },
-        api_key: key,
-        model: get("ppc.modelName"),
-        temperature: bounded(&settings,"temperature",0.7,0.0,2.0),
-        top_p: bounded(&settings,"topP",1.0,0.0,1.0),
-        frequency_penalty: bounded(&settings,"frequencyPenalty",0.0,-2.0,2.0),
-        presence_penalty: bounded(&settings,"presencePenalty",0.0,-2.0,2.0),
-        stream: settings.get("stream").and_then(Value::as_bool).unwrap_or(false),
-        memory_rounds: bounded(&settings,"memoryRounds",40.0,1.0,200.0) as usize,
-    })
-}
+pub fn model_settings(config:&Value)->ChatResult<ModelSettings> { super::model_config::from_config(config) }

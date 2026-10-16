@@ -3,20 +3,28 @@ package com.peroperochat.mobile
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
-import android.util.Log
+import android.os.PowerManager
+import android.os.UserManager
+import java.io.File
 
-/**
- * 开机完成广播接收器
- * 安卓系统重启后 AlarmManager 注册的闹铃会全部丢失，
- * 此 Receiver 在开机完成时被唤醒，通知 App 重新注册所有未过期的闹铃。
- * 实际的重新注册逻辑由 Rust 后端在 App 启动时完成。
- */
+/** 开机解锁、更新、校时和授权后，直接从数据库恢复系统登记。 */
 class BootReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
-        if (intent.action == Intent.ACTION_BOOT_COMPLETED) {
-            Log.i("PPC_BootReceiver", "设备重启完成，等待 App 启动时重新注册闹铃")
-            // 可选：在此启动一个前台 Service 来确保 App 进程被拉起
-            // 目前依赖用户下次打开 App 时，Rust 侧自动重新注册
+        val allowed = setOf(Intent.ACTION_BOOT_COMPLETED, Intent.ACTION_MY_PACKAGE_REPLACED,
+            Intent.ACTION_TIME_CHANGED, Intent.ACTION_TIMEZONE_CHANGED, Intent.ACTION_USER_UNLOCKED,
+            "android.app.action.SCHEDULE_EXACT_ALARM_PERMISSION_STATE_CHANGED", ReminderScheduler.RETRY_ACTION)
+        if (intent.action !in allowed) return
+        if (!(context.getSystemService(Context.USER_SERVICE) as UserManager).isUserUnlocked) return
+        if (!File(context.applicationInfo.dataDir, "data/peropero.db").isFile) return
+        val result = goAsync()
+        val app = context.applicationContext
+        val lock = (app.getSystemService(Context.POWER_SERVICE) as PowerManager)
+                .newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "PeroperoChat:提醒恢复")
+        lock.acquire(30_000)
+        ReminderScheduler.executor.execute {
+            try { ReminderScheduler.synchronize(app, force = true) }
+            catch (error: Throwable) { ReminderScheduler.failed(app, error) }
+            finally { try { if (lock.isHeld) lock.release() } finally { result.finish() } }
         }
     }
 }

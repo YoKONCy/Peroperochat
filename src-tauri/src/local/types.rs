@@ -45,6 +45,10 @@ pub struct Message {
     pub revision: i64,
     pub status: String,
     pub error: Option<String>,
+    #[serde(default)]
+    pub reasoning: String,
+    #[serde(default)]
+    pub usage: Value,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -88,10 +92,32 @@ pub struct ChatEvent {
     pub content: Option<String>,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct ModelMessage {
     pub role: String,
     pub content: Value,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub calls: Vec<ToolCall>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub call_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub name: Option<String>,
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub reasoning: String,
+    #[serde(default, skip_serializing_if = "Value::is_null")]
+    pub native: Value,
+}
+
+impl ModelMessage {
+    pub fn new(role: &str, content: Value) -> Self { Self { role:role.into(),content,..Self::default() } }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ToolCall { pub id:String, pub name:String, pub arguments:Value }
+
+#[derive(Debug, Clone, Default)]
+pub struct Completion {
+    pub content:String, pub reasoning:String, pub calls:Vec<ToolCall>, pub native:Value, pub usage:Value,
 }
 
 pub fn text_content(value: &Value) -> String {

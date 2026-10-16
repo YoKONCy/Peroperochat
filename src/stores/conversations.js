@@ -7,7 +7,7 @@ const conversations = new Map()
 
 function entryFor(threadId) {
   if (!conversations.has(threadId)) conversations.set(threadId, shallowReactive({
-    threadId, messages: [], busy: false, loaded: false, revision: 0, controller: null, speaker: null,
+    threadId, messages: [], busy: false, loaded: false, revision: 0, controller: null, speaker: null, activity: '',
   }))
   return conversations.get(threadId)
 }
@@ -38,6 +38,7 @@ export function useLocalConversation(channel = 'desktop') {
   const messages = computed(() => current.value.messages.map(displayMessage))
   const isLoading = computed(() => current.value.busy)
   const processingAgentId = computed(() => current.value.speaker)
+  const activityText = computed(() => current.value.activity)
 
   async function load() {
     const entry = current.value
@@ -49,6 +50,7 @@ export function useLocalConversation(channel = 'desktop') {
     const entry = entryFor(channel === 'group' ? 'group:family' : `desktop:${agentId}`)
     if (entry.busy) throw new Error('该会话正在回复，请稍后重试')
     entry.busy = true
+    entry.activity = '正在听你说…'
     entry.controller = new AbortController()
     let started = false
     let preview = null
@@ -76,8 +78,24 @@ export function useLocalConversation(channel = 'desktop') {
             entry.speaker = event.agentId
             started = true
             if (event.user) mergeMessage(entry, event.user)
-            preview = { ...event.message, content: '', status: 'pending', error: null }
+            entry.activity = '正在想怎么回答你…'
+            preview = { ...event.message, content: '', reasoning: '', status: 'pending', error: null }
             mergeMessage(entry, preview)
+          } else if (event.kind === 'step' && preview) {
+            clearTimeout(frameTimer)
+            frameTimer = null
+            entry.activity = '正在想怎么回答你…'
+            preview = { ...preview, content: '' }
+            mergeMessage(entry, preview)
+          } else if (event.kind === 'reasoning' && preview) {
+            preview = { ...preview, reasoning: (preview.reasoning || '') + event.content }
+            if (!frameTimer) frameTimer = setTimeout(flushPreview, 33)
+          } else if (event.kind === 'tool') {
+            try {
+              const tool = JSON.parse(event.content)
+              const labels = { query_diary: '正在翻一翻日记…', write_diary: '正在记下今天的小事…', update_character: '正在整理此刻的心情…', query_reminders: '正在查看提醒…', manage_reminder: '正在整理提醒…' }
+              entry.activity = labels[tool.name] || '正在整理思绪…'
+            } catch { entry.activity = '正在整理思绪…' }
           } else if (['done', 'error', 'cancelled'].includes(event.kind) && event.message) {
             clearTimeout(frameTimer)
             frameTimer = null
@@ -95,6 +113,7 @@ export function useLocalConversation(channel = 'desktop') {
       entry.messages = result.snapshot.messages
       entry.revision++
       publishCharacterState(result.state)
+      if (result.state?.reminderChanges > 0) window.dispatchEvent(new CustomEvent('ppc:reminders-changed', { detail: { agentId } }))
       if (agentId === activeAgentId.value && channel === 'desktop') {
         window.dispatchEvent(new CustomEvent('ppc:chat', { detail: visibleMessage(result.message.content) }))
       }
@@ -111,6 +130,7 @@ export function useLocalConversation(channel = 'desktop') {
       entry.busy = false
       entry.controller = null
       entry.speaker = null
+      entry.activity = ''
     }
   }
 
@@ -128,7 +148,7 @@ export function useLocalConversation(channel = 'desktop') {
   }
 
   return {
-    messages, isLoading, processingAgentId, load, remove, removeById,
+    messages, isLoading, processingAgentId, activityText, load, remove, removeById,
     send: (content, options = {}) => run({ content, ephemeral: !!options.ephemeral }, options),
     sendGroup: content => run({ content }, { command: 'local_group_chat' }),
     regenerate: (index) => {

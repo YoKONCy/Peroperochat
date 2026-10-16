@@ -17,7 +17,15 @@ pub struct Memory {
     pub agent_id: String,
     #[serde(default)]
     pub source_message_id: Option<i64>,
+    #[serde(default)]
+    pub diary_date: Option<String>,
+    #[serde(default="memory_revision")]
+    pub revision:i64,
+    #[serde(default)]
+    pub source_message_ids:Vec<i64>,
 }
+
+fn memory_revision()->i64 { 1 }
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Reminder {
@@ -29,6 +37,10 @@ pub struct Reminder {
     pub delivered: Option<bool>,
     pub recur: Option<String>,
     pub recur_until: Option<String>,
+    #[serde(default="memory_revision")]
+    pub revision:i64,
+    #[serde(default)]
+    pub delivery_error:Option<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -44,6 +56,7 @@ pub struct Topic {
 
 pub struct DbState {
     pub conn: Mutex<Connection>,
+    pub diary: crate::local::diary::DiaryStore,
 }
 
 pub fn init_db(app: &AppHandle) -> Result<DbState, Box<dyn std::error::Error>> {
@@ -130,91 +143,26 @@ pub fn init_db(app: &AppHandle) -> Result<DbState, Box<dyn std::error::Error>> {
 
     Ok(DbState {
         conn: Mutex::new(conn),
+        diary: crate::local::diary::DiaryStore::new(data_dir.join("diary")),
     })
 }
 
 // --- Memory Commands ---
 
 #[tauri::command]
-pub fn get_memories(state: tauri::State<DbState>, agent_id: String, limit: u32, offset: u32) -> Result<Vec<Memory>, String> {
-    let conn = state.conn.lock().map_err(|e| e.to_string())?;
-    let mut stmt = conn.prepare(
-        "SELECT id, content, tags, importance, timestamp, msg_timestamp, type, source, agent_id, source_message_id
-         FROM memories WHERE agent_id = ?1 ORDER BY timestamp DESC LIMIT ?2 OFFSET ?3"
-    ).map_err(|e| e.to_string())?;
-    
-    let memory_iter = stmt.query_map(params![agent_id, limit, offset], |row| {
-        let tags_str: String = row.get(2)?;
-        let tags: Vec<String> = serde_json::from_str(&tags_str).unwrap_or_default();
-        
-        Ok(Memory {
-            id: row.get(0)?,
-            content: row.get(1)?,
-            tags,
-            importance: row.get(3)?,
-            timestamp: row.get(4)?,
-            msg_timestamp: row.get(5)?,
-            type_: row.get(6)?,
-            source: row.get(7)?,
-            agent_id: row.get(8)?,
-            source_message_id: row.get(9)?,
-        })
-    }).map_err(|e| e.to_string())?;
-    
-    let mut memories = Vec::new();
-    for memory in memory_iter {
-        memories.push(memory.map_err(|e| e.to_string())?);
-    }
-    
-    Ok(memories)
+pub fn get_memories(state:tauri::State<DbState>,agent_id:String,limit:u32,offset:u32)->Result<Vec<Memory>,crate::local::types::ChatError> {
+    let conn=state.conn.lock().map_err(|_|crate::local::types::ChatError::new("STORAGE_ERROR","本地数据库不可用"))?;
+    Ok(state.diary.query(&conn,&agent_id,&crate::local::diary::Query { limit:limit as usize,offset:offset as usize,..Default::default() })?
+        .into_iter().map(|e|Memory { id:Some(e.id),content:e.content,tags:e.tags,importance:5,timestamp:e.timestamp,msg_timestamp:Some(e.timestamp),
+            type_:"event".into(),source:"diary".into(),agent_id:e.agent_id,source_message_id:e.source_message_ids.last().copied(),diary_date:Some(e.date),revision:e.revision,source_message_ids:e.source_message_ids }).collect())
 }
 
 #[tauri::command]
-pub fn delete_memory(state: tauri::State<DbState>, id: i64) -> Result<(), String> {
-    let conn = state.conn.lock().map_err(|e| e.to_string())?;
-    conn.execute("DELETE FROM memories WHERE id = ?1", params![id])
-        .map_err(|e| e.to_string())?;
-    Ok(())
-}
-
-// --- Reminder Commands ---
-
-#[tauri::command]
-pub fn get_reminders(state: tauri::State<DbState>, agent_id: String) -> Result<Vec<Reminder>, String> {
-    let conn = state.conn.lock().map_err(|e| e.to_string())?;
-    let mut stmt = conn.prepare(
-        "SELECT id, task, time, timestamp, agent_id, delivered, recur, recur_until FROM reminders WHERE agent_id = ?1 ORDER BY time ASC"
-    ).map_err(|e| e.to_string())?;
-    
-    let iter = stmt.query_map(params![agent_id], |row| {
-        Ok(Reminder {
-            id: row.get(0)?,
-            task: row.get(1)?,
-            time: row.get(2)?,
-            timestamp: row.get(3)?,
-            agent_id: row.get(4)?,
-            delivered: {
-                let v: i64 = row.get(5).unwrap_or(0);
-                Some(v != 0)
-            },
-            recur: row.get(6).ok(),
-            recur_until: row.get(7).ok(),
-        })
-    }).map_err(|e| e.to_string())?;
-    
-    let mut items = Vec::new();
-    for item in iter {
-        items.push(item.map_err(|e| e.to_string())?);
-    }
-    Ok(items)
-}
-
-#[tauri::command]
-pub fn delete_reminder(state: tauri::State<DbState>, id: i64) -> Result<(), String> {
-    let conn = state.conn.lock().map_err(|e| e.to_string())?;
-    conn.execute("DELETE FROM reminders WHERE id = ?1", params![id])
-        .map_err(|e| e.to_string())?;
-    Ok(())
+pub fn delete_memory(state:tauri::State<DbState>,runtime:tauri::State<crate::local::runtime::ChatRuntime>,agent_id:String,id:i64)->Result<(),crate::local::types::ChatError> {
+    let _lease=runtime.maintenance()?;
+    let mut conn=state.conn.lock().map_err(|_|crate::local::types::ChatError::new("STORAGE_ERROR","本地数据库不可用"))?;
+    let tx=conn.transaction()?;crate::local::diary::delete(&tx,&agent_id,id)?;tx.commit()?;
+    state.diary.synchronize(&conn)
 }
 
 fn ensure_reminders_columns(conn: &Connection) -> SqlResult<()> {

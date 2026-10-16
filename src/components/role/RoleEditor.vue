@@ -1,24 +1,18 @@
 <template>
   <div class="role-editor">
-    <div class="editor-header">
-      <h2>{{ isNew ? '创建新角色' : `编辑角色: ${formData.name}` }}</h2>
-      <button class="close-btn" @click="$emit('close')">
-        <i class="fas fa-times"></i>
-      </button>
-    </div>
     
-    <div class="editor-content">
+    <div class="editor-content" :inert="isSaving ? true : undefined">
       <el-tabs v-model="activeTab">
         <el-tab-pane label="基础信息" name="basic">
           <div class="form-section">
             <div class="avatar-upload">
-              <div class="avatar-preview" @click="triggerAvatarUpload">
-                <img v-if="formData.avatar" :src="formData.avatar" />
+              <button type="button" class="avatar-preview" aria-label="上传角色头像" @click="triggerAvatarUpload">
+                <CharacterAvatar v-if="formData.avatar" class="editor-avatar" :src="formData.avatar" :label="formData.name" />
                 <div v-else class="avatar-placeholder">
-                  <i class="fas fa-camera"></i>
+                  <RoomIcon name="camera" />
                   <span>上传头像</span>
                 </div>
-              </div>
+              </button>
               <input 
                 ref="avatarInput"
                 type="file"
@@ -86,7 +80,7 @@
                   <div class="label-with-help">
                     <span>系统提示词</span>
                     <el-tooltip content="定义 AI 的基本行为规则和安全约束">
-                      <i class="fas fa-question-circle"></i>
+                      <RoomIcon name="help" />
                     </el-tooltip>
                   </div>
                 </template>
@@ -103,7 +97,7 @@
                   <div class="label-with-help">
                     <span>人设提示词</span>
                     <el-tooltip content="定义角色的性格、外貌、背景等特征">
-                      <i class="fas fa-question-circle"></i>
+                      <RoomIcon name="help" />
                     </el-tooltip>
                   </div>
                 </template>
@@ -120,7 +114,7 @@
                   <div class="label-with-help">
                     <span>后置提示词</span>
                     <el-tooltip content="附加在用户消息后的提示，用于引导回复格式">
-                      <i class="fas fa-question-circle"></i>
+                      <RoomIcon name="help" />
                     </el-tooltip>
                   </div>
                 </template>
@@ -160,7 +154,7 @@
                   placeholder="角色首次对话时的问候语..."
                 />
               </el-form-item>
-              
+<el-form-item label="闲置互动台词"><el-input v-model="formData.idle_messages_text" type="textarea" :rows="5" placeholder="每行一条台词" /><span class="form-hint">角色闲置时使用，一行一条。</span></el-form-item>
               <el-divider>默认状态</el-divider>
               
               <el-row :gutter="16">
@@ -189,9 +183,9 @@
     <div class="editor-footer">
       <div class="footer-left"></div>
       <div class="footer-right">
-        <el-button @click="$emit('close')">取消</el-button>
+        <el-button :disabled="isSaving" @click="$emit('close')">取消</el-button>
         <el-button type="primary" @click="handleSave" :loading="isSaving">
-          <i class="fas fa-save"></i> 保存
+          保存角色
         </el-button>
       </div>
     </div>
@@ -201,6 +195,8 @@
 <script setup>
 import { ref, reactive, computed, onMounted, watch } from 'vue'
 import { ElMessage } from 'element-plus'
+import RoomIcon from '../companion/RoomIcon.vue'
+import CharacterAvatar from '../companion/CharacterAvatar.vue'
 
 const props = defineProps({
   saving: { type: Boolean, default: false },
@@ -231,6 +227,7 @@ const formData = reactive({
   avatar: '',
   description: '',
   tags: [],
+  idle_messages_text: '',
   system_prompt: '',
   persona_prompt: '',
   post_system_prompt: '',
@@ -243,14 +240,13 @@ const formData = reactive({
 })
 
 function resetForm() {
-  console.log('resetForm called, props.role:', props.role, 'isNew:', props.isNew)
   if (props.role && !props.isNew) {
-    console.log('Loading existing role')
     formData.id = props.role.id || ''
     formData.name = props.role.name || ''
     formData.avatar = props.role.avatar || ''
     formData.description = props.role.description || ''
-    formData.tags = props.role.tags || []
+    formData.tags = [...(props.role.tags || [])]
+    formData.idle_messages_text = Array.isArray(props.role.idle_messages) ? props.role.idle_messages.join('\n') : ''
     formData.system_prompt = props.role.system_prompt || ''
     formData.persona_prompt = props.role.persona_prompt || ''
     formData.post_system_prompt = props.role.post_system_prompt || ''
@@ -261,12 +257,12 @@ function resetForm() {
       mind: props.role.default_state?.mind || ''
     }
   } else {
-    console.log('Creating new role')
     formData.id = `custom_${Date.now()}`
     formData.name = '新角色'
     formData.avatar = ''
     formData.description = ''
     formData.tags = []
+    formData.idle_messages_text = ''
     formData.system_prompt = ''
     formData.persona_prompt = ''
     formData.post_system_prompt = ''
@@ -355,255 +351,32 @@ function handleSave() {
   }
   
   // 保存结果由父页面等待后端事务后展示，事件发出不等于保存成功。
-  emit('save', { ...formData })
+  emit('save', { ...(props.role || {}), ...formData })
 }
 </script>
 
 <style scoped>
-.role-editor {
-  display: flex;
-  flex-direction: column;
-  height: 100%;
-  background: white;
-  border-radius: 24px;
-  overflow: hidden;
-  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.1);
-}
-
-.editor-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 24px 28px;
-  border-bottom: 1px solid rgba(0, 0, 0, 0.04);
-  background: linear-gradient(135deg, rgba(253, 242, 248, 0.5), rgba(240, 249, 255, 0.5));
-}
-
-.editor-header h2 {
-  margin: 0;
-  font-size: 22px;
-  font-weight: 700;
-  color: #1e293b;
-}
-
-.close-btn {
-  width: 40px;
-  height: 40px;
-  border: none;
-  border-radius: 14px;
-  background: white;
-  color: #64748b;
-  cursor: pointer;
-  transition: all 0.2s;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
-}
-
-.close-btn:hover {
-  background: linear-gradient(135deg, #f472b6, #ef4444);
-  color: white;
-  transform: scale(0.95);
-}
-
-.editor-content {
-  flex: 1;
-  overflow-y: auto;
-  padding: 0 28px;
-}
-
-.form-section {
-  padding: 24px 0;
-}
-
-.avatar-upload {
-  display: flex;
-  justify-content: center;
-  margin-bottom: 28px;
-}
-
-.avatar-preview {
-  width: 120px;
-  height: 120px;
-  border-radius: 32px;
-  overflow: hidden;
-  cursor: pointer;
-  border: 4px solid rgba(59, 130, 246, 0.2);
-  transition: all 0.3s;
-  box-shadow: 0 6px 20px rgba(244, 114, 182, 0.15);
-}
-
-.avatar-preview:hover {
-  border-color: rgba(59, 130, 246, 0.6);
-  transform: scale(1.05);
-  box-shadow: 0 10px 32px rgba(244, 114, 182, 0.3);
-}
-
-.avatar-preview img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-}
-
-.avatar-placeholder {
-  width: 100%;
-  height: 100%;
-  background: linear-gradient(135deg, #f472b6, #3b82f6);
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  color: white;
-  gap: 6px;
-}
-
-.avatar-placeholder i {
-  font-size: 32px;
-}
-
-.avatar-placeholder span {
-  font-size: 12px;
-  font-weight: 600;
-}
-
-.form-hint {
-  font-size: 12px;
-  color: #94a3b8;
-  margin-top: 6px;
-}
-
-.label-with-help {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.label-with-help i {
-  color: #94a3b8;
-  cursor: help;
-}
-
-.tags-input {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  padding: 10px 14px;
-  border: 1px solid rgba(0, 0, 0, 0.06);
-  border-radius: 16px;
-  min-height: 48px;
-  background: rgba(248, 250, 252, 0.8);
-}
-
-.tags-input input {
-  flex: 1;
-  min-width: 100px;
-  border: none;
-  outline: none;
-  font-size: 14px;
-  background: transparent;
-}
-
-.template-section {
-  margin-top: 28px;
-  padding-top: 28px;
-  border-top: 1px solid rgba(0, 0, 0, 0.04);
-}
-
-.template-section h4 {
-  margin: 0 0 16px 0;
-  font-size: 15px;
-  font-weight: 600;
-  color: #64748b;
-}
-
-.template-grid {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 10px;
-}
-
-.template-btn {
-  padding: 10px 18px;
-  border: 1px solid rgba(0, 0, 0, 0.06);
-  border-radius: 14px;
-  background: white;
-  color: #64748b;
-  font-size: 13px;
-  cursor: pointer;
-  transition: all 0.2s;
-  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.03);
-  font-weight: 500;
-}
-
-.template-btn:hover {
-  border-color: rgba(59, 130, 246, 0.4);
-  color: #3b82f6;
-  background: rgba(59, 130, 246, 0.06);
-  transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.1);
-}
-
-.editor-footer {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 20px 28px;
-  border-top: 1px solid rgba(0, 0, 0, 0.04);
-  background: rgba(248, 250, 252, 0.8);
-}
-
-.footer-right {
-  display: flex;
-  gap: 12px;
-}
-
-:deep(.el-tabs__header) {
-  margin-bottom: 0;
-}
-
-:deep(.el-tabs__item) {
-  font-size: 14px;
-  font-weight: 600;
-}
-
-:deep(.el-form-item__label) {
-  font-weight: 600;
-  color: #334155;
-}
-
-:deep(.el-textarea__inner) {
-  font-family: inherit;
-  line-height: 1.7;
-  border-radius: 14px;
-}
-
-:deep(.el-input__wrapper) {
-  border-radius: 14px;
-}
-
-@media (max-width: 640px) {
-  .editor-header {
-    padding: 20px;
-  }
-  
-  .editor-content {
-    padding: 0 20px;
-  }
-  
-  .editor-footer {
-    flex-direction: column;
-    gap: 12px;
-    padding: 16px;
-  }
-  
-  .footer-left,
-  .footer-right {
-    width: 100%;
-    justify-content: center;
-  }
-  
-  .avatar-preview {
-    width: 100px;
-    height: 100px;
-    border-radius: 24px;
-  }
-}
+.role-editor { display: flex; flex-direction: column; height: 100%; min-height: 0; width: 100%; background: var(--room-surface); }
+.editor-content { flex: 1; min-height: 0; overflow-y: auto; padding: 0 24px; overscroll-behavior: contain; }
+.form-section { padding: 18px 0 8px; }
+.avatar-upload { display: flex; margin-bottom: 26px; }
+.avatar-preview { padding: 0; width: 86px; height: 100px; border: 1px solid var(--room-line); border-radius: 3px 10px 3px 3px; overflow: hidden; background: var(--room-subtle); }
+.avatar-preview .editor-avatar { width: 100%; height: 100%; }
+.avatar-placeholder { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; height: 100%; color: var(--room-muted); font-size: 11px; }
+.form-hint { font-size: 11px; color: var(--room-muted); line-height: 1.65; margin-top: 6px; }
+.tags-input { display: flex; flex-wrap: wrap; gap: 7px; width: 100%; padding: 8px; border: 1px solid var(--room-line); border-radius: 5px; }
+.tags-input input { min-width: 100px; flex: 1; border: 0; padding: 4px; outline: 0; background: transparent; color: var(--room-ink); font-size: 13px; }
+.tags-input:focus-within { border-color: var(--room-accent); }
+.label-with-help { display: flex; align-items: center; gap: 8px; }
+.label-with-help svg { width: 14px; height: 14px; color: var(--room-muted); }
+.template-section { border-top: 1px solid var(--room-line); padding: 14px 0 20px; }
+.template-section h4 { font-size: 12px; font-weight: 500; color: var(--room-muted); }
+.template-grid { display: flex; flex-wrap: wrap; gap: 8px; }
+.template-btn { border: 1px solid var(--room-line); border-radius: 8px; background: var(--room-subtle); padding: 9px 12px; color: var(--room-muted); font-size: 12px; }
+.template-btn:hover { border-color: var(--room-accent); color: var(--room-accent); }
+.editor-footer { display: flex; justify-content: flex-end; padding: 16px 24px calc(16px + env(safe-area-inset-bottom)); border-top: 1px solid var(--room-line); background: var(--room-surface); flex: none; }
+.footer-right { display: flex; gap: 8px; }
+.footer-right :deep(.el-button + .el-button) { margin-left: 0; }
+@media (max-width: 480px) { .editor-content { padding: 0 18px; } :deep(.el-col-8), :deep(.el-col-12) { flex: 0 0 100%; max-width: 100%; } :deep(.el-input__inner), :deep(.el-textarea__inner), .tags-input input { font-size: 13px; } }
+@supports (-webkit-touch-callout: none) { :deep(.el-input__inner), :deep(.el-textarea__inner), .tags-input input { font-size: 16px; } }
 </style>

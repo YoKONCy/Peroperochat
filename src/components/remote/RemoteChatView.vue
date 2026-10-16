@@ -1,5 +1,5 @@
 <template>
-  <div class="remote-chat-view pixel-font">
+  <div class="remote-chat-view">
     <!-- 聊天记录区域 -->
     <div class="chat-messages" ref="scrollContainer">
       <div v-for="msg in messages" :key="msg.id || msg.timestamp" 
@@ -30,10 +30,10 @@
         v-model="userInput" 
         placeholder="发送指令到 PeroCore..." 
         class="pixel-textarea"
-        @keydown.enter.prevent="sendMessage"
+        @keydown="handleComposerKey"
       ></textarea>
-      <button class="send-btn pixel-btn" @click="sendMessage" :disabled="!userInput.trim() || isSending">
-        <i class="fas fa-paper-plane"></i>
+      <button class="send-btn pixel-btn" aria-label="发送消息" @click="sendMessage" :disabled="!userInput.trim() || isSending">
+        <RoomIcon name="send" />
       </button>
     </div>
   </div>
@@ -43,6 +43,7 @@
 import { ref, onMounted, nextTick } from 'vue'
 import { marked } from 'marked'
 import DOMPurify from 'dompurify'
+import RoomIcon from '../companion/RoomIcon.vue'
 
 const props = defineProps({
   pcUrl: String,
@@ -50,6 +51,7 @@ const props = defineProps({
 })
 
 const messages = ref([])
+function handleComposerKey(event) { if (event.key === 'Enter' && !event.shiftKey && !event.isComposing && event.keyCode !== 229) { event.preventDefault(); sendMessage() } }
 const userInput = ref('')
 const isSending = ref(false)
 const scrollContainer = ref(null)
@@ -199,153 +201,24 @@ onMounted(() => {
 </script>
 
 <style scoped>
-.remote-chat-view {
-  display: flex;
-  flex-direction: column;
-  height: 100%;
-  background: #000;
-}
-
-.chat-messages {
-  flex: 1;
-  overflow-y: auto;
-  padding: 15px;
-  display: flex;
-  flex-direction: column;
-  gap: 20px;
-}
-
-.message-row {
-  display: flex;
-  gap: 12px;
-  max-width: 85%;
-}
-
-.user-row {
-  align-self: flex-end;
-  flex-direction: row;
-}
-
-.assistant-row {
-  align-self: flex-start;
-}
-
-.avatar-box {
-  width: 36px;
-  height: 36px;
-  flex-shrink: 0;
-  background: #333;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  overflow: hidden;
-}
-
-.avatar-img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-}
-
-.user-icon {
-  font-size: 10px;
-  color: #fff;
-}
-
-.bubble-container {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-
-.user-row .bubble-container {
-  align-items: flex-end;
-}
-
-.sender-name {
-  font-size: 10px;
-  color: #0ff;
-  text-transform: uppercase;
-}
-
-.bubble {
-  padding: 10px 14px;
-  font-size: 14px;
-  line-height: 1.5;
-  word-break: break-word;
-}
-
-.user-bubble {
-  background: #004488;
-  color: #fff;
-}
-
-.assistant-bubble {
-  background: #222;
-  color: #0f0;
-}
-
-.message-time {
-  font-size: 8px;
-  color: #666;
-}
-
-.streaming-dot {
-  display: inline-block;
-  width: 8px;
-  height: 8px;
-  background: #0f0;
-  margin-left: 5px;
-  animation: blink 1s infinite;
-}
-
-@keyframes blink {
-  0%, 100% { opacity: 0; }
-  50% { opacity: 1; }
-}
-
-.input-area {
-  display: flex;
-  padding: 10px;
-  gap: 10px;
-  background: #111;
-}
-
-.pixel-textarea {
-  flex: 1;
-  height: 50px;
-  background: #000;
-  border: 2px solid #fff;
-  color: #0f0;
-  padding: 8px;
-  font-family: inherit;
-  font-size: 14px;
-  outline: none;
-  resize: none;
-}
-
-.send-btn {
-  width: 50px;
-  background: #0088ff;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.pixel-border-sm {
-  border: 2px solid #fff;
-}
-
-/* Markdown 样式 */
-:deep(.markdown-body) {
-  font-size: 14px;
-}
-:deep(.markdown-body p) {
-  margin-bottom: 8px;
-}
-:deep(.markdown-body code) {
-  background: #1a1a1a;
-  padding: 2px 4px;
-  border: 1px solid #444;
-}
+.remote-chat-view { height: 100%; display: flex; flex-direction: column; background: var(--room-page); }
+.chat-messages { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: 24px max(18px, calc((100% - 800px) / 2)); }
+.message-row { display: flex; align-items: flex-start; gap: 10px; margin-bottom: 20px; }
+.user-row { justify-content: flex-end; }
+.avatar-box { width: 34px; height: 38px; border-radius: 10px; overflow: hidden; background: var(--room-accent-soft); flex: none; }
+.avatar-img { width: 100%; height: 100%; object-fit: cover; }
+.user-icon { display: grid; place-items: center; height: 100%; color: var(--room-muted); font-size: 11px; }
+.bubble-container { min-width: 0; max-width: min(80%, 600px); }
+.sender-name { font-size: 11px; color: var(--room-muted); margin: 0 0 7px; }
+.bubble { background: var(--room-surface); color: var(--room-ink); border: 1px solid var(--room-line); border-radius: 4px 15px 15px; padding: 12px 15px; }
+.user-bubble { background: var(--room-user-bubble); border-color: transparent; border-radius: 15px 4px 15px 15px; }
+.message-time { margin-top: 6px; font-size: 10px; color: var(--room-muted); }
+.user-row .message-time { text-align: right; }
+.streaming-dot { width: 5px; height: 5px; margin-top: 7px; border-radius: 50%; background: var(--room-accent); animation: remote-pulse 1s infinite; }
+.input-area { display: flex; align-items: flex-end; gap: 10px; padding: 12px max(16px, calc((100% - 800px) / 2)) calc(12px + env(safe-area-inset-bottom)); background: var(--room-surface); border-top: 1px solid var(--room-line); }
+.pixel-textarea { flex: 1; min-width: 0; min-height: 44px; max-height: 120px; padding: 11px 12px; border: 1px solid var(--room-line); border-radius: 11px; outline: 0; resize: vertical; background: var(--room-surface); color: var(--room-ink); font: inherit; font-size: 16px; line-height: 22px; }
+.pixel-textarea:focus { border-color: var(--room-accent); }
+.send-btn { display: grid; place-items: center; width: 44px; height: 44px; border: 0; border-radius: 11px; flex: none; background: var(--room-accent); color: white !important; }
+.send-btn:disabled { background: var(--room-accent-soft); color: var(--room-accent) !important; }
+@keyframes remote-pulse { 0%, 100% { opacity: .3; } 50% { opacity: 1; } }
 </style>

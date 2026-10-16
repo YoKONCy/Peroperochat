@@ -1,15 +1,15 @@
 <template>
-  <div class="remote-stronghold-view pixel-font">
+  <div class="remote-stronghold-view">
     <!-- 标签切换 -->
     <div class="tabs pixel-border-sm">
-      <div 
+      <button
         v-for="t in ['members', 'rooms']" 
         :key="t"
         :class="['tab', { active: activeTab === t }]"
         @click="activeTab = t"
       >
         {{ t === 'members' ? '据点成员' : '房间列表' }}
-      </div>
+      </button>
     </div>
 
     <!-- 成员列表 -->
@@ -128,176 +128,25 @@ onMounted(() => {
 </script>
 
 <style scoped>
-.remote-stronghold-view {
-  display: flex;
-  flex-direction: column;
-  height: 100%;
-  background: #111;
-  position: relative;
-}
-
-.tabs {
-  display: flex;
-  background: #222;
-  margin: 10px;
-}
-
-.tab {
-  flex: 1;
-  padding: 12px;
-  text-align: center;
-  cursor: pointer;
-  font-size: 14px;
-}
-
-.tab.active {
-  background: #0088ff;
-  color: #fff;
-  font-weight: bold;
-}
-
-.tab-content {
-  flex: 1;
-  overflow-y: auto;
-  padding: 10px;
-}
-
-.member-grid {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-
-.member-card {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 12px;
-  background: #222;
-}
-
-.card-left {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-
-.member-avatar {
-  width: 48px;
-  height: 48px;
-  object-fit: cover;
-}
-
-.member-name {
-  font-size: 16px;
-  font-weight: bold;
-  color: #fff;
-}
-
-.member-status {
-  font-size: 10px;
-  margin-top: 4px;
-}
-
-.member-status.active { color: #0f0; }
-.member-status.inactive { color: #666; }
-
-.action-btn {
-  padding: 8px 16px;
-  font-size: 12px;
-  min-width: 80px;
-}
-
-.btn-active {
-  background: #ff4444;
-}
-
-.room-list {
-  display: flex;
-  flex-direction: column;
-  gap: 15px;
-}
-
-.room-card {
-  padding: 15px;
-  background: #222;
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-}
-
-.room-name {
-  font-size: 16px;
-  font-weight: bold;
-  color: #0ff;
-  margin-bottom: 5px;
-}
-
-.room-desc {
-  font-size: 12px;
-  color: #aaa;
-  margin-bottom: 10px;
-}
-
-.room-members {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-}
-
-.member-tag {
-  font-size: 10px;
-  padding: 2px 6px;
-  background: #333;
-  color: #eee;
-  border: 1px solid #555;
-}
-
-.enter-btn {
-  background: #0088ff;
-  padding: 6px 12px;
-  font-size: 12px;
-}
-
-.loading-overlay {
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background: rgba(0,0,0,0.7);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 10;
-}
-
-.pixel-loader {
-  padding: 20px;
-  border: 4px solid #fff;
-  background: #000;
-  color: #0f0;
-  animation: pulse 1s infinite;
-}
-
-@keyframes pulse {
-  0%, 100% { opacity: 0.5; }
-  50% { opacity: 1; }
-}
-
-.pixel-border-sm {
-  border: 2px solid #fff;
-}
-
-.pixel-btn {
-  border: 2px solid #fff;
-  background: #444;
-  color: #fff;
-  cursor: pointer;
-  font-family: inherit;
-}
-
-.pixel-btn:active {
-  transform: scale(0.95);
-}
+.remote-stronghold-view { position: relative; height: 100%; overflow-y: auto; padding: 24px max(18px, calc((100% - 1000px) / 2)); background: var(--room-page); }
+.tabs { display: flex; gap: 6px; border-bottom: 1px solid var(--room-line); margin-bottom: 24px; }
+.tab { border: 0; border-bottom: 2px solid transparent; padding: 12px 16px; background: transparent; color: var(--room-muted); font-size: 13px; }
+.tab.active { color: var(--room-accent); border-bottom-color: var(--room-accent); }
+.member-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 300px), 1fr)); gap: 12px; }
+.member-card { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 18px; border: 1px solid var(--room-line); border-radius: 14px; background: var(--room-surface); }
+.card-left { display: flex; align-items: center; gap: 12px; min-width: 0; }
+.member-avatar { width: 44px; height: 50px; object-fit: cover; border-radius: 11px; }
+.member-name { font-size: 14px; font-weight: 500; }
+.member-status { margin-top: 6px; font-size: 11px; color: var(--room-muted); }
+.member-status.active { color: var(--room-accent); }
+.pixel-btn { border: 1px solid var(--room-line); border-radius: 9px; padding: 9px 12px; background: var(--room-surface); color: var(--room-ink); font-size: 12px; }
+.btn-active { background: var(--room-accent-soft); color: var(--room-accent); }
+.room-list { display: flex; flex-direction: column; gap: 12px; }
+.room-card { display: flex; align-items: center; justify-content: space-between; gap: 20px; border: 1px solid var(--room-line); border-radius: 14px; background: var(--room-surface); padding: 20px; }
+.room-name { font-size: 15px; font-weight: 500; }
+.room-desc { color: var(--room-muted); font-size: 12px; line-height: 1.7; margin-top: 8px; }
+.room-members { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 12px; }
+.member-tag { font-size: 10px; border-radius: 5px; padding: 3px 6px; background: var(--room-accent-soft); color: var(--room-accent); }
+.loading-overlay { position: absolute; inset: 0; display: grid; place-items: center; background: #ffffffb3; backdrop-filter: blur(2px); }
+.pixel-loader { font-size: 13px; color: var(--room-muted); }
 </style>

@@ -2,7 +2,7 @@
   <div class="role-list">
     <div class="toolbar">
       <div class="search-box">
-        <i class="fas fa-search"></i>
+        <RoomIcon name="search" />
         <input 
           v-model="searchQuery" 
           type="text" 
@@ -11,8 +11,8 @@
       </div>
       <div class="toolbar-actions">
         <el-tooltip content="导入角色" placement="top">
-          <button class="tool-btn" @click="triggerImport">
-            <i class="fas fa-file-import"></i>
+          <button class="tool-btn" aria-label="导入角色" @click="triggerImport">
+            <RoomIcon name="upload" />
           </button>
         </el-tooltip>
         <input 
@@ -40,18 +40,18 @@
         />
       </TransitionGroup>
       
-      <div class="add-role-card" @click="$emit('create')">
+      <button class="add-role-card" @click="$emit('create')">
         <div class="add-icon">
-          <i class="fas fa-plus"></i>
+          <RoomIcon name="plus" />
         </div>
         <span class="add-text">新建角色</span>
-      </div>
+      </button>
       
       <div v-if="filteredRoles.length === 0" class="empty-state">
-        <i class="fas fa-user-slash"></i>
+        <RoomIcon name="profile" />
         <p>没有找到角色</p>
         <button class="create-btn" @click="$emit('create')">
-          <i class="fas fa-plus"></i> 创建新角色
+          <RoomIcon name="plus" /> 创建新角色
         </button>
       </div>
     </div>
@@ -62,6 +62,7 @@
 import { ref, computed } from 'vue'
 import { ElMessageBox, ElMessage } from 'element-plus'
 import RoleCard from './RoleCard.vue'
+import RoomIcon from '../companion/RoomIcon.vue'
 
 const props = defineProps({
   roles: {
@@ -149,228 +150,22 @@ async function handleImport(e) {
 </script>
 
 <style scoped>
-.role-list {
-  display: flex;
-  flex-direction: column;
-  gap: 24px;
-  height: 100%;
-}
-
-.toolbar {
-  display: flex;
-  gap: 16px;
-  align-items: center;
-}
-
-.search-box {
-  flex: 1;
-  position: relative;
-}
-
-.search-box i {
-  position: absolute;
-  left: 18px;
-  top: 50%;
-  transform: translateY(-50%);
-  color: #94a3b8;
-  font-size: 16px;
-  pointer-events: none;
-}
-
-.search-box input {
-  width: 100%;
-  padding: 14px 16px 14px 46px;
-  border: 1px solid rgba(255, 255, 255, 0.8);
-  border-radius: 20px;
-  background: rgba(255, 255, 255, 0.6);
-  backdrop-filter: blur(10px);
-  -webkit-backdrop-filter: blur(10px);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.02);
-  font-size: 15px;
-  color: #1e293b;
-  transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
-}
-
-.search-box input::placeholder {
-  color: #94a3b8;
-  font-weight: 500;
-}
-
-.search-box input:focus {
-  outline: none;
-  background: rgba(255, 255, 255, 0.9);
-  border-color: #818cf8;
-  box-shadow: 0 8px 20px rgba(129, 140, 248, 0.15), 0 0 0 3px rgba(129, 140, 248, 0.1);
-  transform: translateY(-1px);
-}
-
-.toolbar-actions {
-  display: flex;
-  gap: 10px;
-}
-
-.tool-btn {
-  width: 50px;
-  height: 50px;
-  border: 1px solid rgba(255, 255, 255, 0.8);
-  border-radius: 18px;
-  background: rgba(255, 255, 255, 0.6);
-  backdrop-filter: blur(10px);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.02);
-  color: #64748b;
-  font-size: 16px;
-  cursor: pointer;
-  transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.tool-btn:hover {
-  background: white;
-  color: #818cf8;
-  border-color: #818cf8;
-  transform: translateY(-2px);
-  box-shadow: 0 8px 20px rgba(129, 140, 248, 0.15);
-}
-
-.roles-container {
-  flex: 1;
-  overflow-y: auto;
-  padding-right: 8px;
-  padding-bottom: 20px;
-}
-
-/* 自定义滚动条风格 */
-.roles-container::-webkit-scrollbar {
-  width: 6px;
-}
-.roles-container::-webkit-scrollbar-track {
-  background: transparent;
-}
-.roles-container::-webkit-scrollbar-thumb {
-  background: rgba(148, 163, 184, 0.2);
-  border-radius: 10px;
-}
-.roles-container::-webkit-scrollbar-thumb:hover {
-  background: rgba(148, 163, 184, 0.4);
-}
-
-.roles-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
-  gap: 20px;
-  margin-bottom: 20px;
-}
-
-.add-role-card {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 14px;
-  padding: 30px;
-  background: rgba(255, 255, 255, 0.4);
-  backdrop-filter: blur(10px);
-  border: 2px dashed rgba(148, 163, 184, 0.4);
-  border-radius: 24px;
-  cursor: pointer;
-  transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1);
-  min-height: 160px;
-}
-
-.add-role-card:hover {
-  background: rgba(255, 255, 255, 0.7);
-  border-color: #818cf8;
-  border-style: solid;
-  transform: translateY(-4px);
-  box-shadow: 0 12px 30px rgba(129, 140, 248, 0.1);
-}
-
-.add-icon {
-  width: 54px;
-  height: 54px;
-  border-radius: 50%;
-  background: linear-gradient(135deg, #f472b6, #818cf8);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: white;
-  font-size: 22px;
-  box-shadow: 0 8px 20px rgba(244, 114, 182, 0.3);
-  transition: transform 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
-}
-
-.add-role-card:hover .add-icon {
-  transform: scale(1.1) rotate(90deg);
-}
-
-.add-text {
-  color: #475569;
-  font-size: 15px;
-  font-weight: 700;
-}
-
-.empty-state {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  padding: 60px 24px;
-  color: #94a3b8;
-}
-
-.empty-state i {
-  font-size: 56px;
-  margin-bottom: 20px;
-  opacity: 0.5;
-}
-
-.empty-state p {
-  font-size: 16px;
-  font-weight: 500;
-  margin-bottom: 24px;
-}
-
-.create-btn {
-  padding: 14px 28px;
-  border: none;
-  border-radius: 18px;
-  background: linear-gradient(135deg, #f472b6, #818cf8);
-  color: white;
-  font-size: 15px;
-  font-weight: 600;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  transition: all 0.3s;
-  box-shadow: 0 8px 20px rgba(244, 114, 182, 0.3);
-}
-
-.create-btn:hover {
-  transform: translateY(-2px) scale(1.02);
-  box-shadow: 0 12px 28px rgba(244, 114, 182, 0.4);
-}
-
-.list-enter-active,
-.list-leave-active {
-  transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1);
-}
-
-.list-enter-from {
-  opacity: 0;
-  transform: translateY(30px) scale(0.98);
-}
-
-.list-leave-to {
-  opacity: 0;
-  transform: scale(0.95);
-}
-
-@media (max-width: 768px) {
-  .roles-grid {
-    grid-template-columns: 1fr;
-  }
-}
+.role-list { display: flex; flex-direction: column; gap: 22px; }
+.toolbar { display: flex; align-items: center; gap: 12px; }
+.search-box { position: relative; flex: 1; }
+.search-box > svg { position: absolute; left: 14px; top: 50%; transform: translateY(-50%); color: var(--room-muted); width: 18px; height: 18px; }
+.search-box input { width: 100%; height: 44px; padding: 11px 14px 11px 42px; border: 1px solid var(--room-line); border-radius: 11px; background: var(--room-surface); color: var(--room-ink); font-size: 14px; outline: none; }
+.search-box input:focus { border-color: var(--room-accent); box-shadow: 0 0 0 3px var(--room-accent-soft); }
+.toolbar-actions { display: flex; gap: 8px; }
+.tool-btn { display: grid; place-items: center; height: 44px; width: 44px; border: 1px solid var(--room-line); border-radius: 11px; background: var(--room-surface); color: var(--room-muted); }
+.roles-container { display: flex; flex-direction: column; gap: 14px; }
+.roles-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 340px), 1fr)); gap: 14px; }
+.add-role-card { display: flex; align-items: center; justify-content: center; gap: 10px; min-height: 64px; padding: 15px; border: 1px dashed #c7d0dc; border-radius: 16px; background: transparent; color: var(--room-muted); font-size: 13px; }
+.add-role-card:hover { background: var(--room-accent-soft); color: var(--room-accent); border-color: var(--room-accent); }
+.add-icon { display: flex; }
+.empty-state { display: flex; flex-direction: column; align-items: center; padding: 40px 20px; color: var(--room-muted); font-size: 13px; }
+.create-btn { display: flex; align-items: center; gap: 7px; padding: 10px 14px; border: 1px solid var(--room-line); border-radius: 10px; background: var(--room-surface); }
+.list-enter-active, .list-leave-active { transition: opacity .2s; }
+.list-enter-from, .list-leave-to { opacity: 0; }
+@media (max-width: 600px) { .search-box input { font-size: 16px; } }
 </style>

@@ -1,7 +1,6 @@
 pub mod context;
 pub mod conversation;
 pub mod identity;
-pub mod metadata;
 pub mod provider;
 pub mod repository;
 pub mod runtime;
@@ -11,6 +10,26 @@ pub mod group;
 pub mod blackjack;
 pub mod environment;
 pub mod settings;
+pub mod diary;
+pub mod chat_tools;
+pub mod prompts;
+pub mod model_config;
+pub mod wire;
+pub mod provider_stream;
+pub mod react;
+pub mod management;
+pub mod reminders;
+pub mod reminder_dispatch;
+pub mod reminder_platform;
+#[cfg(any(target_os="android",test))]
+mod reminder_jni;
+
+#[cfg(test)]
+mod standalone_tests;
+#[cfg(test)]
+mod reminder_tests;
+#[cfg(test)]
+mod reminder_dispatch_tests;
 
 use serde_json::{json, Value};
 use tauri::{AppHandle, Emitter, Manager};
@@ -24,6 +43,10 @@ fn db_lock(state: &DbState) -> ChatResult<std::sync::MutexGuard<'_,rusqlite::Con
 
 pub fn initialize(app: &AppHandle) -> ChatResult<()> {
     identity::initialize(app)?;
+    {
+        let db=app.state::<DbState>();
+        identity::update_builtin_personas(&mut *db_lock(&db)?)?;
+    }
     let agents = identity::agents(app)?;
     let raw_group = identity::config(app,"ppc.group.messages")?;
     let group: Vec<Value> = if raw_group.trim().is_empty() { Vec::new() } else {
@@ -43,12 +66,13 @@ pub fn initialize(app: &AppHandle) -> ChatResult<()> {
 pub fn local_agents(app: AppHandle) -> ChatResult<Value> { identity::agents(&app) }
 
 #[tauri::command]
-pub fn local_delete_agent(app: AppHandle, runtime: tauri::State<ChatRuntime>, id: String) -> ChatResult<Value> {
+pub async fn local_delete_agent(app: AppHandle, runtime: tauri::State<'_,ChatRuntime>, id: String) -> ChatResult<Value> {
     let _lease = runtime.maintenance()?;
     let mut agents = identity::agents(&app)?;
     agents.as_object_mut().unwrap().remove(&id);
     let agents = identity::normalize_agents(agents)?;
     identity::set_config(&app,"ppc.agents",&agents.to_string())?;
+    if let Err(error)=reminder_platform::synchronize(&app) {eprintln!("角色删除后的系统提醒取消等待恢复：{}",error.message);}
     // 角色定义删除不隐式擦除历史和记忆，重新导入同一身份时仍可恢复。
     Ok(agents)
 }
@@ -71,6 +95,7 @@ pub fn local_delete_message(db: tauri::State<DbState>, runtime: tauri::State<Cha
     let _lease = runtime.reserve(&thread_id,&uuid::Uuid::new_v4().to_string())?;
     let mut conn = db_lock(&db)?;
     repository::delete_message(&mut conn,&thread_id,message_id,pair)?;
+    if let Err(error)=db.diary.synchronize(&conn) { eprintln!("消息已删除，日记索引等待恢复：{}",error.message); }
     repository::snapshot(&conn,&thread_id)
 }
 
@@ -86,8 +111,12 @@ pub async fn local_chat(app: AppHandle, request: TurnRequest) -> ChatResult<Turn
     let settings = identity::model_settings(&config)?;
     config["currentTime"] = json!(chrono::Local::now().format("%Y-%m-%d %H:%M:%S %:z").to_string());
     let service = conversation::ConversationService { db:&db,runtime:&runtime,agents:&agents,config:&config,settings:&settings };
-    service.execute(request,|event| { let _ = app.emit("local-chat-event",event); },
-        |agent_id,_| identity::state(&app,agent_id)).await
+    let mut result=service.execute(request,|event| { let _ = app.emit("local-chat-event",event); },
+        |agent_id,_| identity::state(&app,agent_id)).await?;
+    if result.state["reminderChanges"].as_u64().unwrap_or(0)>0 {
+        result.state["backgroundSyncPending"]=json!(reminder_platform::synchronize(&app).is_err());
+    }
+    Ok(result)
 }
 
 #[cfg(test)]

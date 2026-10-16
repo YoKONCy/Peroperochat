@@ -1,20 +1,29 @@
 use std::time::Duration;
 use futures::StreamExt;
 use reqwest::{Client, Url};
-use serde_json::{json, Value};
+use serde_json::Value;
 use super::types::*;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[serde(default, rename_all="camelCase", deny_unknown_fields)]
 pub struct ModelSettings {
-    pub base: String,
-    pub api_key: String,
-    pub model: String,
-    pub temperature: f64,
-    pub top_p: f64,
-    pub frequency_penalty: f64,
-    pub presence_penalty: f64,
-    pub stream: bool,
-    pub memory_rounds: usize,
+    pub base:String, pub api_key:String, pub model:String,
+    pub api_format:String, pub reasoning_dialect:String, pub reasoning_effort:Option<String>,
+    pub temperature:Option<f64>, pub top_p:Option<f64>,
+    pub frequency_penalty:Option<f64>, pub presence_penalty:Option<f64>,
+    pub max_tokens:usize, pub context_window:usize, pub stream:bool, pub memory_rounds:usize,
+    pub tools_enabled:bool, pub max_steps:usize, pub turn_timeout:u64,
+    pub headers:serde_json::Map<String,Value>, pub extra_body:serde_json::Map<String,Value>,
+    pub disabled_params:Vec<String>,
+}
+impl Default for ModelSettings {
+    fn default()->Self {
+        Self { base:"https://api.openai.com/v1".into(),api_key:String::new(),model:String::new(),
+            api_format:"chat_completions".into(),reasoning_dialect:"auto".into(),reasoning_effort:None,
+            temperature:Some(0.7),top_p:Some(1.0),frequency_penalty:None,presence_penalty:None,
+            max_tokens:4096,context_window:32768,stream:true,memory_rounds:40,tools_enabled:true,max_steps:8,turn_timeout:300,
+            headers:Default::default(),extra_body:Default::default(),disabled_params:Vec::new() }
+    }
 }
 
 pub fn endpoint(base: &str, resource: &str) -> ChatResult<Url> {
@@ -23,7 +32,7 @@ pub fn endpoint(base: &str, resource: &str) -> ChatResult<Url> {
         return Err(ChatError::new("INVALID_CONFIG", "API 地址必须是有效的 HTTP 或 HTTPS 地址"));
     }
     let mut path = url.path().trim_end_matches('/').to_owned();
-    for suffix in ["/chat/completions", "/models"] {
+    for suffix in ["/chat/completions", "/models", "/responses", "/messages"] {
         if path.ends_with(suffix) { path.truncate(path.len() - suffix.len()); }
     }
     // 根地址补标准版本；厂商已有的 /api/v3、/api/paas/v4 等路径原样保留。
@@ -34,32 +43,12 @@ pub fn endpoint(base: &str, resource: &str) -> ChatResult<Url> {
 }
 
 pub fn client() -> ChatResult<Client> {
-    Client::builder().connect_timeout(Duration::from_secs(15)).build()
+    Client::builder().connect_timeout(Duration::from_secs(15)).redirect(reqwest::redirect::Policy::none()).build()
         .map_err(|_| ChatError::new("NETWORK_ERROR", "无法初始化网络连接"))
 }
 
 fn network_error(error: reqwest::Error) -> ChatError {
     ChatError::new("NETWORK_ERROR", if error.is_timeout() { "模型请求超时，请重试" } else { "无法连接模型服务，请检查网络和 API 地址" })
-}
-
-async fn checked_response(response: reqwest::Response, api_key: &str) -> ChatResult<reqwest::Response> {
-    if response.status().is_success() { return Ok(response); }
-    let status = response.status().as_u16();
-    let data = tokio::time::timeout(Duration::from_secs(10), response.text()).await.ok().and_then(Result::ok).unwrap_or_default();
-    let detail = serde_json::from_str::<Value>(&data).ok()
-        .and_then(|value| value.pointer("/error/message").or_else(|| value.get("message")).and_then(Value::as_str).map(str::to_owned))
-        .unwrap_or_default();
-    let detail = if api_key.is_empty() { detail } else { detail.replace(api_key, "[已隐藏]") };
-    let detail: String = detail.chars().take(300).collect();
-    Err(ChatError::new("UPSTREAM_ERROR", format!("模型服务返回 HTTP {status}{}", if detail.is_empty() { String::new() } else { format!("：{detail}") })))
-}
-
-pub async fn list_models(base: &str, api_key: &str) -> ChatResult<Value> {
-    let request = client()?.get(endpoint(base, "models")?).bearer_auth(api_key);
-    let response = tokio::time::timeout(Duration::from_secs(30), request.send()).await
-        .map_err(|_| ChatError::new("TIMEOUT", "获取模型列表超时"))?.map_err(network_error)?;
-    checked_response(response, api_key).await?.json().await
-        .map_err(|_| ChatError::new("INVALID_RESPONSE", "模型列表响应不是有效 JSON"))
 }
 
 #[derive(Default)]
@@ -93,6 +82,7 @@ impl SseDecoder {
     }
 }
 
+#[cfg(test)]
 fn consume_event(data: &str, output: &mut String, on_delta: &mut impl FnMut(&str) -> ChatResult<()>) -> ChatResult<bool> {
     if data.trim() == "[DONE]" { return Ok(true); }
     let value: Value = serde_json::from_str(data).map_err(|_| ChatError::new("INVALID_RESPONSE", "模型流式响应格式无效"))?;
@@ -115,46 +105,92 @@ fn consume_event(data: &str, output: &mut String, on_delta: &mut impl FnMut(&str
     }
 }
 
-pub async fn complete(settings: &ModelSettings, messages: &[ModelMessage], output: &mut String,
-    mut on_delta: impl FnMut(&str) -> ChatResult<()>) -> ChatResult<()> {
-    if settings.model.trim().is_empty() || settings.model.contains("请先") {
-        return Err(ChatError::new("INVALID_CONFIG", "请先在设置中选择模型"));
+pub fn request_url(settings:&ModelSettings)->ChatResult<Url> {
+    if settings.api_format!="gemini" { return endpoint(&settings.base,match settings.api_format.as_str() { "responses"=>"responses","anthropic"=>"messages",_=>"chat/completions" }); }
+    let mut url=Url::parse(&settings.base).map_err(|_|ChatError::new("INVALID_CONFIG","API 地址格式无效"))?;
+    let base=url.path().split("/models/").next().unwrap_or("").trim_end_matches('/').to_owned();
+    url.set_path(&if base.is_empty() { "/v1beta".to_owned() } else { base });
+    let action=if settings.stream { "streamGenerateContent" } else { "generateContent" };
+    url.path_segments_mut().map_err(|_|ChatError::new("INVALID_CONFIG","Gemini 地址无效"))?.push("models").push(&format!("{}:{action}",settings.model.trim_start_matches("models/")));
+    if settings.stream { url.query_pairs_mut().append_pair("alt","sse"); }
+    Ok(url)
+}
+
+async fn bytes(response:reqwest::Response)->ChatResult<Vec<u8>> {
+    let mut stream=response.bytes_stream();let mut output=Vec::new();
+    while let Some(chunk)=tokio::time::timeout(Duration::from_secs(60),stream.next()).await.map_err(|_|ChatError::new("TIMEOUT","模型响应读取超时"))? {
+        output.extend_from_slice(&chunk.map_err(network_error)?);
+        if output.len()>8*1024*1024 { return Err(ChatError::new("RESPONSE_TOO_LARGE","模型响应过大")); }
     }
-    let body = json!({ "model": settings.model, "messages": messages,
-        "temperature": settings.temperature, "top_p": settings.top_p,
-        "frequency_penalty": settings.frequency_penalty, "presence_penalty": settings.presence_penalty,
-        "stream": settings.stream });
-    let response = tokio::time::timeout(Duration::from_secs(30),client()?.post(endpoint(&settings.base, "chat/completions")?)
-        .bearer_auth(&settings.api_key).json(&body).send()).await
-        .map_err(|_| ChatError::new("TIMEOUT","连接模型服务超时，请重试"))?.map_err(network_error)?;
-    let response = checked_response(response, &settings.api_key).await?;
-    let content_type = response.headers().get(reqwest::header::CONTENT_TYPE).and_then(|h| h.to_str().ok()).unwrap_or("");
-    if !settings.stream || content_type.contains("application/json") {
-        let value: Value = response.json().await.map_err(|_| ChatError::new("INVALID_RESPONSE", "模型响应不是有效 JSON"))?;
-        if value.pointer("/choices/0/message/tool_calls").and_then(Value::as_array).is_some_and(|calls| !calls.is_empty()) {
-            return Err(ChatError::new("INVALID_RESPONSE", "当前单机聊天不支持工具调用回复"));
+    Ok(output)
+}
+
+fn authorize(mut request:reqwest::RequestBuilder,settings:&ModelSettings)->reqwest::RequestBuilder {
+    if !settings.api_key.is_empty() { request=match settings.api_format.as_str() {
+        "anthropic"=>request.header("x-api-key",&settings.api_key),"gemini"=>request.header("x-goog-api-key",&settings.api_key),_=>request.bearer_auth(&settings.api_key),
+    }; }
+    if settings.api_format=="anthropic" { request=request.header("anthropic-version","2023-06-01"); }
+    for (key,value) in &settings.headers { request=request.header(key,value.as_str().unwrap_or("")); }
+    request
+}
+
+async fn send(request:reqwest::RequestBuilder,settings:&ModelSettings)->ChatResult<reqwest::Response> {
+    let response=tokio::time::timeout(Duration::from_secs(30),request.send()).await.map_err(|_|ChatError::new("TIMEOUT","连接模型服务超时"))?.map_err(network_error)?;
+    if response.status().is_success() { return Ok(response); }
+    let status=response.status().as_u16();
+    let data=bytes(response).await.unwrap_or_default();
+    let error=serde_json::from_slice::<Value>(&data).ok().and_then(|v|v.pointer("/error/message").or_else(||v.get("message")).and_then(Value::as_str).map(str::to_owned)).unwrap_or_default();
+    Err(ChatError::new("UPSTREAM_ERROR",format!("模型服务返回 HTTP {status}：{}",super::model_config::redact(settings,&error))))
+}
+
+pub async fn list_models(settings:&ModelSettings)->ChatResult<Value> {
+    super::model_config::validate(settings)?;
+    let mut url=if settings.api_format=="gemini" {
+        let mut url=request_url(settings)?;let path=url.path().split("/models/").next().unwrap_or("/v1beta").to_owned();
+        url.set_path(&format!("{path}/models"));url.set_query(None);url
+    } else {endpoint(&settings.base,"models")?};
+    let mut models=Vec::new();
+    for _ in 0..10 {
+        let response=send(authorize(client()?.get(url.clone()),settings),settings).await?;
+        let value:Value=serde_json::from_slice(&bytes(response).await?).map_err(|_|ChatError::new("INVALID_RESPONSE","模型列表不是有效 JSON"))?;
+        let entries=value[if settings.api_format=="gemini" {"models"} else {"data"}].as_array()
+            .ok_or_else(||ChatError::new("INVALID_RESPONSE","模型列表缺少数据"))?;
+        for item in entries {
+            let id=item[if settings.api_format=="gemini" {"name"} else {"id"}].as_str().ok_or_else(||ChatError::new("INVALID_RESPONSE","模型列表缺少身份"))?;
+            let mut item=item.clone();item["id"]=serde_json::json!(id.trim_start_matches("models/"));models.push(item);
         }
-        let content = value.pointer("/choices/0/message/content").and_then(Value::as_str)
-            .ok_or_else(|| ChatError::new("INVALID_RESPONSE", "模型没有返回可显示的回复"))?;
-        output.push_str(content);
-        on_delta(content)?;
-        if value.pointer("/choices/0/finish_reason").and_then(Value::as_str) == Some("length") {
-            return Err(ChatError::new("OUTPUT_LIMIT","模型输出达到长度上限，回复未完整结束"));
-        }
-        return Ok(());
-    }
-    let mut stream = response.bytes_stream();
-    let mut decoder = SseDecoder::default();
-    while let Some(item) = tokio::time::timeout(Duration::from_secs(60), stream.next()).await
-        .map_err(|_| ChatError::new("TIMEOUT", "模型长时间没有响应，请重试"))? {
-        for data in decoder.push(&item.map_err(network_error)?)? {
-            if consume_event(&data, output, &mut on_delta)? { return Ok(()); }
+        if models.len()>10_000 { return Err(ChatError::new("RESPONSE_TOO_LARGE","模型列表过大")); }
+        let next=if settings.api_format=="gemini" {value["nextPageToken"].as_str().map(|s|("pageToken",s))}
+            else if settings.api_format=="anthropic" && value["has_more"]==true {value["last_id"].as_str().map(|s|("after_id",s))} else {None};
+        match next.filter(|(_,value)|!value.is_empty()) {
+            Some((key,value))=> {let pairs=url.query_pairs().filter(|(k,_)|k!=key).map(|(k,v)|(k.into_owned(),v.into_owned())).collect::<Vec<_>>();url.set_query(None);url.query_pairs_mut().extend_pairs(pairs).append_pair(key,value);}
+            None=>return Ok(serde_json::json!({"data":models})),
         }
     }
-    for data in decoder.finish()? {
-        if consume_event(&data, output, &mut on_delta)? { return Ok(()); }
+    Err(ChatError::new("OUTPUT_LIMIT","模型列表分页过多，请缩小服务端列表"))
+}
+
+pub async fn complete(settings:&ModelSettings,messages:&[ModelMessage],tools:&[Value],mut emit:impl FnMut(&str,&str)->ChatResult<()>)->ChatResult<Completion> {
+    super::model_config::validate(settings)?;
+    if settings.model.trim().is_empty() || settings.model.contains("请先") { return Err(ChatError::new("INVALID_CONFIG","请先在设置中选择模型")); }
+    let body=super::wire::body(settings,messages,tools)?;
+    let response=send(authorize(client()?.post(request_url(settings)?).json(&body),settings),settings).await?;
+    let stream_type=response.headers().get(reqwest::header::CONTENT_TYPE).and_then(|h|h.to_str().ok()).unwrap_or("").contains("text/event-stream");
+    if !stream_type {
+        let value:Value=serde_json::from_slice(&bytes(response).await?).map_err(|_|ChatError::new("INVALID_RESPONSE","模型响应不是有效 JSON"))?;
+        let result=super::wire::parse(&settings.api_format,&value)?;
+        if !result.reasoning.is_empty() { emit("reasoning",&result.reasoning)?; }
+        if !result.content.is_empty() { emit("delta",&result.content)?; }
+        return Ok(result);
     }
-    Err(ChatError::new("STREAM_INTERRUPTED", "连接提前结束，回复未完整接收，请重新生成"))
+    let mut stream=response.bytes_stream();let mut decoder=SseDecoder::default();let mut accumulator=super::provider_stream::Accumulator::default();
+    while let Some(chunk)=tokio::time::timeout(Duration::from_secs(60),stream.next()).await.map_err(|_|ChatError::new("TIMEOUT","模型长时间没有响应"))? {
+        for data in decoder.push(&chunk.map_err(network_error)?)? {
+            if accumulator.event(&settings.api_format,&data,&mut emit)? { return accumulator.finish(&settings.api_format); }
+        }
+    }
+    for data in decoder.finish()? { if accumulator.event(&settings.api_format,&data,&mut emit)? { break; } }
+    accumulator.finish(&settings.api_format)
 }
 
 #[cfg(test)]

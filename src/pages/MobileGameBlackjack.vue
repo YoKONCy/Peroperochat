@@ -1,15 +1,6 @@
 <template>
   <div class="blackjack-container">
-    <div class="header">
-      <div class="back-btn" @click="goHome">
-        <i class="fas fa-chevron-left"></i>
-      </div>
-      <div class="header-title">
-        <h2>21 点</h2>
-        <span>BLACKJACK</span>
-      </div>
-      <div class="placeholder"></div>
-    </div>
+    <CompanionHeader title="21 点" :subtitle="`和 ${agentName} 玩一局`" @back="goHome" />
 
     <!-- 游戏区域 -->
     <div class="game-area">
@@ -83,6 +74,7 @@
 import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
+import CompanionHeader from '../components/companion/CompanionHeader.vue'
 import { AGENTS, getActiveAgentId } from '../api'
 import { localInvoke, localChat } from '../services/localChat'
 import { projectNativeTurn } from '../stores/conversations'
@@ -149,202 +141,22 @@ const resetGame = startGame
 </script>
 
 <style scoped>
-.blackjack-container {
-  min-height: 100vh;
-  background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
-  display: flex;
-  flex-direction: column;
-  color: white;
-  padding-bottom: env(safe-area-inset-bottom);
-}
-
-.header {
-  height: 60px;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 0 16px;
-  background: rgba(0, 0, 0, 0.2);
-  backdrop-filter: blur(10px);
-}
-
-.back-btn {
-  width: 40px;
-  height: 40px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: 12px;
-  background: rgba(255, 255, 255, 0.1);
-  cursor: pointer;
-}
-
-.header-title { text-align: center; }
-.header-title h2 { margin: 0; font-size: 16px; }
-.header-title span { font-size: 10px; color: #94a3b8; letter-spacing: 2px; }
-.placeholder { width: 40px; }
-
-.game-area {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  justify-content: space-between;
-  padding: 20px;
-  position: relative;
-}
-
-.dealer-area, .player-area {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 10px;
-}
-
-.agent-info {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  margin-bottom: 5px;
-  padding: 8px 16px;
-  background: rgba(255, 255, 255, 0.05);
-  border-radius: 20px;
-  border: 1px solid rgba(255, 255, 255, 0.1);
-}
-
-.agent-name {
-  font-size: 14px;
-  font-weight: 600;
-  color: #f1f5f9;
-}
-
-.cards-row {
-  display: flex;
-  gap: 8px;
-  justify-content: center;
-  height: 90px;
-}
-
-.poker-card {
-  width: 60px;
-  height: 84px;
-  background: white;
-  border-radius: 8px;
-  color: #1e293b;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 18px;
-  font-weight: bold;
-  box-shadow: 0 4px 6px rgba(0,0,0,0.3);
-  transition: all 0.3s;
-}
-
-.poker-card.card-hidden {
-  background: #3b82f6;
-  background-image: repeating-linear-gradient(
-    45deg,
-    rgba(255,255,255,0.1) 0px,
-    rgba(255,255,255,0.1) 10px,
-    transparent 10px,
-    transparent 20px
-  );
-  color: rgba(255,255,255,0.5);
-}
-
-.score-tag {
-  background: rgba(0, 0, 0, 0.4);
-  padding: 4px 12px;
-  border-radius: 12px;
-  font-size: 14px;
-  font-weight: bold;
-  font-family: monospace;
-}
-
-.game-status-message {
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
-  background: rgba(0, 0, 0, 0.6);
-  backdrop-filter: blur(4px);
-  padding: 10px 20px;
-  border-radius: 20px;
-  font-weight: bold;
-  pointer-events: none;
-  border: 1px solid rgba(255, 255, 255, 0.1);
-}
-
-.action-bar {
-  height: 80px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 16px;
-  padding: 0 20px;
-  background: rgba(0, 0, 0, 0.2);
-}
-
-.action-btn {
-  padding: 12px 24px;
-  border: none;
-  border-radius: 16px;
-  font-weight: 600;
-  font-size: 15px;
-  cursor: pointer;
-  transition: transform 0.1s;
-}
-
-.action-btn:active { transform: scale(0.95); }
-
-.action-btn.primary { background: #3b82f6; color: white; width: 100%; max-width: 200px; }
-.action-btn.hit { background: #10b981; color: white; flex: 1; }
-.action-btn.stand { background: #ef4444; color: white; flex: 1; }
-
-/* 结算气泡样式 */
-.settlement-bubble {
-  position: absolute;
-  bottom: 100px;
-  left: 50%;
-  transform: translateX(-50%);
-  width: fit-content;
-  max-width: 85%;
-  min-width: 120px;
-  background: rgba(255, 255, 255, 0.95);
-  backdrop-filter: blur(10px);
-  border-radius: 20px;
-  padding: 16px 20px;
-  color: #1e293b;
-  box-shadow: 0 10px 30px rgba(0,0,0,0.3);
-  z-index: 100;
-  border: 1px solid rgba(255, 255, 255, 0.8);
-  display: flex;
-  justify-content: center;
-}
-
-.bubble-content {
-  width: 100%;
-}
-
-.settlement-bubble p {
-  margin: 0;
-  font-size: 15px;
-  line-height: 1.6;
-  color: #1e293b;
-  white-space: pre-wrap;
-  word-wrap: break-word;
-  word-break: break-word;
-  text-align: left;
-}
-
-/* 弹跳动画 */
-.bounce-enter-active {
-  animation: bounce-in 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275);
-}
-.bounce-leave-active {
-  animation: bounce-in 0.3s reverse ease-in;
-}
-@keyframes bounce-in {
-  0% { transform: translate(-50%, 20px) scale(0.8); opacity: 0; }
-  100% { transform: translate(-50%, 0) scale(1); opacity: 1; }
-}
+.blackjack-container { min-height: 100dvh; display: flex; flex-direction: column; background: var(--room-page); padding-bottom: env(safe-area-inset-bottom); }
+.game-area { flex: 1; display: flex; flex-direction: column; justify-content: space-between; gap: 24px; width: min(calc(100% - 32px), 800px); min-height: 480px; margin: 28px auto; padding: 32px 22px; background: var(--room-accent-soft); border: 1px solid var(--room-line); border-radius: 20px; }
+.dealer-area, .player-area { display: flex; flex-direction: column; align-items: center; gap: 16px; }
+.agent-name { font-size: 15px; font-weight: 600; color: var(--room-ink); }
+.cards-row { display: flex; justify-content: center; flex-wrap: wrap; gap: 10px; }
+.poker-card { display: grid; place-items: center; width: 64px; height: 92px; border: 1px solid #d4dde6; border-radius: 10px; background: var(--room-surface); color: var(--room-ink); box-shadow: 0 3px 9px #253b4c0c; font-size: 21px; font-weight: 500; }
+.poker-card.card-hidden { background: repeating-linear-gradient(45deg, var(--room-accent-soft), var(--room-accent-soft) 6px, var(--room-surface) 6px, var(--room-surface) 8px); color: var(--room-accent); }
+.score-tag { min-width: 35px; padding: 5px 10px; border-radius: 8px; background: var(--room-surface); font-size: 13px; color: var(--room-accent); text-align: center; }
+.game-status-message { text-align: center; color: var(--room-muted); font-size: 14px; line-height: 1.7; }
+.player-label { font-size: 11px; color: var(--room-muted); letter-spacing: .08em; }
+.action-bar { display: flex; justify-content: center; gap: 12px; padding: 4px 20px 28px; }
+.action-btn { min-width: 120px; min-height: 44px; border: 1px solid var(--room-line); border-radius: 11px; padding: 12px 20px; background: var(--room-surface); color: var(--room-ink); font-weight: 500; }
+.action-btn.primary, .action-btn.hit { border-color: transparent; background: var(--room-accent); color: white !important; }
+.settlement-bubble { width: min(calc(100% - 32px), 800px); margin: 0 auto 20px; border: 1px solid var(--room-line); border-radius: 15px; padding: 16px 20px; background: var(--room-surface); cursor: pointer; }
+.bubble-content p { margin: 0; font-size: 14px; line-height: 1.75; white-space: pre-wrap; overflow-wrap: anywhere; }
+.bounce-enter-active, .bounce-leave-active { transition: opacity .2s; }
+.bounce-enter-from, .bounce-leave-to { opacity: 0; }
+@media (max-width: 400px) { .poker-card { width: 52px; height: 78px; font-size: 18px; } .game-area { padding: 26px 14px; } .cards-row { gap: 7px; } }
 </style>

@@ -3,7 +3,7 @@ use std::net::TcpListener;
 use std::sync::{mpsc, Mutex};
 use rusqlite::Connection;
 use serde_json::{json, Value};
-use super::{context, conversation::ConversationService, identity, metadata, provider::ModelSettings, repository, runtime::ChatRuntime, types::*};
+use super::{context, conversation::ConversationService, identity, provider::ModelSettings, repository, runtime::ChatRuntime, types::*};
 use crate::db::DbState;
 
 pub(super) fn database() -> Connection {
@@ -23,17 +23,17 @@ pub(super) fn state() -> DbState {
     let mut conn = database();
     repository::migrate(&mut conn,&[],&agents()).unwrap();
     for id in ["pero","nana"] { repository::ensure_thread(&conn,&repository::desktop_thread(id),id,"desktop").unwrap(); }
-    DbState { conn:Mutex::new(conn) }
+    DbState { conn:Mutex::new(conn),diary:super::diary::DiaryStore::temporary() }
 }
 
-fn request(agent_id: &str, content: &str) -> TurnRequest {
+pub(super) fn request(agent_id: &str, content: &str) -> TurnRequest {
     TurnRequest { request_id:uuid::Uuid::new_v4().to_string(),thread_id:repository::desktop_thread(agent_id),agent_id:agent_id.into(),
         content:Some(json!(content)),regenerate_message_id:None,reply_to_message_id:None,ephemeral:false }
 }
 
 pub(super) fn settings(base: String, stream: bool) -> ModelSettings {
-    ModelSettings { base,api_key:"test-key".into(),model:"测试模型".into(),temperature:0.6,top_p:0.8,
-        frequency_penalty:0.2,presence_penalty:0.3,stream,memory_rounds:40 }
+    ModelSettings { base,api_key:"test-key".into(),model:"测试模型".into(),temperature:Some(0.6),top_p:Some(0.8),
+        frequency_penalty:Some(0.2),presence_penalty:Some(0.3),stream,memory_rounds:40,..Default::default() }
 }
 
 // 使用真实 TCP 和 reqwest 验证请求体、流式拆包、HTTP 错误及持久化，不访问外网。
@@ -57,7 +57,7 @@ pub(super) fn mock_server(responses: Vec<(u16,&'static str,String)>) -> (String,
             }
             let mut bytes = vec![0;length];
             reader.read_exact(&mut bytes).unwrap();
-            sender.send(serde_json::from_slice(&bytes).unwrap()).unwrap();
+            sender.send(if bytes.is_empty() {Value::Null} else {serde_json::from_slice(&bytes).unwrap()}).unwrap();
             write!(socket,"HTTP/1.1 {status} OK\r\nContent-Type: {kind}\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",body.len()).unwrap();
             // 故意拆在中文 UTF-8 的字节内部，客户端必须通过事件缓冲器恢复。
             for chunk in body.as_bytes().chunks(7) { if socket.write_all(chunk).is_err() { break; } }
@@ -108,7 +108,7 @@ async fn full_conversation_regeneration_idempotence_and_pair_deletion() {
     let result = service.execute(original.clone(),|event| events.lock().unwrap().push(event),|_,_| Ok(json!({}))).await.unwrap();
     let id = result.message.id;
     let timestamp = result.message.timestamp;
-    assert_eq!(result.message.content,first_reply);
+    assert_eq!(result.message.content,"主人你好🐱");
     assert_eq!(result.message.status,"active");
     assert_eq!(result.snapshot.messages.len(),2);
     assert_eq!(events.lock().unwrap().iter().filter(|e| e.kind == "done").count(),1);
@@ -125,7 +125,7 @@ async fn full_conversation_regeneration_idempotence_and_pair_deletion() {
     let error = service.execute(regenerate.clone(), |_| {}, |_,_| Ok(json!({}))).await.unwrap_err();
     assert_eq!(error.code,"UPSTREAM_ERROR");
     assert!(!error.message.contains("test-key"));
-    assert_eq!(repository::message(&db.conn.lock().unwrap(),id).unwrap().content,first_reply);
+    assert_eq!(repository::message(&db.conn.lock().unwrap(),id).unwrap().content,"主人你好🐱");
     requests.recv().unwrap();
     regenerate.request_id = uuid::Uuid::new_v4().to_string();
     let regenerated = service.execute(regenerate, |_| {}, |_,_| Ok(json!({}))).await.unwrap();
@@ -139,7 +139,7 @@ async fn full_conversation_regeneration_idempotence_and_pair_deletion() {
     let mut conn = db.conn.lock().unwrap();
     assert_eq!(conn.query_row("SELECT COUNT(*) FROM chat_message_revisions",[],|r| r.get::<_,i64>(0)).unwrap(),1);
     assert_eq!(conn.query_row("SELECT COUNT(*) FROM memories",[],|r| r.get::<_,i64>(0)).unwrap(),0);
-    context::remember(&conn,"nana",timestamp,None,&json!({"content":"其他角色的事实","tags":[]})).unwrap();
+    super::diary::apply(&conn,"nana",&super::diary::Draft {content:"其他角色的事实".into(),date:None,tags:vec![],id:None,expected_revision:None},&[],timestamp).unwrap();
     repository::delete_message(&mut conn,"desktop:pero",id,true).unwrap();
     assert!(repository::snapshot(&conn,"desktop:pero").unwrap().messages.is_empty());
     assert_eq!(conn.query_row("SELECT COUNT(*) FROM memories WHERE agent_id='nana'",[],|r| r.get::<_,i64>(0)).unwrap(),1);
@@ -216,7 +216,7 @@ fn thread_ownership_group_perspective_and_crash_recovery() {
     let input = repository::insert_message(&conn,repository::FAMILY_THREAD,"群聊轮次","user","","User",&json!("大家好"),1,"active").unwrap();
     repository::insert_message(&conn,repository::FAMILY_THREAD,"群聊轮次","assistant","pero","佩洛",&json!("你好"),2,"active").unwrap();
     let (model,manifest) = context::compile(&conn,context::ContextInput { thread:&repository::thread(&conn,repository::FAMILY_THREAD).unwrap(),
-        agent_id:"nana",identity:&agents(),config:&json!({}),current:&input.content,before_id:None,rounds:40 }).unwrap();
+        agent_id:"nana",identity:&agents(),config:&json!({}),current:&input.content,before_id:None,rounds:40,budget:16000,diary:&[] }).unwrap();
     assert_eq!(model.last().unwrap().role,"user");
     assert_eq!(model.last().unwrap().content,"[佩洛]：你好");
     assert_eq!(model.iter().filter(|m| m.content == "大家好").count(),1);
@@ -242,7 +242,6 @@ fn runtime_leases_and_strict_metadata_validation() {
     assert!(runtime.reserve("desktop:nana","维护期间").is_err());
     drop(maintenance);
     assert!(runtime.reserve("desktop:nana","维护之后").is_ok());
-    assert!(metadata::blocks("<PEROCUE>({mood: globalThis.secret()})</PEROCUE>","PEROCUE").is_empty());
     assert_eq!(context::visible_text("<DIV>普通示例</DIV><MEMORY>{}</MEMORY>"),"<DIV>普通示例</DIV>");
     assert!(identity::normalize_agents(json!({"pero":{"name":"佩洛","system_prompt":[]}})).is_err());
 }
@@ -264,6 +263,38 @@ fn role_save_derives_texts_atomically_and_preserves_other_interactions() {
     assert!(identity::save_agent_in(&mut conn,"pero",json!({"name":"覆盖"}),true).is_err());
     assert!(identity::save_agent_in(&mut conn,"../bad",json!({"name":"非法"}),false).is_err());
     assert_eq!(identity::snapshot_in(&conn).unwrap(),config);
+}
+
+#[test]
+fn builtin_persona_update_only_changes_requested_roles_once() {
+    let db=state();let mut conn=db.conn.lock().unwrap();
+    let before=json!({"pero":{"name":"自定义显示名","persona_prompt":"旧 Pero 人设","avatar":"我的头像","system_prompt":"保留系统设定"},
+        "nana":{"name":"Nana","persona_prompt":"旧 Nana 人设"},"custom":{"name":"其他角色","persona_prompt":"保留自定义人设"}});
+    identity::set_value_in(&conn,"ppc.agents",&json!(before.to_string())).unwrap();
+    identity::update_builtin_personas(&mut conn).unwrap();
+    let mut updated=identity::agents_from(&identity::snapshot_in(&conn).unwrap()).unwrap();
+    assert!(updated["pero"]["persona_prompt"].as_str().unwrap().contains("可爱但克制"));
+    assert!(updated["nana"]["persona_prompt"].as_str().unwrap().contains("不禁夸"));
+    assert!(!updated.to_string().contains("owner_appellation"));assert!(!updated.to_string().contains("owner_name"));
+    assert_eq!(updated["pero"]["name"],before["pero"]["name"]);assert_eq!(updated["pero"]["avatar"],"我的头像");
+    assert_eq!(updated["pero"]["system_prompt"],"保留系统设定");assert_eq!(updated["custom"]["persona_prompt"],"保留自定义人设");
+    updated["pero"]["persona_prompt"]=json!("更新后再次编辑的人设");updated.as_object_mut().unwrap().remove("nana");
+    identity::set_value_in(&conn,"ppc.agents",&json!(updated.to_string())).unwrap();
+    identity::update_builtin_personas(&mut conn).unwrap();
+    let repeated=identity::agents_from(&identity::snapshot_in(&conn).unwrap()).unwrap();
+    assert_eq!(repeated["pero"]["persona_prompt"],"更新后再次编辑的人设");assert!(repeated.get("nana").is_none());
+}
+
+#[test]
+fn builtin_avatar_defaults_only_fill_missing_fields() {
+    let projected=identity::normalize_agents(json!({"pero":{"name":"Pero"},"nana":{"name":"Nana"},"custom":{"name":"自定义"}})).unwrap();
+    assert_eq!(projected["pero"]["avatar"],"/avatars/pero.jpg");
+    assert_eq!(projected["nana"]["avatar"],"/avatars/nana.jpg");
+    assert!(projected["custom"].get("avatar").is_none());
+    let customized=identity::normalize_agents(json!({"pero":{"name":"Pero","avatar":"data:image/png;base64,自定义头像"},"nana":{"name":"Nana","avatar":""}})).unwrap();
+    assert_eq!(customized["pero"]["avatar"],"data:image/png;base64,自定义头像");
+    assert_eq!(customized["nana"]["avatar"],"");
+    assert_eq!(identity::normalize_agents(projected.clone()).unwrap(),projected);
 }
 
 #[tokio::test]

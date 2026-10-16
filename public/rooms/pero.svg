@@ -1,0 +1,86 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 1600" fill="none">
+  <title>Pero 的晴空房间</title>
+  <desc>蓝白配色的明亮房间，窗外有云朵和樱花，窗边是书桌，另一侧摆着柔软的床和星形靠垫，中央留给角色。</desc>
+  <defs>
+    <linearGradient id="wall" x2=".75" y2="1"><stop stop-color="#f4fcff"/><stop offset=".6" stop-color="#e4f6ff"/><stop offset="1" stop-color="#c8e8fb"/></linearGradient>
+    <linearGradient id="side" x2="1" y2="1"><stop stop-color="#bddff5"/><stop offset="1" stop-color="#e0f2ff"/></linearGradient>
+    <linearGradient id="sky" y2="1"><stop stop-color="#59b8ed"/><stop offset=".65" stop-color="#a9e2ff"/><stop offset="1" stop-color="#effaff"/></linearGradient>
+    <linearGradient id="floor" y2="1"><stop stop-color="#e0c6b6"/><stop offset="1" stop-color="#f9e9d8"/></linearGradient>
+    <linearGradient id="curtain" x2="1"><stop stop-color="#63b8ed"/><stop offset=".22" stop-color="#a9e2ff"/><stop offset=".5" stop-color="#7ec5f3"/><stop offset=".75" stop-color="#b8e8ff"/><stop offset="1" stop-color="#75b9e6"/></linearGradient>
+    <linearGradient id="quilt" x2=".2" y2="1"><stop stop-color="#e2f6ff"/><stop offset=".5" stop-color="#b4e2fc"/><stop offset="1" stop-color="#83c6ed"/></linearGradient>
+    <linearGradient id="sunbeam" x2="1" y2="1"><stop stop-color="#fff8cf" stop-opacity=".6"/><stop offset="1" stop-color="#fffdf1" stop-opacity="0"/></linearGradient>
+    <radialGradient id="light"><stop stop-color="#ffffff" stop-opacity=".85"/><stop offset="1" stop-color="#fff" stop-opacity="0"/></radialGradient>
+    <filter id="shadow" x="-30%" y="-30%" width="170%" height="180%"><feDropShadow dx="0" dy="8" stdDeviation="7" flood-color="#4383b1" flood-opacity=".14"/></filter>
+    <clipPath id="window"><rect x="60" y="210" width="395" height="618" rx="10"/></clipPath>
+    <pattern id="quilt-dots" width="45" height="45" patternUnits="userSpaceOnUse"><circle cx="12" cy="12" r="3" fill="#fff" fill-opacity=".65"/></pattern>
+  </defs>
+  <!-- 以明亮的冷暖分层衬托角色，墙面中央保留完整的人物轮廓。 -->
+  <path fill="url(#wall)" d="M0 0h1200v1600H0z"/>
+  <path fill="url(#side)" d="M1030 0h170v1140l-170-100Z"/>
+  <path stroke="#a5d1eb" stroke-width="3" d="M1030 0v1040"/>
+  <path fill="#ffffff" fill-opacity=".6" d="M0 0h1200v42H0Z"/>
+  <path fill="#c4e7fa" d="M0 42h1030v9H0Z"/>
+  <path fill="url(#floor)" d="m0 1110 1030-70 170 100v460H0Z"/>
+  <path fill="#f5fcff" d="m0 1093 1030-70 170 99v23l-170-100-1030 71Z"/>
+  <path stroke="#9bc5df" stroke-width="3" d="m0 1116 1030-71 170 100"/>
+  <g stroke="#c1a697" stroke-width="2" opacity=".35"><path d="m0 1240 1100-155M0 1410l1200-270M250 1600l950-403M810 1600l390-308M1030 1045 500 1600M1030 1045l50 555"/></g>
+  <ellipse cx="610" cy="1375" rx="430" ry="128" fill="#c6aeb0" opacity=".2"/>
+  <ellipse cx="610" cy="1358" rx="420" ry="126" fill="#fafdff"/>
+  <ellipse cx="610" cy="1358" rx="392" ry="106" fill="#ddf2ff"/>
+  <ellipse cx="610" cy="1358" rx="365" ry="91" stroke="#fff" stroke-width="5"/>
+  <!-- 宽窗、云朵与带有层次的樱花树。 -->
+  <rect x="42" y="189" width="430" height="665" rx="16" fill="#9ccae4" filter="url(#shadow)"/>
+  <rect x="50" y="197" width="414" height="645" rx="13" fill="#fff"/>
+  <g clip-path="url(#window)">
+    <rect x="60" y="210" width="395" height="618" fill="url(#sky)"/>
+    <g fill="#fff" opacity=".9"><path d="M43 328q-4-25 24-26 11-33 44-24 15-33 46-14 27-3 32 23 37 2 35 30-84 27-181 11Z"/><path d="M269 414q4-25 27-25 8-28 33-23 21-24 40-3 29-1 33 21 32 1 39 22-84 19-172 8Z"/></g>
+    <path d="M342 828q-15-189 59-294M369 700l-80-78M381 657l66-71" stroke="#b9a0a0" stroke-width="11"/>
+    <g fill="#f7b7d8"><circle cx="336" cy="592" r="70"/><circle cx="402" cy="550" r="88"/><circle cx="467" cy="614" r="87"/><circle cx="278" cy="624" r="57"/></g>
+    <g fill="#ffd9e9"><circle cx="317" cy="561" r="42"/><circle cx="389" cy="523" r="54"/><circle cx="447" cy="577" r="53"/><circle cx="266" cy="602" r="32"/></g>
+    <path fill="#9ed7c4" d="M60 760q60-76 114-29 38-67 102-19 41-52 90 22 58-45 89 3v91H60Z"/>
+    <path fill="#c8efdb" d="M60 803q58-43 100-21 50-51 106-12 53-33 88 1 64-22 101 16v41H60Z"/>
+  </g>
+  <g stroke="#fbfdff" stroke-width="16"><path d="M256 208v620M60 505h395"/></g>
+  <path stroke="#bddded" stroke-width="3" d="M266 216v608M67 515h379"/>
+  <path d="M23 837h470v22H23Z" fill="#fff"/><path d="M23 859h470v12H23Z" fill="#a7cbe1"/>
+  <path stroke="#d1e3ee" stroke-width="9" stroke-linecap="round" d="M-12 166h519"/>
+  <circle cx="508" cy="166" r="11" fill="#f4fbff" stroke="#9cc9e4" stroke-width="3"/>
+  <path fill="url(#curtain)" stroke="#6baedb" stroke-width="2" d="M0 178q64-14 126 0l-11 340-42 130 52 257q-69 17-125-3Z"/>
+  <path fill="url(#curtain)" stroke="#6baedb" stroke-width="2" d="M397 178q61-14 112 0l-3 724q-58 12-116-1l48-255-32-130Z"/>
+  <g stroke="#e2f7ff" stroke-width="4" opacity=".65"><path d="m24 191 7 436-11 251M78 190l-15 447 39 239M430 190l27 440-42 249M481 188l-13 452 11 240"/></g>
+  <path fill="#f5d6ea" stroke="#d6aacb" stroke-width="2" d="m9 638 76 6-3 18-73-6ZM432 642l74-6v19l-78 7Z"/>
+  <path fill="url(#sunbeam)" d="m73 584 326 12 538 746-692 145Z"/>
+  <ellipse cx="360" cy="620" rx="435" ry="540" fill="url(#light)"/>
+  <!-- 小幅画、收纳架与圆润的壁钟。 -->
+  <g filter="url(#shadow)" transform="translate(737 253) rotate(4)"><rect width="140" height="173" rx="9" fill="#fff" stroke="#badbec" stroke-width="4"/><rect x="12" y="12" width="116" height="149" rx="4" fill="#d7f1ff"/><path d="M24 136q12-37 29-21 18-50 40-22 13-22 26 15v39H24Z" fill="#a0ddc9"/><circle cx="91" cy="51" r="22" fill="#ffe4a3"/><path d="M31 66q3-12 16-10 10-14 19-1 16-1 19 11Z" fill="white"/></g>
+  <g transform="translate(970 316)" filter="url(#shadow)"><circle r="58" fill="#fff" stroke="#9fcde7" stroke-width="6"/><circle r="45" fill="#edf9ff"/><path d="M0-32v5M0 27v5M-32 0h5M27 0h5" stroke="#73b4dd" stroke-width="4" stroke-linecap="round"/><path d="M0-23V0l19 10" stroke="#5b90ba" stroke-width="5" stroke-linecap="round"/><circle r="4" fill="#f2b9d7"/></g>
+  <g filter="url(#shadow)"><path fill="#fff" stroke="#b4d4e7" stroke-width="3" d="M649 593h325v23H649Z"/><path fill="#9ec8e0" d="M667 616h17v28h-17ZM940 616h17v28h-17Z"/>
+    <g stroke="#fff" stroke-width="2"><rect x="675" y="497" width="25" height="95" rx="3" fill="#75bde8"/><rect x="703" y="518" width="30" height="74" rx="3" fill="#efb8d6"/><rect x="736" y="505" width="20" height="87" rx="3" fill="#b0a5e4"/><path fill="#a6dfce" d="m760 519 21-6 21 79-22 5Z"/></g>
+    <path d="M683 521h9M713 540h10M741 525h10" stroke="#fff" stroke-width="3" stroke-linecap="round"/>
+    <path fill="#e6f7ff" stroke="#a6cfe4" stroke-width="2" d="M862 549h55l-8 43h-39Z"/>
+    <path d="M889 551v-44M890 533l-18-14M889 525l19-20" stroke="#61b69b" stroke-width="4"/>
+    <path fill="#91d6b8" d="M886 523q-33-1-29-26 30 0 29 26ZM891 519q-2-25 28-29 2 27-28 29Z"/>
+  </g>
+  <!-- 白色书桌与彩色文具，家具阴影集中在边缘。 -->
+  <g filter="url(#shadow)"><path fill="#a6c7df" d="M33 1030h23v232H33ZM400 1022h23v217h-23Z"/><path fill="#fff9f2" stroke="#b5cddd" stroke-width="3" d="m0 954 424-8 51 64-475 15Z"/><path fill="#c7e1ef" stroke="#9cbfd5" stroke-width="2" d="m0 1025 475-15v26L0 1051Z"/><path fill="#fafdff" stroke="#b1d3e6" stroke-width="3" d="M63 1054h305v99H63Z"/><path d="M63 1103h305" stroke="#c1ddec" stroke-width="3"/><path d="M191 1076h45M191 1126h45" stroke="#95c5e0" stroke-width="6" stroke-linecap="round"/></g>
+  <g transform="translate(117 902) rotate(-4)"><rect width="140" height="27" rx="4" fill="#8ec5e6"/><path fill="#fff" d="M10 6h130v15H10Z"/><rect x="7" y="-24" width="127" height="24" rx="3" fill="#eeb5d0"/><path fill="#fff5fa" d="M16-19h118v13H16Z"/></g>
+  <g transform="translate(320 901)"><path fill="#fff" stroke="#b7d8e9" stroke-width="3" d="M0 0h48v62H0Z"/><path d="M48 11q32-3 25 25-5 13-25 9" stroke="#b7d8e9" stroke-width="7"/><ellipse cx="24" rx="24" ry="6" fill="#cfa991"/><path d="M12-19q-9-10 1-22M30-16q-9-11 2-23" stroke="#fff" stroke-width="3" opacity=".85" stroke-linecap="round"/><path d="m14 32 5 5 13-13" stroke="#79bae1" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/></g>
+  <g transform="translate(52 904)"><rect width="44" height="58" rx="6" fill="#b7ddf4" stroke="#86b9d9" stroke-width="2"/><path d="m12 10-6-48M23 9l4-56M32 12l10-45" stroke="#f1adcb" stroke-width="7"/><path d="M23 9l4-56" stroke="#99c6e8" stroke-width="7"/></g>
+  <!-- 蓝白被褥与星形靠垫。 -->
+  <path fill="#b5d1e5" stroke="#8fb9d6" stroke-width="3" d="m944 820 256 50v380l-312-41Z"/>
+  <path fill="#f6fcff" stroke="#b0d4ea" stroke-width="3" d="m917 826 283 47v204l-310-34Z"/>
+  <path fill="#a8cde4" d="m888 1209 312 41v56l-329-35Z"/>
+  <path fill="url(#quilt)" stroke="#8bbfdf" stroke-width="3" d="m894 1028 306 39v219l-349-49 13-146Z"/>
+  <path fill="url(#quilt-dots)" d="m894 1028 306 39v219l-349-49 13-146Z"/>
+  <path d="m898 1058 302 41" stroke="#f0fbff" stroke-width="13"/>
+  <path fill="#fff" stroke="#c3dcec" stroke-width="3" d="m972 871 153 23-15 113-163-20Z"/>
+  <path fill="#ffdb9c" stroke="#eac085" stroke-width="3" stroke-linejoin="round" d="m1011 939 28-38 13 45 45 10-37 28 4 45-37-25-42 17 12-43-29-35Z"/>
+  <path d="m1029 945 10-15" stroke="#fff2cc" stroke-width="4" stroke-linecap="round"/>
+  <path d="m879 1272-8 37M1175 1308l3 31" stroke="#95b7d0" stroke-width="9" stroke-linecap="round"/>
+  <!-- 窗边绿植和柔和的地面反光。 -->
+  <path d="m162 1170-4-158M164 1153l49-95M155 1129l-48-53" stroke="#58a991" stroke-width="7" stroke-linecap="round"/>
+  <g fill="#8bd6b3" stroke="#64b99b" stroke-width="2"><path d="M157 1075q-57-4-62-54 50-10 62 54Z"/><path d="M159 1047q-3-61 56-77 16 53-56 77Z"/><path d="M184 1130q12-54 60-49 0 50-60 49Z"/><path d="M153 1138q-60 1-73-44 54-19 73 44Z"/></g>
+  <path fill="#fff" stroke="#b6d7e8" stroke-width="3" d="M108 1170h109l-14 114h-80Z"/><ellipse cx="162" cy="1170" rx="55" ry="11" fill="#d6eaf4"/>
+  <path d="M123 1194h78M127 1211h70" stroke="#d2e9f5" stroke-width="3"/>
+  <ellipse cx="383" cy="1462" rx="190" ry="28" fill="#fff" opacity=".18"/>
+</svg>

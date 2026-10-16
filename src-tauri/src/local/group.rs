@@ -121,5 +121,9 @@ pub async fn local_group_chat(app: AppHandle, request: GroupRequest) -> ChatResu
     let settings = identity::model_settings(&config)?;
     config["currentTime"] = json!(chrono::Local::now().format("%Y-%m-%d %H:%M:%S %:z").to_string());
     let service = ConversationService { db:&db,runtime:&runtime,agents:&agents,config:&config,settings:&settings };
-    execute(&service,request,|event| { let _ = app.emit("local-chat-event",event); },|id,_|identity::state(&app,id)).await
+    let mut result=execute(&service,request,|event| { let _ = app.emit("local-chat-event",event); },|id,_|identity::state(&app,id)).await;
+    let sync=super::reminder_platform::synchronize(&app);
+    if let Err(error)=&sync {eprintln!("群聊提交后的系统提醒同步等待恢复：{}",error.message);}
+    if let Ok(result)=&mut result {result.state["backgroundSyncPending"]=json!(sync.is_err());}
+    result
 }

@@ -31,11 +31,7 @@ export function getRecentMemories(limit = 10, offset = 0, agentId = getActiveAge
   return localInvoke('get_memories', { agentId, limit, offset })
 }
 export const getAllMemories = () => getRecentMemories(10000)
-export const deleteMemory = (id) => localInvoke('delete_memory', { id })
-export function getReminders(agentId = getActiveAgentId()) {
-  return localInvoke('get_reminders', { agentId })
-}
-export const deleteReminder = (id) => localInvoke('delete_reminder', { id })
+export const deleteMemory = (id) => localInvoke('delete_memory', { id, agentId: getActiveAgentId() })
 export function getTopics(agentId = getActiveAgentId()) {
   return localInvoke('get_topics', { agentId })
 }

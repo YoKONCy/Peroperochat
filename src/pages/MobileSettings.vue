@@ -1,1889 +1,306 @@
 <template>
-  <div class="settings-container">
-    <!-- 顶部导航 -->
-    <div class="header">
-      <div class="back-btn" @click="goHome">
-        <el-icon><ArrowLeft /></el-icon>
-      </div>
-      <div class="header-title">
-        <h2>设置中心</h2>
-        <span>Settings</span>
-      </div>
-      <div class="menu-btn" @click="drawerVisible = true">
-        <span class="menu-text">导航</span>
-        <el-icon><Menu /></el-icon>
-      </div>
-    </div>
+  <CompanionPage class="settings-page" title="设置" subtitle="模型、偏好与应用数据" @back="router.push('/')">
+    <div class="settings-layout">
+      <aside class="settings-navigation">
+        <div class="settings-partner"><CharacterAvatar class="settings-portrait" :src="agent.avatar" :label="agent.name" /><div><CompanionEmblem /><strong>{{ agent.name }}</strong><small>当前伙伴</small></div></div>
+        <nav aria-label="设置分类" role="tablist">
+          <button v-for="(item, index) in categories" :id="`settings-tab-${item.id}`" :key="item.id" type="button" role="tab" :aria-selected="tab === item.id" :aria-controls="`settings-panel-${item.id}`" :tabindex="tab === item.id ? 0 : -1" :class="{ selected: tab === item.id }" @click="tab = item.id" @keydown="onCategoryKey($event, index)"><RoomIcon :name="item.icon" /><span>{{ item.label }}</span><i v-if="dirtySections[item.id]" aria-label="未保存" /></button>
+        </nav>
+      </aside>
+      <section :id="`settings-panel-${tab}`" class="settings-content" role="tabpanel" :aria-labelledby="`settings-tab-${tab}`">
+        <div :key="tab" class="settings-panel-body">
+          <header class="settings-section-heading"><span class="settings-section-symbol"><RoomIcon :name="currentCategory.icon" /></span><div><h2>{{ currentCategory.label }}</h2><p>{{ currentCategory.description }}</p></div><span v-if="dirtySections[tab]" class="settings-unsaved">未保存</span></header>
+          <p v-if="loadError" class="room-error" role="alert">{{ loadError }} <button class="room-text-button" @click="load">重新读取</button></p>
+          <p v-if="loading" class="control-hint" role="status">正在读取设置…</p>
 
-    <!-- 侧边抽屉导航 -->
-    <el-drawer
-      v-model="drawerVisible"
-      title="设置导航"
-      direction="ltr"
-      size="70%"
-      :show-close="false"
-      class="settings-drawer"
-    >
-      <div class="drawer-menu">
-        <div
-          v-for="item in menuItems.filter((i) => i.id !== 'remote')"
-          :key="item.id"
-          :class="['drawer-item', { active: tab === item.id }]"
-          @click="switchTab(item.id)"
-        >
-          <el-icon><component :is="item.icon" /></el-icon>
-          <span>{{ item.label }}</span>
-        </div>
-      </div>
-    </el-drawer>
-
-    <!-- 设置主体 -->
-    <div class="settings-body">
-      <!-- 设置内容区 -->
-      <div class="content-area">
-        <Transition name="fade" mode="out-in">
-          <div :key="tab" class="content-card">
-            <!-- 角色选择与管理 -->
-            <div v-if="tab === 'role'" class="section">
-              <div class="section-header">
-                <el-icon><Avatar /></el-icon>
-                <h3>角色管理</h3>
-                <el-button
-                  type="primary"
-                  class="create-btn"
-                  :icon="Plus"
-                  @click="createNewAgent"
-                  circle
-                ></el-button>
+          <form v-if="tab === 'api'" @submit.prevent="saveApi">
+            <fieldset :disabled="loading || !loaded || !!busy">
+              <div class="settings-field-grid">
+                <label class="settings-field">服务商<ChoicePicker v-model="provider" label="选择服务商" :display-label="providerLabel" :options="providerChoices" :disabled="loading || !loaded || !!busy" @change="chooseProvider"><template #leading><BrandIcon :brand="providerBrand" :size="18" fallback="provider" /></template><template #option-leading="{ option }"><BrandIcon :brand="resolveProviderBrand(option.value)" :size="22" fallback="provider" /></template></ChoicePicker></label>
+                <label class="settings-field">API 协议<ChoicePicker v-model="api.apiFormat" label="选择 API 协议" :options="protocolChoices" :disabled="loading || !loaded || !!busy" /></label>
               </div>
+              <label class="settings-field">API 地址<input v-model="api.base" type="url" required spellcheck="false" autocomplete="off" placeholder="https://api.example.com/v1" /><small>支持自定义代理与本地服务</small></label>
+              <label class="settings-field">API 密钥<div class="settings-secret"><input v-model="api.key" :type="showKey ? 'text' : 'password'" autocomplete="off" spellcheck="false" placeholder="填写密钥，本地服务可留空" /><button type="button" class="room-icon-button" :aria-label="showKey ? '隐藏密钥' : '显示密钥'" :aria-pressed="showKey" @click="showKey = !showKey"><RoomIcon name="eye" /></button></div></label>
+              <label class="settings-field">模型名称<div class="settings-model-input"><BrandIcon :brand="resolveModelBrand(api.model)" :size="20" /><input v-model="api.model" required spellcheck="false" placeholder="填写模型 ID，或从下方选择" /></div></label>
+              <div class="model-discovery"><button type="button" class="room-secondary-button" :aria-busy="busy === 'fetch'" @click="fetchModels"><RoomIcon name="refresh" :class="{ 'room-spinning': busy === 'fetch' }" />{{ busy === 'fetch' ? '正在获取…' : '获取模型列表' }}</button><input v-model="modelSearch" class="control-input" type="search" aria-label="搜索模型" placeholder="搜索模型 ID" /></div>
+              <div v-if="models.length" class="model-options" aria-label="可用模型"><button v-for="model in filteredModels.slice(0, 100)" :key="model.id" type="button" :aria-pressed="api.model === model.id" :class="{ selected: api.model === model.id }" @click="api.model = model.id"><BrandIcon :brand="resolveModelBrand(model.id)" :size="20" /><span>{{ model.id }}</span><RoomIcon v-if="api.model === model.id" class="model-selected-check" name="check" /></button><p v-if="!filteredModels.length" class="control-hint">没有匹配的模型</p></div>
+              <p v-if="filteredModels.length > 100" class="control-hint">匹配 {{ filteredModels.length }} 个模型，显示前 100 个；输入关键词可缩小范围。</p>
+              <footer class="settings-save"><span>连接配置对所有本地角色生效</span><button class="room-primary-button" :disabled="!dirtySections.api">{{ busy === 'save-api' ? '正在保存…' : '保存连接' }}</button></footer>
+            </fieldset>
+          </form>
 
-              <div class="agent-selection-container">
-                <div
-                  v-for="(agent, id) in AGENTS"
-                  :key="id"
-                  class="agent-select-card"
-                  :class="{ active: activeAgentId === id }"
-                  @click="activeAgentId = id"
-                >
-                  <div class="agent-avatar-placeholder">
-                    <img v-if="agent.avatar" :src="agent.avatar" class="agent-avatar-img" :alt="agent.name" />
-                    <span v-else>{{ agent.name.charAt(0).toUpperCase() }}</span>
-                  </div>
-                  <div class="agent-info">
-                    <div class="agent-name">{{ agent.name }}</div>
-                    <div class="agent-desc">
-                      {{ id === 'pero' ? '看板娘' : id === 'nana' ? '雌小鬼AI' : '自定义角色' }}
-                    </div>
-                  </div>
-                  <div class="agent-actions">
-                    <div class="status-indicator" v-if="activeAgentId === id">
-                      <span class="dot"></span> 使用中
-                    </div>
-                    <el-dropdown
-                      trigger="click"
-                      @command="(cmd) => handleAgentCommand(cmd, id)"
-                      v-else-if="!['pero', 'nana'].includes(id)"
-                    >
-                      <el-icon class="more-btn" @click.stop><MoreFilled /></el-icon>
-                      <template #dropdown>
-                        <el-dropdown-menu>
-                          <el-dropdown-item command="edit" :icon="Edit">编辑配置</el-dropdown-item>
-                          <el-dropdown-item
-                            command="delete"
-                            :icon="Delete"
-                            class="danger-text"
-                            :disabled="['pero', 'nana'].includes(id)"
-                          >
-                            删除角色
-                          </el-dropdown-item>
-                        </el-dropdown-menu>
-                      </template>
-                    </el-dropdown>
-                    <el-button
-                      v-if="activeAgentId === id && !['pero', 'nana'].includes(id)"
-                      type="primary"
-                      link
-                      :icon="Edit"
-                      @click.stop="editAgent(id)"
-                      >配置</el-button
-                    >
-                  </div>
-                </div>
+          <form v-else-if="tab === 'model'" @submit.prevent="saveParameters">
+            <fieldset :disabled="loading || !loaded || !!busy">
+              <div class="settings-field-grid">
+                <label class="settings-field">Temperature<input v-model.number="parameters.temperature" type="number" min="0" max="2" step="0.01" placeholder="由模型决定" /><small>较高时回复更有变化，留空则不发送。</small></label>
+                <label class="settings-field">Top P<input v-model.number="parameters.topP" type="number" min="0" max="1" step="0.01" placeholder="由模型决定" /><small>控制采样范围，留空则不发送。</small></label>
+                <label class="settings-field">思考强度<ChoicePicker v-model="parameters.reasoningEffort" label="选择思考强度" :options="reasoningChoices" :disabled="loading || !loaded || !!busy" /><small>可用档位取决于所选模型</small></label>
+                <label class="settings-field">最多输出 Token<input v-model.number="parameters.maxTokens" type="number" min="128" max="65536" required /></label>
+                <label class="settings-field">上下文窗口<input v-model.number="parameters.contextWindow" type="number" min="1152" max="2000000" required /><small>应与模型能力一致，并留出回复空间。</small></label>
+                <label class="settings-field">历史对话轮次<input v-model.number="parameters.memoryRounds" type="number" min="1" max="200" required /><small>一轮包含一条输入和一条回复。</small></label>
               </div>
+              <label class="settings-toggle"><span><strong>流式回复</strong><small>边生成边显示消息</small></span><input v-model="parameters.stream" type="checkbox" role="switch" /></label>
+              <footer class="settings-save"><span>未编辑的高级参数会保留</span><button class="room-primary-button" :disabled="!dirtySections.model">{{ busy === 'save-model' ? '正在保存…' : '保存参数' }}</button></footer>
+            </fieldset>
+          </form>
 
-              <!-- 高级角色管理入口 -->
-              <div class="advanced-role-entry">
-                <el-button type="primary" plain class="advanced-btn" @click="goToRoleManager">
-                  <el-icon><Setting /></el-icon>
-                  <span>高级角色管理</span>
-                  <el-icon class="arrow"><ArrowRight /></el-icon>
-                </el-button>
-                <p class="entry-hint">支持导入导出、详细人设编辑、角色模板等高级功能</p>
-              </div>
+          <form v-else-if="tab === 'user'" @submit.prevent="saveUser">
+            <fieldset :disabled="loading || !loaded || !!busy"><label class="settings-field">你的名字<input v-model="user.name" maxlength="200" autocomplete="name" placeholder="希望角色怎样称呼你" /></label><label class="settings-field">关于你<textarea v-model="user.persona" rows="9" maxlength="100000" placeholder="介绍你的喜好、日常或希望她了解的事情" /><small>这些资料会用于本地角色的对话。</small></label><footer class="settings-save"><span /><button class="room-primary-button" :disabled="!dirtySections.user">{{ busy === 'save-user' ? '正在保存…' : '保存资料' }}</button></footer></fieldset>
+          </form>
 
-              <!-- 编辑弹窗 -->
-              <el-dialog
-                v-model="showAgentEditor"
-                :title="isNewAgent ? '新建角色' : '编辑角色'"
-                width="95%"
-                destroy-on-close
-                append-to-body
-                class="agent-editor-dialog"
-              >
-                <el-tabs v-model="editorActiveTab" class="editor-tabs">
-                  <!-- Tab 1: 基础信息 -->
-                  <el-tab-pane name="basic">
-                    <template #label>
-                      <span class="custom-tab-label">
-                        <el-icon><Avatar /></el-icon>
-                        <span>基础信息</span>
-                      </span>
-                    </template>
-                    <el-form :model="editingAgentForm" label-position="top" class="editor-form">
-                      <el-alert
-                        v-if="['pero', 'nana'].includes(editingAgentIdRaw)"
-                        title="默认角色核心设定不可更改"
-                        type="warning"
-                        show-icon
-                        :closable="false"
-                        class="mb-2"
-                      />
-                      <div class="form-row">
-                        <el-form-item label="角色名称" class="half-width">
-                          <el-input
-                            v-model="editingAgentForm.name"
-                            placeholder="例如：Mio"
-                            :prefix-icon="User"
-                            :disabled="['pero', 'nana'].includes(editingAgentIdRaw)"
-                          />
-                        </el-form-item>
-                        <el-form-item label="角色ID" v-if="isNewAgent" class="half-width">
-                          <el-input
-                            v-model="editingAgentIdRaw"
-                            placeholder="例如：mio_001"
-                            :prefix-icon="Key"
-                          />
-                        </el-form-item>
-                      </div>
+          <div v-else-if="tab === 'role'" class="settings-destinations"><button @click="router.push('/roles')"><span class="destination-icon"><RoomIcon name="profile" /></span><span><strong>角色管理</strong><small>{{ agentList.length }} 位伙伴 · 编辑人设、头像与互动台词</small></span><RoomIcon name="arrow" /></button><p class="control-hint">角色的创建、编辑、导入和导出统一在角色管理中完成。</p></div>
+          <div v-else-if="tab === 'memory'" class="settings-destinations"><button @click="router.push({ path: '/', query: { panel: 'journal' } })"><span class="destination-icon"><RoomIcon name="diary" /></span><span><strong>{{ agent.name }} 的日记</strong><small>搜索、查看来源、修订和删除</small></span><RoomIcon name="arrow" /></button><p class="control-hint">日记按角色独立保存，与房间中的日记入口使用同一界面。</p></div>
 
-                      <el-form-item label="欢迎语">
-                        <el-input
-                          v-model="editingAgentForm.welcome_message"
-                          type="textarea"
-                          :rows="3"
-                          placeholder="你好呀！我是..."
-                          resize="none"
-                        />
-                      </el-form-item>
-
-                      <el-divider content-position="left"
-                        ><el-icon><Operation /></el-icon> 默认状态</el-divider
-                      >
-
-                      <div class="state-grid">
-                        <el-form-item label="Mood (心情)">
-                          <el-input
-                            v-model="editingAgentForm.default_state.mood"
-                            placeholder="开心"
-                          />
-                        </el-form-item>
-                        <el-form-item label="Vibe (氛围)">
-                          <el-input
-                            v-model="editingAgentForm.default_state.vibe"
-                            placeholder="充满活力"
-                          />
-                        </el-form-item>
-                        <el-form-item label="Mind (想法)">
-                          <el-input
-                            v-model="editingAgentForm.default_state.mind"
-                            placeholder="希望能帮到主人"
-                          />
-                        </el-form-item>
-                      </div>
-                    </el-form>
-                  </el-tab-pane>
-
-                  <!-- Tab 2: 核心设定 -->
-                  <el-tab-pane name="core">
-                    <template #label>
-                      <span class="custom-tab-label">
-                        <el-icon><Cpu /></el-icon>
-                        <span>核心设定</span>
-                      </span>
-                    </template>
-                    <el-form :model="editingAgentForm" label-position="top" class="editor-form">
-                      <el-alert
-                        title="Prompt 设定决定了角色的性格和行为方式"
-                        type="info"
-                        show-icon
-                        :closable="false"
-                        class="mb-2"
-                      />
-                      <el-form-item label="System Prompt (系统指令)">
-                        <el-input
-                          v-model="editingAgentForm.system_prompt"
-                          type="textarea"
-                          :rows="8"
-                          placeholder="<System_Core_Setting>..."
-                          :disabled="['pero', 'nana'].includes(editingAgentIdRaw)"
-                        />
-                      </el-form-item>
-                      <el-form-item label="Persona Prompt (人设模块)">
-                        <el-input
-                          v-model="editingAgentForm.persona_prompt"
-                          type="textarea"
-                          :rows="8"
-                          placeholder="<Identity_Module>..."
-                          :disabled="['pero', 'nana'].includes(editingAgentIdRaw)"
-                        />
-                      </el-form-item>
-                    </el-form>
-                  </el-tab-pane>
-
-                  <!-- Tab 3: 互动台词 -->
-                  <el-tab-pane name="interaction">
-                    <template #label>
-                      <span class="custom-tab-label">
-                        <el-icon><ChatDotRound /></el-icon>
-                        <span>互动台词</span>
-                      </span>
-                    </template>
-                    <el-form :model="editingAgentForm" label-position="top" class="editor-form">
-                      <el-alert
-                        title="每行一句，看板娘闲置时会随机播放"
-                        type="success"
-                        show-icon
-                        :closable="false"
-                        class="mb-2"
-                      />
-                      <el-form-item>
-                        <el-input
-                          v-model="editingAgentForm.idle_messages_text"
-                          type="textarea"
-                          :rows="15"
-                          placeholder="今天天气真好呀！&#10;主人在忙什么呢？&#10;好想吃甜点..."
-                        />
-                      </el-form-item>
-                    </el-form>
-                  </el-tab-pane>
-                </el-tabs>
-
-                <template #footer>
-                  <span class="dialog-footer">
-                    <el-button @click="showAgentEditor = false">取消</el-button>
-                    <el-button type="primary" @click="saveAgentData">保存配置</el-button>
-                  </span>
-                </template>
-              </el-dialog>
-            </div>
-
-            <!-- API 设置 -->
-            <div v-if="tab === 'api'" class="section">
-              <div class="section-header">
-                <el-icon><Cpu /></el-icon>
-                <h3>API 配置</h3>
-              </div>
-              <el-form label-position="top">
-                <el-form-item label="服务商 (Provider)">
-                  <el-select
-                    v-model="selectedProvider"
-                    placeholder="选择服务商"
-                    style="width: 100%"
-                    @change="handleProviderChange"
-                  >
-                    <el-option
-                      v-for="p in providers"
-                      :key="p.value"
-                      :label="p.label"
-                      :value="p.value"
-                    />
-                  </el-select>
-                </el-form-item>
-                <el-form-item label="模型名称">
-                  <el-input v-model="modelName" placeholder="请先获取模型" />
-                </el-form-item>
-                <el-form-item label="API 地址">
-                  <el-input
-                    v-model="apiBase"
-                    placeholder="https://api.openai.com"
-                    :disabled="selectedProvider !== 'custom'"
-                  />
-                </el-form-item>
-                <el-form-item label="API 秘钥">
-                  <el-input v-model="apiKey" type="password" placeholder="sk-..." show-password />
-                </el-form-item>
-                <div class="api-tools">
-                  <el-button type="primary" plain @click="fetchModels">获取模型</el-button>
-                  <el-input v-model="modelSearch" placeholder="搜索模型..." clearable />
-                </div>
-                <el-table
-                  :data="filteredModels"
-                  height="200"
-                  @row-click="(row) => (modelName = row.id)"
-                  class="mini-table"
-                >
-                  <el-table-column width="40">
-                    <template #default="{ row }">
-                      <el-radio v-model="modelName" :label="row.id"><span></span></el-radio>
-                    </template>
-                  </el-table-column>
-                  <el-table-column prop="id" label="可用模型列表" />
-                </el-table>
-                <el-button type="primary" class="full-btn" @click="applySettings"
-                  >保存 API 设置</el-button
-                >
-              </el-form>
-            </div>
-
-            <!-- 模型偏好 -->
-            <div v-if="tab === 'model'" class="section">
-              <div class="section-header">
-                <el-icon><Operation /></el-icon>
-                <h3>模型参数</h3>
-              </div>
-              <el-form label-position="top">
-                <div class="slider-group">
-                  <div class="slider-item">
-                    <span>Temperature: {{ temperature }}</span>
-                    <el-slider v-model="temperature" :min="0" :max="2" :step="0.01" />
-                  </div>
-                  <div class="slider-item">
-                    <span>Top P: {{ topP }}</span>
-                    <el-slider v-model="topP" :min="0" :max="1" :step="0.01" />
-                  </div>
-                </div>
-                <el-form-item label="记忆轮次 (1轮=1对对话)">
-                  <el-input-number v-model="memoryRounds" :min="1" :max="500" style="width: 100%" />
-                </el-form-item>
-                <el-form-item label="流式传输">
-                  <el-switch v-model="stream" />
-                </el-form-item>
-                <el-button type="primary" class="full-btn" @click="applyModelSettings"
-                  >确定</el-button
-                >
-              </el-form>
-            </div>
-
-            <!-- 用户设定 -->
-            <div v-if="tab === 'user'" class="section">
-              <div class="section-header">
-                <el-icon><User /></el-icon>
-                <h3>用户设定</h3>
-              </div>
-              <el-form label-position="top">
-                <el-form-item label="我的名字">
-                  <el-input v-model="userName" placeholder="填写你的名字" />
-                </el-form-item>
-                <el-form-item :label="`我的人设`">
-                  <el-input
-                    v-model="userPersonaText"
-                    type="textarea"
-                    :rows="8"
-                    placeholder="例如：性格温柔、喜欢吃甜食..."
-                  />
-                </el-form-item>
-                <el-button type="primary" class="full-btn" @click="applyUserSettings"
-                  >确定</el-button
-                >
-              </el-form>
-            </div>
-
-            <!-- 记忆管理 -->
-            <div v-if="tab === 'memory'" class="section">
-              <div class="section-header">
-                <el-icon><Collection /></el-icon>
-                <h3>记忆管理</h3>
-              </div>
-              <el-input
-                v-model="memorySearch"
-                placeholder="搜索记忆..."
-                clearable
-                class="search-input"
-              >
-                <template #prefix
-                  ><el-icon><Search /></el-icon
-                ></template>
-              </el-input>
-              <div class="memory-list">
-                <div v-if="filteredMemories.length === 0" class="empty">暂无相关记忆</div>
-                <div v-for="m in filteredMemories" :key="m.id" class="memory-item">
-                  <div
-                    class="memory-content markdown-body"
-                    v-html="renderMarkdown(m.content)"
-                  ></div>
-                  <div v-if="m.tags && m.tags.length" class="memory-tags">
-                    <el-tag
-                      v-for="tag in m.tags"
-                      :key="tag"
-                      size="small"
-                      type="info"
-                      effect="plain"
-                      round
-                      class="m-tag"
-                    >
-                      {{ tag }}
-                    </el-tag>
-                  </div>
-                  <div class="memory-footer">
-                    <span class="m-time">{{ m.realTime || '未知时间' }}</span>
-                    <el-button type="danger" size="small" link @click="deleteMemory(m.id)"
-                      >删除</el-button
-                    >
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <!-- 数据管理 -->
-            <div v-if="tab === 'data'" class="section">
-              <div class="section-header">
-                <el-icon><Warning /></el-icon>
-                <h3>数据管理</h3>
-              </div>
-
-              <div class="data-card">
-                <h4><i class="fas fa-file-export"></i> 导出全部数据</h4>
-                <p>
-                  将所有配置、角色、记忆及对话数据导出为一个 JSON 文件，方便备份或在其他设备上使用。
-                </p>
-                <el-button type="primary" @click="handleExportAllData">
-                  <i class="fas fa-download"></i> 导出数据
-                </el-button>
-              </div>
-
-              <div class="data-card">
-                <h4><i class="fas fa-file-import"></i> 导入全部数据</h4>
-                <p>从之前导出的 JSON 文件中恢复所有数据。警告：此操作将覆盖当前的所有数据。</p>
-                <input
-                  ref="importDataInput"
-                  type="file"
-                  accept=".json"
-                  style="display: none"
-                  @change="handleImportAllData"
-                />
-                <el-button @click="triggerImportData">
-                  <i class="fas fa-upload"></i> 选择文件并导入
-                </el-button>
-              </div>
-
-              <div class="data-card danger">
-                <h4><i class="fas fa-trash-alt"></i> 数据重置</h4>
-                <p>将删除所有对话、记忆及偏好设置，恢复到初始状态。</p>
-                <el-button type="danger" @click="handleResetAll">重置所有数据</el-button>
-              </div>
-            </div>
+          <div v-else-if="tab === 'data'" class="settings-data-list">
+            <article><div><RoomIcon name="download" /><h3>导出备份</h3></div><p>导出配置、角色、日记与对话，保存为 JSON 文件。</p><button class="room-secondary-button" :disabled="!!busy" @click="exportBackup">{{ busy === 'export' ? '正在导出…' : '导出全部数据' }}</button></article>
+            <article><div><RoomIcon name="upload" /><h3>恢复备份</h3></div><p>从备份文件恢复数据。确认导入后会覆盖当前数据。</p><input ref="importInput" type="file" accept=".json,application/json" hidden @change="importBackup" /><button class="room-secondary-button" :disabled="!!busy" @click="importInput?.click()">{{ busy.startsWith('import') ? '正在处理…' : '选择备份文件' }}</button></article>
+            <article class="settings-danger"><div><RoomIcon name="trash" /><h3>重置所有数据</h3></div><p>删除全部对话、日记与偏好设置。此操作无法撤销。</p><button class="room-danger-button" :disabled="!!busy" @click="resetData">重置所有数据</button></article>
           </div>
-        </Transition>
-      </div>
+        </div>
+      </section>
     </div>
-  </div>
+  </CompanionPage>
 </template>
 
 <script setup>
-import { ref, computed, onMounted, watch } from 'vue'
-import { invoke } from '@tauri-apps/api/core'
+import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref } from 'vue'
+import { onBeforeRouteLeave, useRouter } from 'vue-router'
+import { ElMessage, ElMessageBox } from 'element-plus'
+import CompanionPage from '../components/companion/CompanionPage.vue'
+import RoomIcon from '../components/companion/RoomIcon.vue'
+import CharacterAvatar from '../components/companion/CharacterAvatar.vue'
+import CompanionEmblem from '../components/companion/CompanionEmblem.vue'
+import ChoicePicker from '../components/companion/ChoicePicker.vue'
+import BrandIcon from '../components/companion/BrandIcon.vue'
+import { modelBrandDefinition, resolveModelBrand, resolveProviderBrand } from '../utils/modelBrands'
+import { AGENTS, activeAgentId, agentList } from '../stores/agents'
+import { getApiKey, getConfig, exportAllData, importAllData, resetAll } from '../api'
 import { localInvoke } from '../services/localChat'
-import { useRouter } from 'vue-router'
-import { ElMessageBox, ElMessage } from 'element-plus'
-import {
-  resetAll,
-  AGENTS,
-  getActiveAgentId,
-  setActiveAgentId,
-  getApiKey,
-  getAllMemories,
-  deleteMemory as apiDeleteMemory,
-  getConfig,
-  saveAgent,
-  deleteAgent,
-  exportAllData,
-  importAllData
-} from '../api'
-import { marked } from 'marked'
-import DOMPurify from 'dompurify'
-import {
-  Search,
-  ArrowLeft,
-  ArrowRight,
-  Cpu,
-  Operation,
-  User,
-  Collection,
-  Warning,
-  Avatar,
-  Setting,
-  Edit,
-  Menu,
-  Plus,
-  Delete,
-  ChatDotRound,
-  Key,
-  MoreFilled,
-  Connection
-} from '@element-plus/icons-vue'
-
-const tab = ref('role')
-const editorActiveTab = ref('basic')
-const drawerVisible = ref(false)
-
-function handleAgentCommand(cmd, id) {
-  if (cmd === 'edit') editAgent(id)
-  else if (cmd === 'delete') handleDeleteAgent(id)
-}
-
-function switchTab(id) {
-  tab.value = id
-  drawerVisible.value = false
-}
-
-// Markdown 渲染
-function renderMarkdown(text) {
-  try {
-    if (!text) return ''
-    const clean = cleanMessageContent(text)
-
-    // 更加防御性的 marked 调用
-    let html = ''
-    if (typeof marked === 'function') {
-      html = marked(clean)
-    } else if (marked && typeof marked.parse === 'function') {
-      html = marked.parse(clean)
-    } else {
-      html = String(clean)
-    }
-
-    return DOMPurify && typeof DOMPurify.sanitize === 'function'
-      ? DOMPurify.sanitize(html)
-      : String(html)
-  } catch (e) {
-    console.error('Markdown render error:', e)
-    return String(text || '')
-  }
-}
-
-// 清理消息中的隐藏标签
-function cleanMessageContent(text) {
-  try {
-    if (typeof text !== 'string') return String(text || '')
-    if (text === '__loading__') {
-      const agentId = getActiveAgentId()
-      const agentName = AGENTS[agentId]?.name || 'Pero'
-      return `${agentName}正在思考...`
-    }
-
-    // 移除所有 XML 标签及其内容
-    return text
-      .replace(/<([A-Z_]+)>[\s\S]*?<\/\1>/g, '')
-      .replace(/\[\[\[NIT_CALL\]\]\][\s\S]*?\[\[\[NIT_END\]\]\]/g, '')
-      .trim()
-  } catch {
-    return String(text || '')
-  }
-}
-
-const menuItems = [
-  { id: 'role', label: '角色', icon: Avatar },
-  { id: 'api', label: 'API', icon: Cpu },
-  { id: 'remote', label: '远程', icon: Connection },
-  { id: 'model', label: '模型', icon: Operation },
-  { id: 'user', label: '用户', icon: User },
-  { id: 'memory', label: '记忆', icon: Collection },
-  { id: 'data', label: '数据', icon: Warning }
-]
-
-// Role & Rules Settings
-const activeAgentId = ref(getActiveAgentId())
-
-// Agent Management Logic
-const showAgentEditor = ref(false)
-const isNewAgent = ref(false)
-const editingAgentIdRaw = ref('') // ID for new agent or tracking edited agent
-const editingAgentForm = ref({
-  name: '',
-  system_prompt: '',
-  persona_prompt: '',
-  welcome_message: '',
-  default_state: { mood: '', vibe: '', mind: '' }
-})
-
-function createNewAgent() {
-  isNewAgent.value = true
-  editingAgentIdRaw.value = ''
-  editingAgentForm.value = {
-    name: '',
-    system_prompt: '<System_Core_Setting>\n</System_Core_Setting>',
-    persona_prompt: '<Identity_Module>\n</Identity_Module>',
-    welcome_message: '你好呀！',
-    default_state: { mood: '开心', vibe: '充满活力', mind: '希望能帮到主人' },
-    idle_messages_text: ''
-  }
-  editorActiveTab.value = 'basic'
-  showAgentEditor.value = true
-}
-
-function editAgent(id) {
-  const agent = AGENTS[id]
-  if (!agent) return
-  isNewAgent.value = false
-  editingAgentIdRaw.value = id
-  // Deep copy to avoid direct mutation before save
-  const formData = JSON.parse(JSON.stringify(agent))
-  formData.idle_messages_text = Array.isArray(formData.idle_messages)
-    ? formData.idle_messages.join('\n')
-    : ''
-  editingAgentForm.value = formData
-  editorActiveTab.value = 'basic'
-  showAgentEditor.value = true
-}
-
-async function handleDeleteAgent(id) {
-  try {
-    await ElMessageBox.confirm(`确定要删除角色 ${AGENTS[id].name} 吗？`, '警告', {
-      type: 'warning',
-      confirmButtonText: '删除',
-      cancelButtonText: '取消',
-      confirmButtonClass: 'el-button--danger'
-    })
-
-    if (id === activeAgentId.value) {
-      ElMessage.warning('不能删除当前正在使用的角色')
-      return
-    }
-
-    const success = await deleteAgent(id)
-    if (success) {
-      ElMessage.success('角色已删除')
-    } else {
-      ElMessage.error('删除失败')
-    }
-  } catch {
-    /* cancel */
-  }
-}
-
-async function saveAgentData() {
-  try {
-  if (!editingAgentForm.value.name) return ElMessage.warning('请输入角色名称')
-
-  let id = editingAgentIdRaw.value.trim()
-  if (!id) return ElMessage.warning('请输入角色ID')
-
-  if (isNewAgent.value) {
-    if (AGENTS[id]) return ElMessage.warning('该角色ID已存在')
-  }
-
-  const success = await saveAgent(id, { ...editingAgentForm.value }, isNewAgent.value)
-  if (success) {
-    ElMessage.success('保存成功')
-    showAgentEditor.value = false
-  } else {
-    ElMessage.error('保存失败')
-  }
-
-  } catch (error) { ElMessage.error(error.message || '保存失败') }
-}
-
-const providerDefaults = {
-  siliconflow: 'https://api.siliconflow.cn/v1',
-  deepseek: 'https://api.deepseek.com',
-  moonshot: 'https://api.moonshot.cn/v1',
-  dashscope: 'https://dashscope.aliyuncs.com/compatible-mode/v1',
-  volcengine: 'https://ark.cn-beijing.volces.com/api/v3',
-  groq: 'https://api.groq.com/openai/v1',
-  zhipu: 'https://open.bigmodel.cn/api/paas/v4',
-  minimax: 'https://api.minimax.chat/v1',
-  mistral: 'https://api.mistral.ai/v1',
-  yi: 'https://api.lingyiwanwu.com/v1',
-  xai: 'https://api.x.ai/v1',
-  stepfun: 'https://api.stepfun.com/v1',
-  hunyuan: 'https://api.hunyuan.cloud.tencent.com/v1'
-}
-
-const providers = [
-  { label: '自定义 / OpenAI', value: 'custom' },
-  { label: 'SiliconFlow (硅基流动)', value: 'siliconflow' },
-  { label: 'DeepSeek (深度求索)', value: 'deepseek' },
-  { label: 'Moonshot (Kimi)', value: 'moonshot' },
-  { label: 'DashScope (阿里百炼)', value: 'dashscope' },
-  { label: 'Volcengine (火山引擎)', value: 'volcengine' },
-  { label: 'Groq', value: 'groq' },
-  { label: 'Zhipu (智谱GLM)', value: 'zhipu' },
-  { label: 'MiniMax', value: 'minimax' },
-  { label: 'Mistral', value: 'mistral' },
-  { label: '01.AI (零一万物)', value: 'yi' },
-  { label: 'xAI (Grok)', value: 'xai' },
-  { label: 'StepFun (阶跃星辰)', value: 'stepfun' },
-  { label: 'Hunyuan (腾讯混元)', value: 'hunyuan' }
-]
-
-const selectedProvider = ref('custom')
-
-function handleProviderChange(val) {
-  if (val && providerDefaults[val]) {
-    apiBase.value = providerDefaults[val]
-  } else if (val === 'custom') {
-    // Keep current or clear? Let's keep current to be safe, or maybe empty if it was a default.
-    // If switching to custom, the user probably wants to edit what's there or type a new one.
-  }
-}
-
-// Watch active agent change (Global Switch)
-watch(activeAgentId, async (newVal) => {
-  try { await setActiveAgentId(newVal) }
-  catch (error) { ElMessage.error(error.message) }
-})
-
-const modelName = ref('请先获取模型')
-const apiBase = ref('https://api.openai.com')
-const apiKey = ref('')
-const availableModels = ref([])
-const modelSearch = ref('')
-const userPersonaText = ref('')
-const userName = ref('')
-const temperature = ref(0.7)
-const topP = ref(1)
-const stream = ref(false)
-const memoryRounds = ref(40)
-const memorySearch = ref('')
-const allMemories = ref([])
-
-// 远程服务器配置
-const remoteEnabled = ref(false)
-const remoteUrl = ref('')
-const remoteToken = ref('')
-
-const importDataInput = ref(null)
+import { getModelConfiguration, saveApiConfiguration, saveModelParameters } from '../services/standalone'
 
 const router = useRouter()
-function goHome() {
-  router.push('/')
+const tab = ref('api')
+const categories = [
+  { id: 'api', label: '模型连接', icon: 'connection', description: '选择聊天使用的服务、协议与模型' },
+  { id: 'model', label: '回复偏好', icon: 'sliders', description: '调整回复风格、思考强度与长度' },
+  { id: 'user', label: '个人资料', icon: 'profile', description: '让伙伴更了解你' },
+  { id: 'role', label: '角色', icon: 'group', description: '管理每位伙伴的设定与外观' },
+  { id: 'memory', label: '日记', icon: 'diary', description: '查看和管理角色记住的事情' },
+  { id: 'data', label: '应用数据', icon: 'document', description: '备份、恢复与重置' },
+]
+const currentCategory = computed(() => categories.find(item => item.id === tab.value))
+const agent = computed(() => AGENTS[activeAgentId.value] || { name: '伙伴' })
+const api = reactive({ base: '', model: '', key: '', apiFormat: 'chat_completions' })
+const parameters = reactive({ temperature: null, topP: null, memoryRounds: 40, stream: true, reasoningEffort: '', maxTokens: 4096, contextWindow: 32768 })
+const user = reactive({ name: '', persona: '' })
+const snapshots = reactive({ api: '', model: '', user: '' })
+const loading = ref(true)
+const loaded = ref(false)
+const loadError = ref('')
+const busy = ref('')
+const showKey = ref(false)
+const provider = ref('custom')
+const models = ref([])
+const modelSearch = ref('')
+const importInput = ref(null)
+const reasoningChoices = [{ value: '', label: '跟随模型默认值' }, ...['off', 'none', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max'].map(value => ({ value, label: value }))]
+const protocolChoices = [
+  { value: 'chat_completions', label: 'OpenAI Chat Completions', shortLabel: 'OpenAI Chat', description: 'OpenAI 兼容聊天接口' },
+  { value: 'responses', label: 'OpenAI Responses', shortLabel: 'Responses', description: 'OpenAI Responses 接口' },
+  { value: 'anthropic', label: 'Anthropic Messages', shortLabel: 'Anthropic', description: 'Claude 原生消息接口' },
+  { value: 'gemini', label: 'Google Gemini', shortLabel: 'Gemini', description: 'Gemini 原生生成接口' },
+]
+const providers = [
+  { id: 'openai', name: 'OpenAI', base: 'https://api.openai.com/v1', format: 'chat_completions' },
+  { id: 'anthropic', name: 'Anthropic', base: 'https://api.anthropic.com/v1', format: 'anthropic' },
+  { id: 'gemini', name: 'Google Gemini', base: 'https://generativelanguage.googleapis.com/v1beta', format: 'gemini' },
+  { id: 'siliconflow', name: '硅基流动', base: 'https://api.siliconflow.cn/v1' },
+  { id: 'deepseek', name: 'DeepSeek', base: 'https://api.deepseek.com' },
+  { id: 'moonshot', name: 'Moonshot', base: 'https://api.moonshot.cn/v1' },
+  { id: 'dashscope', name: '阿里百炼', base: 'https://dashscope.aliyuncs.com/compatible-mode/v1' },
+  { id: 'volcengine', name: '火山引擎', base: 'https://ark.cn-beijing.volces.com/api/v3' },
+  { id: 'groq', name: 'Groq', base: 'https://api.groq.com/openai/v1' },
+  { id: 'zhipu', name: '智谱', base: 'https://open.bigmodel.cn/api/paas/v4' },
+  { id: 'minimax', name: 'MiniMax', base: 'https://api.minimax.chat/v1' },
+  { id: 'mistral', name: 'Mistral', base: 'https://api.mistral.ai/v1' },
+  { id: 'yi', name: '零一万物', base: 'https://api.lingyiwanwu.com/v1' },
+  { id: 'xai', name: 'xAI', base: 'https://api.x.ai/v1' },
+  { id: 'stepfun', name: '阶跃星辰', base: 'https://api.stepfun.com/v1' },
+  { id: 'hunyuan', name: '腾讯混元', base: 'https://api.hunyuan.cloud.tencent.com/v1' },
+]
+let disposed = false
+const providerChoices = [{ value: 'custom', label: '自定义连接' }, ...providers.map(item => ({ value: item.id, label: item.name, description: item.base }))]
+const providerBrand = computed(() => resolveProviderBrand(provider.value, api.base))
+const providerLabel = computed(() => modelBrandDefinition(providerBrand.value)?.label || '自定义连接')
+async function onCategoryKey(event, index) {
+  const offset = { ArrowRight: 1, ArrowDown: 1, ArrowLeft: -1, ArrowUp: -1 }[event.key]
+  if (offset === undefined && !['Home', 'End'].includes(event.key)) return
+  event.preventDefault()
+  const target = event.key === 'Home' ? 0 : event.key === 'End' ? categories.length - 1 : (index + offset + categories.length) % categories.length
+  tab.value = categories[target].id
+  await nextTick(); if (!disposed) document.getElementById(`settings-tab-${tab.value}`)?.focus()
 }
-function goToRoleManager() {
-  router.push('/roles')
+let loadVersion = 0
+const parameterValues = () => ({ ...parameters, temperature: parameters.temperature === '' ? null : parameters.temperature, topP: parameters.topP === '' ? null : parameters.topP, reasoningEffort: parameters.reasoningEffort || null })
+const sectionValues = section => section === 'model' ? parameterValues() : { ...(section === 'api' ? api : user) }
+const dirtySections = computed(() => Object.fromEntries(['api', 'model', 'user'].map(section => [section, loaded.value && JSON.stringify(sectionValues(section)) !== snapshots[section]])))
+const filteredModels = computed(() => models.value.filter(model => model.id.toLowerCase().includes(modelSearch.value.trim().toLowerCase())))
+const dismissed = error => error === 'cancel' || error === 'close'
+function readText(value) { try { return JSON.parse(value) || '' } catch { return value || '' } }
+function chooseProvider() {
+  const selected = providers.find(item => item.id === provider.value)
+  if (selected) { api.base = selected.base; api.apiFormat = selected.format || 'chat_completions' }
+  models.value = []; modelSearch.value = ''
 }
-
-const filteredModels = computed(() => {
-  const kw = modelSearch.value.trim().toLowerCase()
-  return (availableModels.value || []).filter((m) => String(m.id).toLowerCase().includes(kw))
-})
-
-const filteredMemories = computed(() => {
+async function load() {
+  if ((loading.value && loadVersion > 0) || busy.value) return
+  const version = ++loadVersion
+  loading.value = true; loadError.value = ''
   try {
-    const memories = Array.isArray(allMemories.value) ? allMemories.value : []
-    const kw = (memorySearch.value || '').trim().toLowerCase()
-    if (!kw) return memories
-    return memories.filter(
-      (m) =>
-        String(m.content || '')
-          .toLowerCase()
-          .includes(kw) ||
-        (Array.isArray(m.tags) ? m.tags : []).some((t) =>
-          String(t || '')
-            .toLowerCase()
-            .includes(kw)
-        )
-    )
-  } catch (e) {
-    console.error('Filter memories error:', e)
-    return []
-  }
-})
-
-async function loadMemories() {
-  try {
-    allMemories.value = await getAllMemories()
-  } catch {
-    ElMessage.error('加载记忆失败')
-  }
+    const [config, key, name, persona] = await Promise.all([getModelConfiguration(), getApiKey(), getConfig('ppc.userName'), getConfig('ppc.userPersonaText')])
+    if (disposed || version !== loadVersion) return
+    Object.assign(api, { base: config.base, model: config.model, apiFormat: config.apiFormat, key: key || '' })
+    for (const field of Object.keys(parameters)) parameters[field] = config[field] ?? (field === 'reasoningEffort' ? '' : null)
+    Object.assign(user, { name: readText(name), persona: readText(persona) })
+    provider.value = providers.find(item => item.base === api.base && (item.format || 'chat_completions') === api.apiFormat)?.id || 'custom'
+    for (const section of ['api', 'model', 'user']) snapshots[section] = JSON.stringify(sectionValues(section))
+    loaded.value = true
+  } catch (error) { if (!disposed && version === loadVersion) loadError.value = error.message || '设置读取失败，请重试' }
+  finally { if (!disposed && version === loadVersion) loading.value = false }
 }
-
-async function deleteMemory(id) {
-  try {
-    await ElMessageBox.confirm('确定要删除这条记忆吗？', '提示', {
-      type: 'warning',
-      confirmButtonClass: 'el-button--danger'
-    })
-    await apiDeleteMemory(id)
-    await loadMemories()
-    ElMessage.success('已删除')
-  } catch {
-    /* ignore */
-  }
+async function run(kind, task, success) {
+  if (busy.value) return
+  busy.value = kind
+  try { await task(); if (!disposed && success) ElMessage.success(success) }
+  catch (error) { if (!disposed && !dismissed(error)) ElMessage.error(error.message || '操作失败，请重试') }
+  finally { if (!disposed) busy.value = '' }
 }
-
-watch(tab, (newTab) => {
-  if (newTab === 'memory') loadMemories()
-})
-
-// Rust Store 辅助
-async function getStoreConfig(k, def) {
-  const v = await getConfig(k)
-  if (!v) return def
-  try {
-    return JSON.parse(v)
-  } catch {
-    return v
-  }
+async function save(section, operation) {
+  if (!loaded.value || busy.value) return
+  const values = sectionValues(section)
+  await run(`save-${section}`, async () => { await operation(values); if (!disposed) snapshots[section] = JSON.stringify(values) }, '已保存')
 }
-async function applySettings() {
-  try {
-    await localInvoke('local_save_settings', { section: 'api', values: {
-      model: modelName.value, base: apiBase.value, key: apiKey.value,
-    } })
-    ElMessage.success('API配置已保存')
-  } catch (error) { ElMessage.error(error.message || '保存失败') }
-}
-
-async function applyModelSettings() {
-  try {
-    await localInvoke('local_save_settings', { section: 'model', values: {
-      temperature: temperature.value, topP: topP.value,
-      stream: stream.value, memoryRounds: memoryRounds.value,
-    } })
-    ElMessage.success('已保存')
-  } catch (error) { ElMessage.error(error.message || '保存失败') }
-}
-
-async function applyUserSettings() {
-  try {
-    await localInvoke('local_save_settings', { section: 'user', values: {
-      name: userName.value, persona: userPersonaText.value,
-    } })
-    ElMessage.success('已保存')
-  } catch (error) { ElMessage.error(error.message || '保存失败') }
-}
-
+const saveApi = () => save('api', saveApiConfiguration)
+const saveParameters = () => save('model', saveModelParameters)
+const saveUser = () => save('user', values => localInvoke('local_save_settings', { section: 'user', values }))
 async function fetchModels() {
-  if (!apiKey.value) return ElMessage.warning('请先输入API秘钥')
-  const loading = ElMessage({ message: '正在获取模型列表...', duration: 0 })
-  try {
-    // 使用 Rust 后端获取模型列表，避免 CORS 问题
-    const data = await invoke('fetch_models', {
-      apiBase: apiBase.value,
-      apiKey: apiKey.value
-    })
-
-    // 兼容 OpenAI 格式返回 { object: "list", data: [...] }
-    if (data && Array.isArray(data.data)) {
-      availableModels.value = data.data
-      ElMessage.success(`成功获取 ${availableModels.value.length} 个模型`)
-    } else if (Array.isArray(data)) {
-      availableModels.value = data
-      ElMessage.success(`成功获取 ${availableModels.value.length} 个模型`)
-    } else {
-      console.warn('Unknown model response format:', data)
-      ElMessage.warning('获取到的模型格式无法解析')
-    }
-  } catch (e) {
-    console.error('Fetch models failed:', e)
-    ElMessage.error(`获取失败: ${e}`)
-  } finally {
-    loading.close()
-  }
+  await run('fetch', async () => {
+    const result = await localInvoke('fetch_models', { apiBase: api.base, apiKey: api.key, apiFormat: api.apiFormat })
+    if (disposed) return
+    models.value = Array.isArray(result) ? result : result.data || []
+    ElMessage.success(`已获取 ${models.value.length} 个模型`)
+  })
 }
-
-async function handleResetAll() {
-  try {
-    const agentName = AGENTS[getActiveAgentId()]?.name || 'Pero'
-    const { value, action } = await ElMessageBox.prompt(
-      `<div class="danger-main-text">主人，真的要让${agentName}忘掉你吗？o(╥﹏╥)o</div>` +
-        '<div class="danger-sub-text">（此操作将清空所有数据，如需继续，请在文本框中输入“我们还会再见的...”）</div>',
-      '危险操作确认',
-      {
-        inputValue: '',
-        inputPlaceholder: '请输入：我们还会再见的...',
-        confirmButtonText: '继续',
-        cancelButtonText: '取消',
-        type: 'error',
-        customClass: 'danger-reset-box',
-        center: true,
-        dangerouslyUseHTMLString: true
-      }
-    )
-    if (action === 'confirm') {
-      if (String(value || '').trim() !== '我们还会再见的...') {
-        ElMessage.error('输入不匹配，已取消')
-        return
-      }
-      const r = await resetAll()
-      if (r) {
-        ElMessage.success('已重置全部数据')
-        setTimeout(() => location.reload(), 1000)
-      } else {
-        ElMessage.error('重置失败')
-      }
-    }
-  } catch {
-    /* ignore */
-  }
+function download(data) {
+  const url = URL.createObjectURL(new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' }))
+  const anchor = document.createElement('a')
+  anchor.href = url; anchor.download = `peroperochat-backup-${Date.now()}.json`
+  document.body.appendChild(anchor); anchor.click(); anchor.remove()
+  setTimeout(() => URL.revokeObjectURL(url), 1000)
 }
-
-// 导出全部数据
-async function handleExportAllData() {
-  try {
-    const loading = ElMessage({ message: '正在导出数据...', duration: 0 })
-    const data = await exportAllData()
-
-    // 创建下载链接
-    const jsonString = JSON.stringify(data, null, 2)
-    const blob = new Blob([jsonString], { type: 'application/json' })
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url
-    const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19)
-    a.download = `peropero-chat-backup-${timestamp}.json`
-    document.body.appendChild(a)
-    a.click()
-    document.body.removeChild(a)
-    URL.revokeObjectURL(url)
-
-    loading.close()
-    ElMessage.success('数据导出成功！')
-  } catch (e) {
-    console.error('导出数据失败:', e)
-    ElMessage.error('导出数据失败，请查看控制台了解详情')
-  }
-}
-
-// 触发文件选择
-function triggerImportData() {
-  importDataInput.value?.click()
-}
-
-// 处理导入数据
-async function handleImportAllData(event) {
+const exportBackup = () => run('export', async () => { const data = await exportAllData(); if (!disposed) download(data) }, '备份已导出')
+async function importBackup(event) {
   const file = event.target.files?.[0]
+  event.target.value = ''
   if (!file) return
-
-  try {
-    await ElMessageBox.confirm(
-      '导入数据将覆盖当前所有数据，确定要继续吗？',
-      '确认导入',
-      {
-        confirmButtonText: '确定导入',
-        cancelButtonText: '取消',
-        type: 'warning'
-      }
-    )
-
-    const loading = ElMessage({ message: '正在导入数据...', duration: 0 })
-
-    // 读取文件内容
-    const text = await file.text()
-    const data = JSON.parse(text)
-
-    // 导入数据
+  await run('import', async () => {
+    await ElMessageBox.confirm('导入后将覆盖当前配置、角色、日记与对话。确定恢复这份备份吗？', '恢复备份', { confirmButtonText: '恢复备份', cancelButtonText: '取消', type: 'warning' })
+    if (disposed) return
+    const data = JSON.parse(await file.text())
+    if (disposed) return
     await importAllData(data)
-
-    loading.close()
-    ElMessage.success('数据导入成功！正在重新加载...')
-
-    // 清空文件输入
-    event.target.value = ''
-
-    // 刷新页面
-    setTimeout(() => location.reload(), 1500)
-  } catch (e) {
-    console.error('导入数据失败:', e)
-    if (e.message?.includes('JSON')) {
-      ElMessage.error('导入失败：无效的JSON文件格式')
-    } else {
-      ElMessage.error('导入数据失败，请查看控制台了解详情')
-    }
-    event.target.value = ''
-  }
+    if (!disposed) location.reload()
+  })
 }
-
-// Init settings
-onMounted(async () => {
-  modelName.value = await getStoreConfig('ppc.modelName', '请先获取模型')
-  apiBase.value = await getStoreConfig('ppc.apiBase', 'https://api.openai.com')
-  apiKey.value = (await getApiKey()) || ''
-
-  const mSettings = await getStoreConfig('ppc.modelSettings', {})
-  if (mSettings.temperature !== undefined) temperature.value = mSettings.temperature
-  if (mSettings.topP !== undefined) topP.value = mSettings.topP
-  if (mSettings.stream !== undefined) stream.value = mSettings.stream
-  if (mSettings.memoryRounds !== undefined) memoryRounds.value = mSettings.memoryRounds
-
-  userPersonaText.value = await getStoreConfig('ppc.userPersonaText', '')
-  userName.value = await getStoreConfig('ppc.userName', '')
-
-  const rEnabled = await getStoreConfig('ppc.remoteEnabled', 'false')
-  remoteEnabled.value = rEnabled === 'true' || rEnabled === true
-  remoteUrl.value = await getStoreConfig('ppc.remoteUrl', '')
-  remoteToken.value = await getStoreConfig('ppc.remoteToken', '')
-
-  // Set provider selection based on loaded apiBase
-  const foundProvider = Object.entries(providerDefaults).find(([, v]) => v === apiBase.value)
-  if (foundProvider) {
-    selectedProvider.value = foundProvider[0]
-  } else {
-    selectedProvider.value = 'custom'
-  }
+async function resetData() {
+  await run('reset', async () => {
+    await ElMessageBox.prompt('将删除全部对话、日记与偏好设置。请输入“重置所有数据”确认。', '重置所有数据', { confirmButtonText: '重置', cancelButtonText: '取消', type: 'warning', inputPlaceholder: '重置所有数据', inputValidator: value => value === '重置所有数据' || '请输入完整的确认文字', confirmButtonClass: 'el-button--danger' })
+    if (disposed) return
+    await resetAll()
+    if (!disposed) location.reload()
+  })
+}
+onBeforeRouteLeave(async () => {
+  if (busy.value.startsWith('save-') || ['import', 'reset'].includes(busy.value)) { ElMessage.info('请等待当前操作完成'); return false }
+  if (!Object.values(dirtySections.value).some(Boolean)) return true
+  try { await ElMessageBox.confirm('还有尚未保存的更改，离开后不会保留。', '离开设置？', { confirmButtonText: '离开', cancelButtonText: '继续编辑' }); return true }
+  catch { return false }
 })
+onMounted(load)
+onBeforeUnmount(() => { disposed = true; loadVersion++ })
 </script>
 
 <style scoped>
-.settings-container {
-  min-height: 100vh;
-  background: linear-gradient(135deg, #fdf2f8 0%, #f0f9ff 100%);
-  display: flex;
-  flex-direction: column;
-  padding-bottom: env(safe-area-inset-bottom);
-}
-
-/* 头部样式 */
-.header {
-  height: 60px;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 0 16px;
-  background: rgba(255, 255, 255, 0.7);
-  backdrop-filter: blur(10px);
-  position: sticky;
-  top: 0;
-  z-index: 100;
-  border-bottom: 1px solid rgba(0, 0, 0, 0.05);
-}
-
-.back-btn {
-  width: 40px;
-  height: 40px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: 12px;
-  background: white;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
-  cursor: pointer;
-}
-
-.header-title {
-  text-align: center;
-}
-
-.header-title h2 {
-  font-size: 16px;
-  margin: 0;
-  color: #1e293b;
-}
-
-.header-title span {
-  font-size: 10px;
-  color: #94a3b8;
-  text-transform: uppercase;
-  letter-spacing: 1px;
-}
-
-.menu-btn {
-  height: 36px;
-  padding: 0 12px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: 18px;
-  background: #3b82f6;
-  color: white;
-  box-shadow: 0 4px 10px rgba(59, 130, 246, 0.3);
-  cursor: pointer;
-  transition: all 0.2s;
-  font-size: 14px;
-  gap: 6px;
-  font-weight: 600;
-}
-
-.menu-btn:active {
-  transform: scale(0.95);
-  box-shadow: 0 2px 5px rgba(59, 130, 246, 0.2);
-}
-
-.menu-text {
-  font-size: 13px;
-}
-
-/* 设置主体 */
-.settings-body {
-  padding: 16px;
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-}
-
-/* 抽屉菜单样式 */
-.drawer-menu {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  padding: 10px;
-}
-
-.drawer-item {
-  display: flex;
-  align-items: center;
-  gap: 16px;
-  padding: 16px;
-  border-radius: 16px;
-  color: #64748b;
-  background: #f8fafc;
-  transition: all 0.2s;
-  cursor: pointer;
-  border: 1px solid transparent;
-}
-
-.drawer-item:active {
-  transform: scale(0.98);
-}
-
-.drawer-item.active {
-  background: #eff6ff;
-  color: #3b82f6;
-  border-color: #bfdbfe;
-  font-weight: 600;
-}
-
-.drawer-item .el-icon {
-  font-size: 22px;
-}
-
-.drawer-item span {
-  font-size: 16px;
-}
-
-:deep(.settings-drawer) {
-  border-radius: 0 24px 24px 0 !important;
-  background: rgba(255, 255, 255, 0.98) !important;
-}
-
-:deep(.el-drawer__header) {
-  margin-bottom: 0;
-  padding: 24px;
-  border-bottom: 1px solid rgba(0, 0, 0, 0.05);
-  color: #1e293b;
-  font-weight: 700;
-}
-
-:deep(.el-drawer__body) {
-  padding: 16px !important;
-}
-
-/* 内容区域 */
-.content-area {
-  flex: 1;
-}
-
-.content-card {
-  background: rgba(255, 255, 255, 0.8);
-  backdrop-filter: blur(20px);
-  border-radius: 24px;
-  border: 1px solid rgba(255, 255, 255, 0.5);
-  padding: 20px;
-  min-height: 400px;
-  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.03);
-}
-
-.section-header {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  margin-bottom: 20px;
-}
-
-.section-header .el-icon {
-  font-size: 20px;
-  color: #3b82f6;
-}
-
-.section-header h3 {
-  font-size: 18px;
-  margin: 0;
-  color: #1e293b;
-  font-weight: 700;
-}
-
-.section-header.small h3 {
-  font-size: 15px;
-  margin: 0;
-  color: #64748b;
-}
-
-.section h4 {
-  margin: 0 0 8px 0;
-  color: #334155;
-  font-size: 16px;
-  font-weight: 600;
-}
-
-.section p {
-  margin: 0 0 16px 0;
-  color: #64748b;
-  font-size: 14px;
-  line-height: 1.6;
-}
-
-.section-header.danger .el-icon {
-  color: #ef4444;
-}
-
-.danger-card {
-  background: rgba(254, 242, 242, 0.8);
-  border: 1px dashed rgba(239, 68, 68, 0.3);
-  border-radius: 16px;
-  padding: 16px;
-  margin-top: 8px;
-}
-
-/* 角色列表样式 */
-.agent-list {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  margin-top: 12px;
-}
-
-.agent-card {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 12px 16px;
-  background: rgba(255, 255, 255, 0.6);
-  border-radius: 12px;
-  border: 1px solid rgba(0, 0, 0, 0.05);
-  transition: all 0.2s;
-}
-
-.agent-card:active {
-  transform: scale(0.99);
-  background: rgba(255, 255, 255, 0.8);
-}
-
-.agent-card-info {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-
-.agent-card-name {
-  font-weight: 600;
-  color: #334155;
-  font-size: 15px;
-}
-
-.agent-card-sub {
-  font-size: 12px;
-  color: #94a3b8;
-  font-family: monospace;
-}
-
-.agent-card-actions {
-  display: flex;
-  gap: 8px;
-}
-
-.state-row {
-  display: flex;
-  gap: 12px;
-}
-.state-row .el-form-item {
-  flex: 1;
-}
-
-/* 记忆列表 */
-.memory-list {
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-}
-.empty {
-  text-align: center;
-  color: #94a3b8;
-  padding: 40px 0;
-  font-size: 14px;
-}
-.memory-item {
-  background: rgba(255, 255, 255, 0.6);
-  border-radius: 12px;
-  padding: 12px;
-  border: 1px solid rgba(0, 0, 0, 0.03);
-}
-.memory-content {
-  font-size: 14px;
-  color: #334155;
-  margin-bottom: 8px;
-  max-height: 100px;
-  overflow-y: auto;
-}
-.memory-tags {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px;
-  margin-bottom: 8px;
-}
-.memory-footer {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  font-size: 12px;
-  color: #cbd5e1;
-}
-.search-input {
-  margin-bottom: 16px;
-}
-
-/* 数据管理卡片样式 */
-.data-card {
-  background: #fff;
-  border-radius: 16px;
-  padding: 20px;
-  margin-bottom: 16px;
-  border: 1px solid rgba(0, 0, 0, 0.05);
-  transition: all 0.3s ease;
-}
-
-.data-card:hover {
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
-  transform: translateY(-1px);
-}
-
-.data-card.danger {
-  background: linear-gradient(135deg, #fef2f2 0%, #fee2e2 100%);
-  border: 1px dashed rgba(239, 68, 68, 0.4);
-}
-
-.data-card.danger:hover {
-  box-shadow: 0 4px 12px rgba(239, 68, 68, 0.15);
-}
-
-.data-card h4 {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-bottom: 12px;
-  font-size: 16px;
-  font-weight: 600;
-  color: #1e293b;
-}
-
-.data-card h4 i {
-  font-size: 18px;
-}
-
-.data-card.danger h4 {
-  color: #dc2626;
-}
-
-.data-card p {
-  margin-bottom: 16px;
-  color: #64748b;
-  font-size: 14px;
-  line-height: 1.6;
-}
-
-.data-card .el-button {
-  border-radius: 12px;
-  padding: 10px 20px;
-  font-weight: 500;
-  transition: all 0.2s;
-}
-
-.data-card .el-button:hover {
-  transform: translateY(-1px);
-  box-shadow: 0 4px 10px rgba(59, 130, 246, 0.2);
-}
-
-.data-card.danger .el-button {
-  background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
-  border: none;
-}
-
-.data-card.danger .el-button:hover {
-  box-shadow: 0 4px 10px rgba(239, 68, 68, 0.3);
-}
-
-/* 过渡动画 */
-.fade-enter-active,
-.fade-leave-active {
-  transition: opacity 0.2s ease;
-}
-
-.fade-enter-from,
-.fade-leave-to {
-  opacity: 0;
-}
-
-/* 滑块样式优化 */
-.slider-group {
-  background: rgba(255, 255, 255, 0.5);
-  padding: 16px;
-  border-radius: 12px;
-  margin-bottom: 16px;
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-.slider-item span {
-  font-size: 12px;
-  color: #64748b;
-  margin-bottom: 4px;
-  display: block;
-}
-
-/* API Tools */
-.api-tools {
-  display: flex;
-  gap: 8px;
-  margin-bottom: 12px;
-}
-.mini-table {
-  border-radius: 8px;
-  overflow: hidden;
-  margin-bottom: 16px;
-  font-size: 12px;
-}
-
-.full-btn {
-  width: 100%;
-  margin-top: 8px;
-  height: 44px;
-  border-radius: 12px;
-  font-weight: 600;
-  font-size: 16px;
-}
-
-.role-group {
-  width: 100%;
-  display: flex;
-  flex-wrap: wrap;
-}
-.role-group :deep(.el-radio-button) {
-  flex: 1;
-}
-.role-group :deep(.el-radio-button__inner) {
-  width: 100%;
-  border-radius: 0;
-  padding: 12px 0;
-}
-.role-group :deep(.el-radio-button:first-child .el-radio-button__inner) {
-  border-radius: 8px 0 0 8px;
-}
-.role-group :deep(.el-radio-button:last-child .el-radio-button__inner) {
-  border-radius: 0 8px 8px 0;
-}
-</style>
-
-<!-- Global Styles for Agent Editor Dialog (Required due to append-to-body) -->
-<style>
-.agent-selection-container {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-
-.agent-select-card {
-  display: flex;
-  align-items: center;
-  padding: 16px;
-  background: #fff;
-  border-radius: 16px;
-  border: 1px solid rgba(0, 0, 0, 0.03);
-  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-  cursor: pointer;
-  position: relative;
-  overflow: hidden;
-}
-
-.agent-select-card:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.03);
-}
-
-.agent-select-card.active {
-  background: linear-gradient(135deg, #eff6ff 0%, #f0f9ff 100%);
-  border-color: #bfdbfe;
-  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.1);
-}
-
-.agent-avatar-placeholder {
-  width: 48px;
-  height: 48px;
-  border-radius: 14px;
-  background: linear-gradient(135deg, #e2e8f0 0%, #cbd5e1 100%);
-  color: #fff;
-  font-size: 20px;
-  font-weight: 700;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  margin-right: 16px;
-  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.05);
-  overflow: hidden;
-}
-
-.agent-avatar-img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  border-radius: 14px;
-}
-
-.agent-select-card.active .agent-avatar-placeholder {
-  background: linear-gradient(135deg, #3b82f6 0%, #60a5fa 100%);
-  box-shadow: 0 4px 10px rgba(59, 130, 246, 0.2);
-}
-
-.agent-info {
-  flex: 1;
-}
-
-.agent-name {
-  font-size: 16px;
-  font-weight: 700;
-  color: #1e293b;
-  margin-bottom: 2px;
-}
-
-.agent-select-card.active .agent-name {
-  color: #2563eb;
-}
-
-.agent-desc {
-  font-size: 12px;
-  color: #94a3b8;
-}
-
-.agent-actions {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.status-indicator {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  font-size: 12px;
-  font-weight: 600;
-  color: #22c55e;
-  background: #dcfce7;
-  padding: 4px 10px;
-  border-radius: 20px;
-}
-
-.status-indicator .dot {
-  width: 6px;
-  height: 6px;
-  background: #22c55e;
-  border-radius: 50%;
-  animation: pulse 2s infinite;
-}
-
-@keyframes pulse {
-  0% {
-    transform: scale(0.95);
-    box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.4);
-  }
-  70% {
-    transform: scale(1);
-    box-shadow: 0 0 0 6px rgba(34, 197, 94, 0);
-  }
-  100% {
-    transform: scale(0.95);
-    box-shadow: 0 0 0 0 rgba(34, 197, 94, 0);
-  }
-}
-
-.more-btn {
-  padding: 8px;
-  border-radius: 50%;
-  color: #94a3b8;
-  cursor: pointer;
-  transition: all 0.2s;
-}
-
-.more-btn:hover {
-  background: #f1f5f9;
-  color: #64748b;
-}
-
-.create-btn {
-  width: 36px;
-  height: 36px;
-  min-height: unset;
-  padding: 0;
-  margin: 0 !important;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  box-shadow: 0 4px 10px rgba(59, 130, 246, 0.3);
-}
-
-.section-header {
-  justify-content: space-between;
-}
-
-.danger-text {
-  color: #ef4444;
-}
-
-/* Agent Editor Dialog Styles */
-.agent-editor-dialog {
-  border-radius: 20px !important;
-  overflow: hidden;
-}
-
-.agent-editor-dialog .el-dialog__header {
-  margin-right: 0;
-  padding: 20px 24px;
-  border-bottom: 1px solid #f1f5f9;
-}
-
-.agent-editor-dialog .el-dialog__body {
-  padding: 0 !important;
-}
-
-.agent-editor-dialog .el-dialog__footer {
-  padding: 16px 24px;
-  border-top: 1px solid #f1f5f9;
-  background: #fafafa;
-}
-
-.editor-tabs {
-  min-height: 400px;
-}
-
-.editor-tabs .el-tabs__header {
-  margin: 0;
-  padding: 0 24px;
-  background: #fff;
-  border-bottom: 1px solid #f1f5f9;
-}
-
-.editor-tabs .el-tabs__content {
-  padding: 24px;
-  max-height: 60vh;
-  overflow-y: auto;
-}
-
-.custom-tab-label {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  font-size: 14px;
-}
-
-.editor-form .el-form-item {
-  margin-bottom: 20px;
-}
-
-.form-row {
-  display: flex;
-  gap: 16px;
-}
-
-.half-width {
-  flex: 1;
-}
-
-.state-group {
-  background: #f8fafc;
-  padding: 16px;
-  border-radius: 12px;
-  border: 1px solid #e2e8f0;
-}
-
-.group-title {
-  font-size: 13px;
-  font-weight: 600;
-  color: #64748b;
-  margin-bottom: 12px;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-}
-
-.state-grid {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 12px;
-}
-
-.mb-2 {
-  margin-bottom: 16px;
-}
-
-/* --- Beautification Overrides --- */
-
-/* Tabs Beautification */
-.editor-tabs .el-tabs__item {
-  height: 50px;
-  font-size: 15px;
-  color: #64748b;
-  transition: all 0.3s;
-}
-
-.editor-tabs .el-tabs__item.is-active {
-  color: #3b82f6;
-  font-weight: 600;
-}
-
-.editor-tabs .el-tabs__active-bar {
-  background-color: #3b82f6;
-  height: 3px;
-  border-radius: 3px;
-}
-
-/* Input Fields Beautification */
-.agent-editor-dialog .el-input__wrapper,
-.agent-editor-dialog .el-textarea__inner {
-  box-shadow: none !important;
-  background-color: #f1f5f9;
-  border: 1px solid transparent;
-  border-radius: 12px;
-  padding: 8px 12px;
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-}
-
-.agent-editor-dialog .el-textarea__inner {
-  padding: 12px;
-  resize: none;
-}
-
-.agent-editor-dialog .el-input__wrapper:hover,
-.agent-editor-dialog .el-textarea__inner:hover {
-  background-color: #e2e8f0;
-}
-
-.agent-editor-dialog .el-input__wrapper.is-focus,
-.agent-editor-dialog .el-textarea__inner:focus {
-  background-color: #fff;
-  border-color: #3b82f6;
-  box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.1) !important;
-}
-
-/* Form Labels */
-.agent-editor-dialog .el-form-item__label {
-  font-weight: 600;
-  color: #334155;
-  margin-bottom: 8px !important;
-}
-
-/* Dialog Header */
-.agent-editor-dialog .el-dialog__title {
-  font-weight: 700;
-  color: #1e293b;
-  font-size: 18px;
-}
-
-.agent-editor-dialog .el-dialog__headerbtn .el-dialog__close {
-  font-size: 20px;
-  color: #94a3b8;
-  transition: color 0.2s;
-}
-
-.agent-editor-dialog .el-dialog__headerbtn .el-dialog__close:hover {
-  color: #ef4444;
-}
-
-/* Footer Buttons */
-.agent-editor-dialog .el-button {
-  border-radius: 10px;
-  padding: 10px 24px;
-  font-weight: 600;
-  height: auto;
-  border: none;
-}
-
-.agent-editor-dialog .el-button--default {
-  background: #f1f5f9;
-  color: #64748b;
-}
-
-.agent-editor-dialog .el-button--default:hover {
-  background: #e2e8f0;
-  color: #475569;
-}
-
-.agent-editor-dialog .el-button--primary {
-  background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
-  box-shadow: 0 4px 12px rgba(37, 99, 235, 0.3);
-  transition: all 0.2s;
-}
-
-.agent-editor-dialog .el-button--primary:hover {
-  transform: translateY(-1px);
-  box-shadow: 0 6px 16px rgba(37, 99, 235, 0.4);
-}
-
-.agent-editor-dialog .el-button--primary:active {
-  transform: translateY(1px);
-  box-shadow: 0 2px 6px rgba(37, 99, 235, 0.2);
-}
-
-/* Alert Styles */
-.agent-editor-dialog .el-alert {
-  border-radius: 12px;
-  border: none;
-}
-
-.agent-editor-dialog .el-alert--info {
-  background-color: #eff6ff;
-  color: #1e40af;
-}
-
-.agent-editor-dialog .el-alert--success {
-  background-color: #f0fdf4;
-  color: #166534;
-}
-
-/* Divider */
-.agent-editor-dialog .el-divider__text {
-  background-color: #fff;
-  color: #94a3b8;
-  font-weight: 500;
-  font-size: 12px;
-}
-
-/* 高级角色管理入口 */
-.advanced-role-entry {
-  margin-top: 20px;
-  padding: 16px;
-  background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
-  border-radius: 16px;
-  border: 1px dashed #cbd5e1;
-}
-
-.advanced-btn {
-  width: 100%;
-  height: 48px;
-  border-radius: 12px;
-  font-weight: 600;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  background: #fff;
-  border-color: #3b82f6;
-  color: #3b82f6;
-  transition: all 0.2s;
-}
-
-.advanced-btn:hover {
-  background: #eff6ff;
-  border-color: #2563eb;
-  color: #2563eb;
-  transform: translateY(-1px);
-  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.15);
-}
-
-.advanced-btn .arrow {
-  margin-left: auto;
-  font-size: 14px;
-}
-
-.entry-hint {
-  margin: 12px 0 0;
-  font-size: 12px;
-  color: #94a3b8;
-  text-align: center;
-}
+.settings-page :deep(.companion-page-body) { display: flex; overflow: hidden; }
+.settings-layout { flex: 1; min-height: 0; min-width: 0; display: grid; grid-template-columns: 200px minmax(0, 1fr); gap: 24px; }
+.settings-navigation { min-height: 0; overflow-y: auto; }
+.settings-partner { position: relative; display: flex; gap: 15px; align-items: center; padding: 0 0 22px; margin-bottom: 10px; border-bottom: 1px solid var(--room-line); }
+.settings-partner::after { content: ''; width: 28px; height: 2px; position: absolute; bottom: -1px; left: 0; background: var(--room-accent); }
+.settings-portrait { width: 74px; height: 92px; clip-path: polygon(0 0, calc(100% - 8px) 0, 100% 8px, 100% 100%, 8px 100%, 0 calc(100% - 8px)); }
+.settings-partner > div { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.settings-partner > div > svg { width: 32px; height: 28px; color: var(--room-accent); margin-bottom: 3px; }
+.settings-partner strong { font-size: 17px; font-weight: 700; overflow: hidden; text-overflow: ellipsis; }
+.settings-partner small { font-size: 10px; color: var(--room-muted); }
+.settings-navigation nav { display: flex; flex-direction: column; gap: 5px; }
+.settings-navigation nav button { position: relative; display: flex; align-items: center; gap: 11px; min-height: 42px; padding: 10px 12px; border: 0; border-left: 2px solid transparent; border-radius: 0 6px 6px 0; background: transparent; color: var(--room-muted); text-align: left; font-size: 12px; }
+.settings-navigation nav button.selected { background: var(--room-surface); border-left-color: var(--room-accent); color: var(--room-ink); font-weight: 600; }
+.settings-navigation nav button.selected > svg { color: var(--room-accent); }
+.settings-navigation nav button > svg { width: 16px; height: 16px; }
+.settings-navigation nav button i { width: 4px; height: 4px; border-radius: 50%; background: var(--room-accent); margin-left: auto; }
+.settings-content { position: relative; min-height: 0; min-width: 0; padding: 22px; border: 1px solid var(--room-line); border-radius: 3px 16px 3px 3px; background: var(--room-surface); overflow-y: auto; overscroll-behavior: contain; scrollbar-width: thin; scrollbar-color: var(--room-line) transparent; }
+.settings-content::before { content: ''; position: absolute; top: 0; left: 22px; width: 30px; height: 2px; background: var(--room-accent); }
+.settings-panel-body { animation: room-content-in .22s var(--room-ease); }
+.settings-navigation nav button.selected > svg { animation: room-check-in .28s var(--room-spring); }
+.settings-section-heading { display: flex; align-items: center; gap: 11px; margin-bottom: 21px; padding-bottom: 17px; border-bottom: 1px solid var(--room-line); }
+.settings-section-symbol { display: grid; place-items: center; width: 32px; height: 36px; color: var(--room-accent); background: var(--room-accent-soft); clip-path: polygon(0 0, calc(100% - 6px) 0, 100% 6px, 100% 100%, 6px 100%, 0 calc(100% - 6px)); flex: none; }
+.settings-section-heading > div { flex: 1; min-width: 0; }
+.settings-section-heading h2 { margin: 0; font-size: 14px; font-weight: 650; }
+.settings-section-heading p { margin: 5px 0 0; color: var(--room-muted); font-size: 10px; line-height: 1.6; }
+.settings-unsaved { align-self: flex-start; padding: 3px 5px; background: var(--room-accent-soft); color: var(--room-accent); font-size: 9px; flex: none; }
+fieldset { border: 0; padding: 0; margin: 0; min-width: 0; }
+.settings-field-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 0 14px; }
+.settings-secret { display: flex; align-items: center; border: 1px solid var(--room-line); border-radius: 5px; background: var(--room-subtle); padding-right: 3px; }
+.settings-secret:focus-within { border-color: var(--room-accent); }
+.settings-secret input { border: 0; box-shadow: none !important; }
+.settings-secret .room-icon-button { width: 34px; height: 34px; color: var(--room-muted); }
+.settings-model-input { display: flex; align-items: center; gap: 10px; padding-left: 12px; border: 1px solid var(--room-line); border-radius: 5px; background: var(--room-subtle); transition: border-color .18s, box-shadow .18s; }
+.settings-model-input:focus-within { border-color: var(--room-accent); box-shadow: 0 0 0 2px var(--room-accent-soft); }
+.settings-model-input input { min-width: 0; border: 0; box-shadow: none !important; background: transparent; }
+.model-discovery { display: flex; gap: 10px; }
+.model-discovery button { flex: none; display: flex; align-items: center; gap: 7px; font-size: 11px; }
+.model-discovery button svg { width: 14px; height: 14px; }
+.model-discovery input { min-width: 0; font-size: 12px; }
+.model-options { max-height: 200px; overflow-y: auto; border: 1px solid var(--room-line); border-radius: 4px; padding: 4px; margin-top: 10px; }
+.model-options button { display: flex; align-items: center; justify-content: space-between; gap: 10px; width: 100%; padding: 10px; border: 0; border-bottom: 1px solid var(--room-line); background: transparent; font-size: 11px; text-align: left; }
+.model-options button:last-child { border-bottom: 0; }
+.model-options button > span:not(.brand-icon) { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.model-selected-check { width: 16px; height: 16px; animation: room-check-in .26s var(--room-spring); }
+.model-options button.selected { background: var(--room-accent-soft); color: var(--room-accent); }
+@media (hover: hover) { .model-options button:hover:not(.selected) { background: var(--room-subtle); } }
+.settings-save { display: flex; align-items: center; justify-content: space-between; gap: 13px; border-top: 1px solid var(--room-line); padding-top: 16px; margin-top: 20px; }
+.settings-save > span { font-size: 10px; color: var(--room-muted); line-height: 1.6; }
+.settings-save button { flex: none; }
+.settings-toggle { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 4px 0; }
+.settings-toggle > span { display: flex; flex-direction: column; gap: 6px; }
+.settings-toggle strong { font-size: 12px; font-weight: 500; }
+.settings-toggle small { color: var(--room-muted); font-size: 10px; }
+.settings-toggle input { appearance: none; width: 36px; height: 20px; padding: 2px; border: 0; border-radius: 5px; background: #d1dce8; cursor: pointer; flex: none; }
+.settings-toggle input::before { content: ''; display: block; width: 16px; height: 16px; border-radius: 3px; background: white; transition: transform .18s; }
+.settings-toggle input:checked { background: var(--room-accent); }
+.settings-toggle input:checked::before { transform: translateX(16px); }
+.settings-toggle input:focus-visible { outline: 2px solid var(--room-accent); outline-offset: 4px; }
+.settings-destinations > button { display: flex; align-items: center; gap: 13px; width: 100%; padding: 16px 0; border: 0; border-bottom: 1px solid var(--room-line); background: transparent; text-align: left; }
+.destination-icon { display: grid; place-items: center; width: 34px; height: 40px; color: var(--room-accent); flex: none; }
+.settings-destinations > button > span:nth-child(2) { display: flex; flex-direction: column; gap: 7px; flex: 1; }
+.settings-destinations strong { font-size: 13px; font-weight: 600; }
+.settings-destinations small { color: var(--room-muted); font-size: 11px; line-height: 1.6; }
+.settings-destinations > .control-hint { margin: 16px 0 0; }
+.settings-data-list { display: flex; flex-direction: column; gap: 22px; }
+.settings-data-list article + article { border-top: 1px solid var(--room-line); padding-top: 22px; }
+.settings-data-list article > div { display: flex; align-items: center; gap: 9px; color: var(--room-accent); }
+.settings-data-list h3 { margin: 0; color: var(--room-ink); font-size: 13px; font-weight: 600; }
+.settings-data-list p { font-size: 11px; line-height: 1.7; color: var(--room-muted); margin: 9px 0 14px; }
+.settings-data-list .settings-danger > div, .settings-data-list .settings-danger h3 { color: var(--room-danger); }
+@media (max-width: 760px) { .settings-layout { grid-template-columns: 1fr; grid-template-rows: auto minmax(0, 1fr); gap: 12px; } .settings-navigation { overflow: visible; } .settings-partner { display: none; } .settings-navigation nav { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 2px 6px; } .settings-navigation nav button { min-height: 37px; gap: 7px; padding: 9px 7px; border: 0; border-bottom: 2px solid transparent; border-radius: 0; font-size: 11px; white-space: nowrap; } .settings-navigation nav button.selected { border-bottom-color: var(--room-accent); background: #ffffff8c; } .settings-navigation nav button > svg { width: 14px; height: 14px; } .settings-navigation nav button i { position: absolute; top: 5px; right: 4px; } .settings-content { padding: 17px 15px; } .settings-content::before { left: 15px; } .settings-section-heading { margin-bottom: 18px; padding-bottom: 14px; } }
+@media (max-width: 340px) { .settings-field-grid { gap: 0 10px; } .settings-navigation nav button { gap: 5px; padding-left: 4px; padding-right: 4px; } .model-discovery { flex-wrap: wrap; } .settings-save > span { max-width: 46%; } }
 </style>

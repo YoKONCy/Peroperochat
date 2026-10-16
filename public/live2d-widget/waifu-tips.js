@@ -163,11 +163,13 @@ function loadWidget(config) {
   })
 
   ;(function initModel() {
+    const initialAgentId = window.WAIFU_GET_AGENT_ID?.() || 'pero'
     let modelId = Number(window.PPC_LIVE2D_CONFIG?.modelId) || 0
     let modelTexturesId = Number(window.PPC_LIVE2D_CONFIG?.modelTexturesId) || 0
     if (useCDN) {
       if (!modelList) {
         loadModelList().then(() => {
+          if (initialAgentId !== window.WAIFU_GET_AGENT_ID?.()) return
           if (isNaN(modelId) || modelId >= modelList.models.length) {
             modelId = 0; modelTexturesId = 0
           } else {
@@ -316,6 +318,8 @@ function loadWidget(config) {
 
   async function loadModelList() { const response = await fetch(`${cdnPath}model_list.json`); modelList = await response.json() }
 
+  let modelLoadVersion = 0
+
   async function ensureLoadFn() {
     if (typeof window.loadlive2d === "function") return true
     return await new Promise(resolve => {
@@ -328,15 +332,18 @@ function loadWidget(config) {
   }
 
   async function loadModel(modelId, modelTexturesId, message, persist = true) {
+    const version = ++modelLoadVersion
     const agentId = window.WAIFU_GET_AGENT_ID?.() || 'pero'
     if (persist && window.PPC_SAVE_MODEL_SETTINGS) await window.PPC_SAVE_MODEL_SETTINGS(modelId, modelTexturesId, agentId)
-    if (agentId !== window.WAIFU_GET_AGENT_ID?.()) return
+    if (version !== modelLoadVersion || agentId !== window.WAIFU_GET_AGENT_ID?.()) return
     window.PPC_LIVE2D_CONFIG = { ...(window.PPC_LIVE2D_CONFIG || {}), modelId, modelTexturesId, activeAgent: agentId }
     showMessage(message, 4000, 10)
     const ok = await ensureLoadFn()
+    if (version !== modelLoadVersion || agentId !== window.WAIFU_GET_AGENT_ID?.()) return
     if (!ok || typeof window.loadlive2d !== "function") { try { console.warn("loadlive2d unavailable") } catch (_) {}; return }
     if (useCDN) {
       if (!modelList) await loadModelList();
+      if (version !== modelLoadVersion || agentId !== window.WAIFU_GET_AGENT_ID?.()) return
       const target = modelList.models[modelId];
       const indexName = modelTexturesId > 0 ? `index_${modelTexturesId}.json` : "index.json";
       window.loadlive2d("live2d", `${cdnPath}model/${target}/${indexName}`);

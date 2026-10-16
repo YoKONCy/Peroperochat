@@ -7,7 +7,8 @@ use crate::db::{DbState, Memory, Reminder, Topic};
 use super::{db_lock, identity, repository, runtime::ChatRuntime, types::*};
 
 #[derive(Serialize, Deserialize)]
-struct Revision { message_id: i64, revision: i64, content: String }
+struct Revision { message_id: i64, revision: i64, content: String,
+    #[serde(default)] reasoning:String,#[serde(default)] usage:Value }
 
 #[derive(Serialize, Deserialize)]
 struct Backup {
@@ -26,11 +27,11 @@ struct Backup {
 }
 
 fn read_memories(conn: &Connection) -> ChatResult<Vec<Memory>> {
-    let mut stmt = conn.prepare("SELECT id,content,tags,importance,timestamp,msg_timestamp,type,source,agent_id,source_message_id FROM memories ORDER BY id")?;
+    let mut stmt = conn.prepare("SELECT id,content,tags,importance,timestamp,msg_timestamp,type,source,agent_id,source_message_id,diary_date,revision,source_message_ids FROM memories ORDER BY id")?;
     let rows = stmt.query_map([], |r| {
         let tags: String = r.get(2)?;
         Ok(Memory { id:r.get(0)?,content:r.get(1)?,tags:serde_json::from_str(&tags).unwrap_or_default(),importance:r.get(3)?,
-            timestamp:r.get(4)?,msg_timestamp:r.get(5)?,type_:r.get(6)?,source:r.get(7)?,agent_id:r.get(8)?,source_message_id:r.get(9)? })
+            timestamp:r.get(4)?,msg_timestamp:r.get(5)?,type_:r.get(6)?,source:r.get(7)?,agent_id:r.get(8)?,source_message_id:r.get(9)?,diary_date:r.get(10)?,revision:r.get(11)?,source_message_ids:serde_json::from_str(&r.get::<_,String>(12)?).unwrap_or_default() })
     })?;
     Ok(rows.collect::<Result<Vec<_>,_>>()?)
 }
@@ -47,18 +48,18 @@ pub fn local_export_data(app: AppHandle, db: tauri::State<DbState>, runtime: tau
         rows.collect::<Result<Vec<_>,_>>()?
     };
     let messages = {
-        let mut stmt = conn.prepare("SELECT id,thread_id,pair_id,role,agent_id,name,content,timestamp,revision,status,error FROM chat_messages ORDER BY id")?;
+        let mut stmt = conn.prepare("SELECT id,thread_id,pair_id,role,agent_id,name,content,timestamp,revision,status,error,reasoning,usage FROM chat_messages ORDER BY id")?;
         let rows = stmt.query_map([], |r| {
             let content: String = r.get(6)?;
             Ok(Message { id:r.get(0)?,thread_id:r.get(1)?,pair_id:r.get(2)?,role:r.get(3)?,agent_id:r.get(4)?,name:r.get(5)?,
-                content:serde_json::from_str(&content).unwrap_or(json!(content)),timestamp:r.get(7)?,revision:r.get(8)?,status:r.get(9)?,error:r.get(10)? })
+                content:serde_json::from_str(&content).unwrap_or(json!(content)),timestamp:r.get(7)?,revision:r.get(8)?,status:r.get(9)?,error:r.get(10)?,reasoning:r.get(11)?,usage:serde_json::from_str(&r.get::<_,String>(12)?).unwrap_or(json!({})) })
         })?;
         rows.collect::<Result<Vec<_>,_>>()?
     };
     let reminders = {
-        let mut stmt = conn.prepare("SELECT id,task,time,timestamp,agent_id,delivered,recur,recur_until FROM reminders ORDER BY id")?;
+        let mut stmt = conn.prepare("SELECT id,task,time,timestamp,agent_id,delivered,recur,recur_until,revision,delivery_error FROM reminders ORDER BY id")?;
         let rows = stmt.query_map([], |r| Ok(Reminder { id:r.get(0)?,task:r.get(1)?,time:r.get(2)?,timestamp:r.get(3)?,
-            agent_id:r.get(4)?,delivered:r.get(5)?,recur:r.get(6)?,recur_until:r.get(7)? }))?;
+            agent_id:r.get(4)?,delivered:r.get(5)?,recur:r.get(6)?,recur_until:r.get(7)?,revision:r.get(8)?,delivery_error:r.get(9)? }))?;
         rows.collect::<Result<Vec<_>,_>>()?
     };
     let topics = {
@@ -67,8 +68,8 @@ pub fn local_export_data(app: AppHandle, db: tauri::State<DbState>, runtime: tau
         rows.collect::<Result<Vec<_>,_>>()?
     };
     let revisions = {
-        let mut stmt = conn.prepare("SELECT message_id,revision,content FROM chat_message_revisions")?;
-        let rows = stmt.query_map([], |r| Ok(Revision { message_id:r.get(0)?,revision:r.get(1)?,content:r.get(2)? }))?;
+        let mut stmt = conn.prepare("SELECT message_id,revision,content,reasoning,usage FROM chat_message_revisions")?;
+        let rows = stmt.query_map([], |r| Ok(Revision { message_id:r.get(0)?,revision:r.get(1)?,content:r.get(2)?,reasoning:r.get(3)?,usage:serde_json::from_str(&r.get::<_,String>(4)?).unwrap_or(json!({})) }))?;
         rows.collect::<Result<Vec<_>,_>>()?
     };
     serde_json::to_value(Backup { version:"2.0".into(),config,agents,
@@ -101,7 +102,7 @@ fn parse_backup(data: Value) -> ChatResult<Backup> {
                 backup.messages.push(Message { id:backup.messages.len() as i64+1,thread_id:thread_id.clone(),pair_id:pair_id.clone(),
                     role:role.into(),agent_id:if role == "assistant" { agent_id.clone() } else { String::new() },
                     name:if role == "assistant" { backup.agents.get(agent_id).and_then(|a| a.get("name")).and_then(Value::as_str).unwrap_or(agent_id).into() } else { "User".into() },
-                    content,timestamp:item.get("timestamp").and_then(Value::as_i64).ok_or_else(invalid)?,revision:1,status:"active".into(),error:None });
+                    content,timestamp:item.get("timestamp").and_then(Value::as_i64).ok_or_else(invalid)?,revision:1,status:"active".into(),error:None,reasoning:String::new(),usage:json!({}) });
             }
         }
         if let Some(memories) = data.get("memories").and_then(Value::as_object) {
@@ -126,13 +127,13 @@ fn parse_backup(data: Value) -> ChatResult<Backup> {
                 backup.messages.push(Message { id:backup.messages.len() as i64+1,thread_id:repository::FAMILY_THREAD.into(),pair_id:pair_id.clone(),
                     role:role.into(),agent_id:if role == "assistant" { agent_id } else { String::new() },name:name.into(),
                     content:item.get("content").cloned().ok_or_else(invalid)?,timestamp:item.get("timestamp").and_then(Value::as_i64).ok_or_else(invalid)?,
-                    revision:1,status:"active".into(),error:None });
+                    revision:1,status:"active".into(),error:None,reasoning:String::new(),usage:json!({}) });
             }
         }
         backup
     } else { return Err(invalid()); };
     backup.agents = identity::normalize_agents(backup.agents)?;
-    if backup.messages.len() > 100_000 || backup.config.len() > 10_000 { return Err(invalid()); }
+    if backup.messages.len()>100_000 || backup.config.len()>10_000 || backup.memories.len()>100_000 || backup.revisions.len()>100_000 { return Err(invalid()); }
     let threads: BTreeMap<_,_> = backup.threads.iter().map(|t| (t.id.clone(),t)).collect();
     if threads.len() != backup.threads.len() { return Err(invalid()); }
     for thread in &backup.threads {
@@ -146,17 +147,43 @@ fn parse_backup(data: Value) -> ChatResult<Backup> {
             !matches!(message.role.as_str(),"user"|"assistant"|"system") ||
             !matches!(message.status.as_str(),"active"|"pending"|"failed"|"cancelled"|"interrupted"|"deleted") ||
             (message.role == "assistant" && thread.channel == "desktop" && message.agent_id != thread.agent_id) ||
-            !(message.content.is_string() || message.content.is_array()) { return Err(invalid()); }
+            !(message.content.is_string() || message.content.is_array()) || message.reasoning.len()>2*1024*1024 || message.usage.to_string().len()>64_000 { return Err(invalid()); }
         if message.status == "pending" { message.status = "interrupted".into(); message.error = Some("备份中的回复未完成，请重新生成".into()); }
+        if message.status=="deleted" {message.content=json!("");message.reasoning.clear();message.usage=json!({});message.error=None;}
     }
     if backup.revisions.iter().any(|r| !ids.contains(&r.message_id) || r.revision < 1) { return Err(invalid()); }
-    if backup.memories.iter().any(|m| m.content.len() > 8000 || !(0..=10).contains(&m.importance) ||
-        m.source_message_id.is_some_and(|id| !ids.contains(&id))) { return Err(invalid()); }
+    let mut reminder_ids=HashSet::new();
+    for reminder in &mut backup.reminders {
+        if reminder.id.is_some_and(|id|id<=0 || id>9_007_199_254_740_991 || !reminder_ids.insert(id)) || reminder.revision<1
+            || reminder.agent_id.is_empty() || reminder.agent_id.len()>128 || reminder.task.trim().is_empty() || reminder.task.len()>2000 {
+            return Err(invalid());
+        }
+        let time=chrono::NaiveDateTime::parse_from_str(&reminder.time,"%Y-%m-%d %H:%M:%S").map_err(|_|invalid())?;
+        if time.format("%Y-%m-%d %H:%M:%S").to_string()!=reminder.time {return Err(invalid());}
+        let recur=reminder.recur.get_or_insert_with(||"none".into());
+        if !["none","daily","weekly"].contains(&recur.as_str()) {return Err(invalid());}
+        if reminder.recur_until.as_ref().is_some_and(|value|value.trim().is_empty()) {reminder.recur_until=None;}
+        if let Some(until)=&reminder.recur_until {
+            let until=chrono::NaiveDateTime::parse_from_str(until,"%Y-%m-%d %H:%M:%S").map_err(|_|invalid())?;
+            if recur=="none" || until<time {return Err(invalid());}
+        }
+        if reminder.delivery_error.as_ref().is_some_and(|value|value.len()>2000) {return Err(invalid());}
+    }
+    if backup.memories.iter().any(|m|m.id.is_some_and(|id|id<=0) || m.revision<1 || m.agent_id.len()>128 || m.content.len()>16_000 || !(0..=10).contains(&m.importance)
+        || m.tags.len()>16 || m.tags.iter().any(|s|s.len()>100) || m.source_message_ids.len()>100_000
+        || m.diary_date.as_ref().is_some_and(|date|chrono::NaiveDate::parse_from_str(date,"%Y-%m-%d").is_err())
+        || m.source_message_id.is_some_and(|id|!ids.contains(&id)) || m.source_message_ids.iter().any(|id|!ids.contains(id))) { return Err(invalid()); }
+    let deleted:HashSet<_>=backup.messages.iter().filter(|m|m.status=="deleted").map(|m|m.id).collect();
+    backup.memories.retain(|m|!m.source_message_id.is_some_and(|id|deleted.contains(&id)) && !m.source_message_ids.iter().any(|id|deleted.contains(id)));
+    backup.revisions.retain(|r|!deleted.contains(&r.message_id));
     if backup.config.values().any(|value| !value.is_string()) { return Err(invalid()); }
     // 旧备份的 API Key 使用另一键名；统一迁移后不再双读写。
     if let Some(key) = backup.config.remove("ppc.apiKey") { backup.config.entry("api_key".into()).or_insert(key); }
     backup.config.remove("ppc.group.messages");
     backup.config.insert("ppc.agents".into(),json!(backup.agents.to_string()));
+    let config=serde_json::to_value(&backup.config).map_err(|_|invalid())?;
+    super::model_config::from_config(&config).map_err(|_|invalid())?;
+    super::prompts::load(&config).map_err(|_|invalid())?;
     Ok(backup)
 }
 
@@ -164,7 +191,8 @@ fn clear_database(conn: &Connection) -> ChatResult<()> {
     super::group::initialize(conn)?;
     super::blackjack::initialize(conn)?;
     conn.execute_batch("DELETE FROM local_group_batches; DELETE FROM local_blackjack_games;")?;
-    conn.execute_batch("DELETE FROM chat_turns;DELETE FROM chat_message_revisions;DELETE FROM chat_messages;DELETE FROM chat_threads;
+    conn.execute("INSERT OR IGNORE INTO memory_tdb_pending(agent_id) SELECT DISTINCT agent_id FROM memories",[])?;
+    conn.execute_batch("DELETE FROM chat_tool_calls;DELETE FROM chat_turns;DELETE FROM chat_message_revisions;DELETE FROM chat_messages;DELETE FROM chat_threads;
         DELETE FROM memories;DELETE FROM reminders;DELETE FROM topics;DELETE FROM messages;")?;
     Ok(())
 }
@@ -173,23 +201,24 @@ fn write_backup(conn: &Connection, backup: &Backup) -> ChatResult<()> {
     clear_database(conn)?;
     for thread in &backup.threads { repository::ensure_thread(conn,&thread.id,&thread.agent_id,&thread.channel)?; }
     for message in &backup.messages {
-        conn.execute("INSERT INTO chat_messages(id,thread_id,pair_id,role,agent_id,name,content,timestamp,revision,status,error)
-            VALUES(?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11)",params![message.id,message.thread_id,message.pair_id,message.role,message.agent_id,
-                message.name,message.content.to_string(),message.timestamp,message.revision,message.status,message.error])?;
+        conn.execute("INSERT INTO chat_messages(id,thread_id,pair_id,role,agent_id,name,content,timestamp,revision,status,error,reasoning,usage)
+            VALUES(?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13)",params![message.id,message.thread_id,message.pair_id,message.role,message.agent_id,
+                message.name,message.content.to_string(),message.timestamp,message.revision,message.status,message.error,message.reasoning,message.usage.to_string()])?;
     }
     for memory in &backup.memories {
-        conn.execute("INSERT INTO memories(id,content,tags,importance,timestamp,msg_timestamp,type,source,agent_id,source_message_id) VALUES(?1,?2,?3,?4,?5,?6,?7,?8,?9,?10)",
-            params![memory.id,memory.content,json!(memory.tags).to_string(),memory.importance,memory.timestamp,memory.msg_timestamp,memory.type_,memory.source,memory.agent_id,memory.source_message_id])?;
+        conn.execute("INSERT INTO memories(id,content,tags,importance,timestamp,msg_timestamp,type,source,agent_id,source_message_id,diary_date,revision,source_message_ids) VALUES(?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13)",
+            params![memory.id,memory.content,json!(memory.tags).to_string(),memory.importance,memory.timestamp,memory.msg_timestamp,memory.type_,memory.source,memory.agent_id,memory.source_message_id,memory.diary_date,memory.revision,json!(memory.source_message_ids).to_string()])?;
+        super::diary::dirty(conn,&memory.agent_id)?;
     }
     for reminder in &backup.reminders {
-        conn.execute("INSERT INTO reminders(id,task,time,timestamp,agent_id,delivered,recur,recur_until) VALUES(?1,?2,?3,?4,?5,?6,?7,?8)",
-            params![reminder.id,reminder.task,reminder.time,reminder.timestamp,reminder.agent_id,reminder.delivered.unwrap_or(false),reminder.recur,reminder.recur_until])?;
+        conn.execute("INSERT INTO reminders(id,task,time,timestamp,agent_id,delivered,recur,recur_until,revision,delivery_error) VALUES(?1,?2,?3,?4,?5,?6,?7,?8,?9,?10)",
+            params![reminder.id,reminder.task,reminder.time,reminder.timestamp,reminder.agent_id,reminder.delivered.unwrap_or(false),reminder.recur,reminder.recur_until,reminder.revision.max(1),reminder.delivery_error])?;
     }
     for topic in &backup.topics {
         conn.execute("INSERT INTO topics(id,topic,revealed,timestamp,agent_id,time) VALUES(?1,?2,?3,?4,?5,?6)",params![topic.id,topic.topic,topic.revealed,topic.timestamp,topic.agent_id,topic.time])?;
     }
     for revision in &backup.revisions {
-        conn.execute("INSERT INTO chat_message_revisions(message_id,revision,content) VALUES(?1,?2,?3)",params![revision.message_id,revision.revision,revision.content])?;
+        conn.execute("INSERT INTO chat_message_revisions(message_id,revision,content,reasoning,usage) VALUES(?1,?2,?3,?4,?5)",params![revision.message_id,revision.revision,revision.content,revision.reasoning,revision.usage.to_string()])?;
     }
     conn.execute("DELETE FROM local_configs",[])?;
     for (key,value) in &backup.config { identity::set_value_in(conn,key,value)?; }
@@ -197,18 +226,20 @@ fn write_backup(conn: &Connection, backup: &Backup) -> ChatResult<()> {
 }
 
 #[tauri::command]
-pub fn local_import_data( db: tauri::State<DbState>, runtime: tauri::State<ChatRuntime>, data: Value) -> ChatResult<()> {
+pub async fn local_import_data(app:AppHandle, db: tauri::State<'_,DbState>, runtime: tauri::State<'_,ChatRuntime>, data: Value) -> ChatResult<()> {
     let backup = parse_backup(data)?;
     let _lease = runtime.maintenance()?;
     let mut conn = db_lock(&db)?;
     let tx = conn.transaction()?;
     write_backup(&tx,&backup)?;
     tx.commit()?;
-    Ok(())
+    let result=db.diary.synchronize(&conn);drop(conn);
+    if let Err(error)=super::reminder_platform::synchronize(&app) {eprintln!("备份恢复后的系统提醒同步等待恢复：{}",error.message);}
+    result
 }
 
 #[tauri::command]
-pub fn local_reset_data( db: tauri::State<DbState>, runtime: tauri::State<ChatRuntime>, clear_config: bool) -> ChatResult<()> {
+pub async fn local_reset_data(app:AppHandle, db: tauri::State<'_,DbState>, runtime: tauri::State<'_,ChatRuntime>, clear_config: bool) -> ChatResult<()> {
     let _lease = runtime.maintenance()?;
     let mut conn = db_lock(&db)?;
     let tx = conn.transaction()?;
@@ -216,12 +247,27 @@ pub fn local_reset_data( db: tauri::State<DbState>, runtime: tauri::State<ChatRu
     if clear_config { tx.execute("DELETE FROM local_configs",[])?; }
     else { identity::set_value_in(&tx,"ppc.conversation_count",&json!("0"))?; }
     tx.commit()?;
-    Ok(())
+    let result=db.diary.synchronize(&conn);drop(conn);
+    if let Err(error)=super::reminder_platform::synchronize(&app) {eprintln!("数据重置后的系统提醒取消等待恢复：{}",error.message);}
+    result
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn reminder_backup_keeps_revision_and_accepts_records_before_revision_migration() {
+        let db=super::super::tests::state();let mut conn=db.conn.lock().unwrap();
+        let original=json!({"version":"2.0","config":{},"agents":{"pero":{"name":"Pero"}},"threads":[],"messages":[],"memories":[],
+            "reminders":[{"id":10,"task":"浇花","time":"2030-01-02 12:00:00","timestamp":1,"agent_id":"pero","delivered":false,"recur":"daily","recur_until":null,"revision":7,"delivery_error":"等待通知权限"}]});
+        let backup=parse_backup(original.clone()).unwrap();
+        {let tx=conn.transaction().unwrap();write_backup(&tx,&backup).unwrap();tx.commit().unwrap();}
+        let restored=super::super::reminders::entry(&conn,"pero",10).unwrap();assert_eq!(restored.revision,7);assert_eq!(restored.delivery_error.as_deref(),Some("等待通知权限"));
+        let mut legacy=original.clone();legacy["reminders"][0].as_object_mut().unwrap().remove("revision");legacy["reminders"][0].as_object_mut().unwrap().remove("delivery_error");
+        assert_eq!(parse_backup(legacy).unwrap().reminders[0].revision,1);
+        let mut invalid=original;invalid["reminders"][0]["time"]=json!("错误时间");assert!(parse_backup(invalid).is_err());
+        assert_eq!(super::super::reminders::entry(&conn,"pero",10).unwrap().revision,7);
+    }
     #[test]
     fn old_backup_is_validated_before_replacing_data() {
         let data = json!({"version":"1.0","config":{"ppc.apiKey":"密钥"},"agents":{"pero":{"name":"Pero"}},
@@ -254,6 +300,24 @@ mod tests {
         }
         assert_eq!(repository::snapshot(&conn,"desktop:pero").unwrap().messages[0].content,"原消息");
         assert_eq!(identity::snapshot_in(&conn).unwrap()["原配置"],"保留");
+    }
+
+    #[test]
+    fn reset_and_import_clear_cached_tdb_and_validate_new_configuration() {
+        let db=super::super::tests::state();let mut conn=db.conn.lock().unwrap();
+        let draft=super::super::diary::Draft {content:"被重置的日记".into(),date:None,tags:vec![],id:None,expected_revision:None};
+        super::super::diary::apply(&conn,"pero",&draft,&[],1).unwrap();
+        assert_eq!(db.diary.query(&conn,"pero",&Default::default()).unwrap().len(),1);
+        {let tx=conn.transaction().unwrap();clear_database(&tx).unwrap();tx.commit().unwrap();}
+        assert!(db.diary.query(&conn,"pero",&Default::default()).unwrap().is_empty());
+        let raw=json!({"version":"1.0","config":{},"agents":{"pero":{"name":"佩洛"}},"messages":{"pero":[]},"memories":{"pero":[
+            {"id":2,"content":"导入的日记","tags":[],"importance":5,"timestamp":2,"type_":"event","source":"diary","agent_id":"pero"}]}});
+        let backup=parse_backup(raw.clone()).unwrap();
+        {let tx=conn.transaction().unwrap();write_backup(&tx,&backup).unwrap();tx.commit().unwrap();}
+        let entries=db.diary.query(&conn,"pero",&Default::default()).unwrap();assert_eq!(entries.len(),1);assert_eq!(entries[0].content,"导入的日记");
+        let mut invalid=raw.clone();invalid["config"]["ppc.modelSettings"]=json!(json!({"contextWindow":1}).to_string());assert!(parse_backup(invalid).is_err());
+        let mut invalid=raw;invalid["config"]["ppc.promptWorkspace"]=json!("{损坏}");assert!(parse_backup(invalid).is_err());
+        assert_eq!(db.diary.query(&conn,"pero",&Default::default()).unwrap()[0].content,"导入的日记");
     }
 
 }

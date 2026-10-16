@@ -7,7 +7,6 @@
     <uses-permission android:name="android.permission.VIBRATE" />
     <!-- 精确闹铃权限 (Android 12+) -->
     <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
-    <uses-permission android:name="android.permission.USE_EXACT_ALARM" />
     <!-- 开机自启权限，用于重启后恢复闹铃 -->
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
     <!-- 唤醒锁 -->
@@ -43,9 +42,14 @@
         <!-- 开机完成广播接收器 -->
         <receiver
             android:name=".BootReceiver"
-            android:exported="true">
+            android:exported="false">
             <intent-filter>
                 <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+                <action android:name="android.intent.action.TIME_SET" />
+                <action android:name="android.intent.action.TIMEZONE_CHANGED" />
+                <action android:name="android.intent.action.USER_UNLOCKED" />
+                <action android:name="android.app.action.SCHEDULE_EXACT_ALARM_PERMISSION_STATE_CHANGED" />
             </intent-filter>
         </receiver>
 
