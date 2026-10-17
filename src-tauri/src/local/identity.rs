@@ -173,7 +173,8 @@ pub fn save_agent_in(conn: &mut Connection, id: &str, mut agent: Value, create: 
 
 #[tauri::command]
 pub async fn local_role_action(app: AppHandle, runtime: tauri::State<'_,super::runtime::ChatRuntime>,
-    action: String, agent: Option<Value>, id: Option<String>, data: Option<String>) -> ChatResult<Value> {
+    action: String, agent: Option<Value>, id: Option<String>, data: Option<String>, mode_token:crate::mode::Token) -> ChatResult<Value> {
+    crate::mode::LOCAL_TOKEN.scope(mode_token, async {
     let _lease = runtime.maintenance()?;
     let db = app.state::<DbState>();
     let mut conn = db_lock(&db)?;
@@ -195,10 +196,13 @@ pub async fn local_role_action(app: AppHandle, runtime: tauri::State<'_,super::r
     drop(conn);
     if let Err(error)=super::reminder_platform::synchronize(&app) {eprintln!("角色变更后的系统提醒同步等待恢复：{}",error.message);}
     Ok(json!({"agents":agents,"agentId":target}))
+
+    }).await
 }
 
 #[tauri::command]
-pub fn local_save_model_preferences(app: AppHandle, agent_id: String, model_id: u32, texture_id: u32) -> ChatResult<()> {
+pub fn local_save_model_preferences(app: AppHandle, agent_id: String, model_id: u32, texture_id: u32, mode_token:crate::mode::Token) -> ChatResult<()> {
+    crate::mode::LOCAL_TOKEN.sync_scope(mode_token, || {
     if model_id > 10000 || texture_id > 10000 { return Err(ChatError::new("INVALID_INPUT","模型或服装编号无效")); }
     let db = app.state::<DbState>();
     let mut conn = db_lock(&db)?;
@@ -210,6 +214,8 @@ pub fn local_save_model_preferences(app: AppHandle, agent_id: String, model_id: 
     }
     tx.commit()?;
     Ok(())
+
+    })
 }
 
 pub fn state(app: &AppHandle, agent_id: &str) -> ChatResult<Value> {
@@ -235,7 +241,8 @@ fn state_from(config:&Value, agent_id:&str)->ChatResult<Value> {
 }
 
 #[tauri::command]
-pub fn local_character_projection(app:AppHandle, agent_id:String)->ChatResult<Value> {
+pub fn local_character_projection(app:AppHandle, agent_id:String, mode_token:crate::mode::Token)->ChatResult<Value> {
+    crate::mode::LOCAL_TOKEN.sync_scope(mode_token, || {
     let db=app.state::<DbState>();
     let conn=db_lock(&db)?;
     let config=snapshot_in(&conn)?;
@@ -252,6 +259,8 @@ pub fn local_character_projection(app:AppHandle, agent_id:String)->ChatResult<Va
     result["memoryTags"]=json!(tags);
     result["environment"]=super::environment::projection(&config);
     Ok(result)
+
+    })
 }
 
 pub fn model_settings(config:&Value)->ChatResult<ModelSettings> { super::model_config::from_config(config) }

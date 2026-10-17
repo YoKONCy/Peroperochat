@@ -61,9 +61,10 @@ object ReminderScheduler {
         (context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager).cancel("ppc.reminder.$id", 0)
     }
 
-    private fun register(context: Context, id: Long, token: String, at: Long, precise: Boolean) {
+    private fun register(context: Context, id: Long, token: String, at: Long, precise: Boolean, modeToken: JSONObject) {
         val manager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
-        val pending = checkNotNull(operation(context, id, token))
+        val pending = checkNotNull(PendingIntent.getBroadcast(context, 0, intent(context, id, token)
+            .putExtra("modeToken", modeToken.toString()), PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE))
         if (precise) manager.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, at, pending)
         else manager.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, at, pending)
     }
@@ -73,9 +74,11 @@ object ReminderScheduler {
 
     // 所有调用在同一工作线程执行；SQLite 修订检查仍防护并行的 Rust 编辑。
     fun synchronize(context: Context, force: Boolean = false): JSONObject {
+        if (!ReminderBridge.active(context)) { suspend(context); return status(context).put("background", false) }
         val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
         val saved = try { JSONObject(prefs.getString("jobs", "{}") ?: "{}") } catch (_: Exception) { JSONObject() }
         val plan = ReminderBridge.execute(context, "plan") as JSONObject
+        val modeToken = plan.getJSONObject("modeToken")
         val jobs = plan.getJSONArray("jobs")
         val cancellations = plan.getJSONArray("cancellations")
         val desired = JSONObject()
@@ -105,8 +108,13 @@ object ReminderScheduler {
                     continue
                 }
                 val changed = old?.optString("token") != token
-                if (changed && job.optBoolean("dismissPrevious")) dismiss(context, id)
-                if (force || changed || old?.optString("mode") != mode || old?.optLong("at") != at) register(context, id, token, at, precise)
+                check(ReminderBridge.guard(context, modeToken) {
+                    if (changed && job.optBoolean("dismissPrevious")) dismiss(context, id)
+                    if (force || changed || old?.optString("mode") != mode || old?.optLong("at") != at || old?.optString("epoch") != modeToken.toString()) {
+                        register(context, id, token, at, precise, modeToken)
+                    }
+                }) { "提醒运行代次已失效" }
+                signature.put("epoch", modeToken.toString())
                 desired.put(key, signature)
                 results.put(receipt(id, token, mode))
             } catch (error: Exception) {
@@ -122,14 +130,14 @@ object ReminderScheduler {
             if (!desired.has(key)) cancel(context, key.toLong(), false)
         }
         check(prefs.edit().putString("jobs", desired.toString()).remove("error").commit()) { "系统调度缓存保存失败" }
-        ReminderBridge.execute(context, "registered", results)
+        ReminderBridge.execute(context, "registered", results, modeToken)
         if (retryNeeded) retry(context)
         return status(context)
     }
 
-    fun fire(context: Context, id: Long, token: String) {
+    fun fire(context: Context, id: Long, token: String, modeToken: JSONObject) {
         val input = JSONObject().put("id", id).put("token", token)
-        val claim = ReminderBridge.execute(context, "claim", input) as? JSONObject
+        val claim = ReminderBridge.execute(context, "claim", input, modeToken) as? JSONObject
         if (claim == null) { synchronize(context); return }
         var failure: String? = null
         try {
@@ -143,26 +151,46 @@ object ReminderScheduler {
                 .setContentTitle(claim.getString("title")).setContentText(claim.getString("body"))
                 .setStyle(NotificationCompat.BigTextStyle().bigText(claim.getString("body"))).setContentIntent(pending)
                 .setAutoCancel(true).setPriority(NotificationCompat.PRIORITY_HIGH).build()
-            manager.notify("ppc.reminder.$id", 0, notification)
+            check(ReminderBridge.guard(context, modeToken) { manager.notify("ppc.reminder.$id", 0, notification) }) { "提醒运行代次已失效" }
         } catch (error: Exception) {
             failure = if (!notifications(context)) "系统通知权限或提醒通道未开启" else "系统通知发送失败，将稍后重试"
             Log.e(TAG, failure, error)
         }
         input.put("lease", claim.getString("lease")).put("error", failure ?: JSONObject.NULL)
-        val accepted = ReminderBridge.execute(context, "finish", input) == true
+        val accepted = ReminderBridge.execute(context, "finish", input, modeToken) == true
         if (!accepted && failure == null) dismiss(context, id)
         synchronize(context)
     }
 
     fun retry(context: Context) {
+        val modeToken = try { (ReminderBridge.execute(context, "mode") as? JSONObject)?.optJSONObject("modeToken") } catch (_: Exception) { null } ?: return
         val operation = PendingIntent.getBroadcast(context, 0, Intent(context, BootReceiver::class.java)
             .setAction(RETRY_ACTION).setData(Uri.parse("peroperochat://reminder-recovery")), PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
-        (context.getSystemService(Context.ALARM_SERVICE) as AlarmManager).setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, System.currentTimeMillis() + 60_000, operation)
+        ReminderBridge.guard(context, modeToken) {
+            (context.getSystemService(Context.ALARM_SERVICE) as AlarmManager).setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, System.currentTimeMillis() + 60_000, operation)
+        }
     }
 
     fun failed(context: Context, error: Throwable) {
+        if (!ReminderBridge.active(context)) { suspend(context); return }
         Log.e(TAG, "原生提醒等待恢复", error)
         context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().putString("error", "系统调度暂不可用，等待恢复").commit()
         try { retry(context) } catch (retryError: Exception) { Log.e(TAG, "提醒恢复任务注册失败", retryError) }
+    }
+
+    /** 仅撤销本机独立提醒，不修改提醒业务记录。门关闭时允许执行。 */
+    fun suspend(context: Context): Boolean = ReminderBridge.inactiveGuard(context) { suspendInactive(context) }
+
+    private fun suspendInactive(context: Context) {
+        val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+        val saved = try { JSONObject(prefs.getString("jobs", "{}") ?: "{}") } catch (_: Exception) { JSONObject() }
+        saved.keys().forEach { key -> key.toLongOrNull()?.let { cancel(context, it, true) } }
+        val retry = PendingIntent.getBroadcast(context, 0, Intent(context, BootReceiver::class.java)
+            .setAction(RETRY_ACTION).setData(Uri.parse("peroperochat://reminder-recovery")), PendingIntent.FLAG_NO_CREATE or PendingIntent.FLAG_IMMUTABLE)
+        retry?.let { (context.getSystemService(Context.ALARM_SERVICE) as AlarmManager).cancel(it); it.cancel() }
+        val manager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        if (Build.VERSION.SDK_INT >= 23) manager.activeNotifications.filter { it.tag?.startsWith("ppc.reminder.") == true }
+            .forEach { manager.cancel(it.tag, it.id) }
+        check(prefs.edit().remove("jobs").remove("error").commit()) { "旧提醒登记缓存撤销失败" }
     }
 }

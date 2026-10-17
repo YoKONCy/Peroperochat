@@ -4,22 +4,29 @@ use crate::db::DbState;
 use super::{context,db_lock,diary,identity,prompts,repository,runtime::ChatRuntime,types::*};
 
 #[tauri::command]
-pub fn local_model_configuration(app:AppHandle)->ChatResult<Value> {
+pub fn local_model_configuration(app:AppHandle, mode_token:crate::mode::Token)->ChatResult<Value> {
+    crate::mode::LOCAL_TOKEN.sync_scope(mode_token, || {
     let settings=identity::model_settings(&identity::snapshot(&app)?)?;
     let mut value=serde_json::to_value(&settings).map_err(|_|ChatError::new("INVALID_CONFIG","模型配置无法读取"))?;
     value.as_object_mut().unwrap().remove("apiKey");
     value["hasApiKey"]=json!(!settings.api_key.is_empty());
     for value in value["headers"].as_object_mut().unwrap().values_mut() { *value=json!("[已隐藏]"); }
     Ok(value)
+
+    })
 }
 
 #[tauri::command]
-pub fn local_diary_query(db:tauri::State<DbState>,agent_id:String,query:diary::Query)->ChatResult<Vec<diary::Entry>> {
+pub fn local_diary_query(db:tauri::State<DbState>,agent_id:String,query:diary::Query, mode_token:crate::mode::Token)->ChatResult<Vec<diary::Entry>> {
+    crate::mode::LOCAL_TOKEN.sync_scope(mode_token, || {
     let conn=db_lock(&db)?;db.diary.query(&conn,&agent_id,&query)
+
+    })
 }
 
 #[tauri::command]
-pub fn local_manage_diary(db:tauri::State<DbState>,runtime:tauri::State<ChatRuntime>,agent_id:String,action:String,draft:Option<diary::Draft>,id:Option<i64>)->ChatResult<()> {
+pub fn local_manage_diary(db:tauri::State<DbState>,runtime:tauri::State<ChatRuntime>,agent_id:String,action:String,draft:Option<diary::Draft>,id:Option<i64>, mode_token:crate::mode::Token)->ChatResult<()> {
+    crate::mode::LOCAL_TOKEN.sync_scope(mode_token, || {
     let _lease=runtime.maintenance()?;let mut conn=db_lock(&db)?;
     if identity::agents_from(&identity::snapshot_in(&conn)?)?.get(&agent_id).is_none() { return Err(ChatError::new("AGENT_NOT_FOUND","角色不存在")); }
     let tx=conn.transaction()?;
@@ -29,20 +36,26 @@ pub fn local_manage_diary(db:tauri::State<DbState>,runtime:tauri::State<ChatRunt
         _=>return Err(ChatError::new("INVALID_INPUT","日记操作无效")),
     }
     tx.commit()?;db.diary.synchronize(&conn)
+
+    })
 }
 
 #[tauri::command]
-pub fn local_diary_day(db:tauri::State<DbState>,agent_id:String,date:String)->ChatResult<String> {
+pub fn local_diary_day(db:tauri::State<DbState>,agent_id:String,date:String, mode_token:crate::mode::Token)->ChatResult<String> {
+    crate::mode::LOCAL_TOKEN.sync_scope(mode_token, || {
     let conn=db_lock(&db)?;
     let entries=db.diary.query(&conn,&agent_id,&diary::Query { from:Some(date.clone()),to:Some(date.clone()),limit:10_000,..Default::default() })?;
     let mut markdown=format!("# {date}\n\n");
     for entry in entries.into_iter().rev() { markdown.push_str(&format!("{}\n\n",entry.content)); }
     if markdown.len()>2*1024*1024 { return Err(ChatError::new("OUTPUT_LIMIT","当日日记过大，请按条目读取")); }
     Ok(markdown)
+
+    })
 }
 
 #[tauri::command]
-pub fn local_prompt_preview(app:AppHandle,agent_id:String,channel:String,content:Value,draft:bool)->ChatResult<Value> {
+pub fn local_prompt_preview(app:AppHandle,agent_id:String,channel:String,content:Value,draft:bool, mode_token:crate::mode::Token)->ChatResult<Value> {
+    crate::mode::LOCAL_TOKEN.sync_scope(mode_token, || {
     validate_content(&content)?;
     if !["desktop","group"].contains(&channel.as_str()) { return Err(ChatError::new("INVALID_THREAD","预览通道无效")); }
     let db=app.state::<DbState>();let conn=db_lock(&db)?;
@@ -57,4 +70,6 @@ pub fn local_prompt_preview(app:AppHandle,agent_id:String,channel:String,content
         current:&content,before_id:Some(i64::MAX),rounds:settings.memory_rounds,diary:&diary,budget:settings.context_window.saturating_sub(settings.max_tokens+tool_tokens+512)},
         if draft {&workspace.draft} else {&workspace.active.bundle},if draft {"draft"} else {&workspace.active.id})?;
     Ok(json!({"messages":messages,"manifest":manifest,"tools":if settings.tools_enabled {super::chat_tools::definitions()} else {Vec::new()}}))
+
+    })
 }

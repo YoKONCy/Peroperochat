@@ -18,6 +18,8 @@
     <application
         android:icon="@mipmap/ic_launcher"
         android:label="@string/app_name"
+        android:fullBackupContent="@xml/backup_rules"
+        android:dataExtractionRules="@xml/data_extraction_rules"
         android:theme="@style/Theme.peroperochat"
         android:usesCleartextTraffic="${usesCleartextTraffic}">
         <activity

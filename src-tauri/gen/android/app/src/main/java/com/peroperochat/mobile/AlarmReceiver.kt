@@ -10,6 +10,7 @@ class AlarmReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
         val id = intent.getLongExtra("id", 0)
         val token = intent.getStringExtra("token") ?: return
+        val modeToken = try { org.json.JSONObject(intent.getStringExtra("modeToken") ?: return) } catch (_: Exception) { return }
         if (id <= 0 || token.length > 200) return
         val result = goAsync()
         val app = context.applicationContext
@@ -17,7 +18,7 @@ class AlarmReceiver : BroadcastReceiver() {
                 .newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "PeroperoChat:提醒处理")
         lock.acquire(30_000)
         ReminderScheduler.executor.execute {
-            try { ReminderScheduler.fire(app, id, token) }
+            try { ReminderScheduler.fire(app, id, token, modeToken) }
             catch (error: Throwable) { ReminderScheduler.failed(app, error) }
             finally { try { if (lock.isHeld) lock.release() } finally { result.finish() } }
         }

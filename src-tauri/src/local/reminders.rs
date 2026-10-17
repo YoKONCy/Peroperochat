@@ -135,19 +135,25 @@ pub fn deliver(conn:&Connection,agent:&str,id:i64,now:NaiveDateTime,send:impl Fn
 }
 
 #[tauri::command]
-pub fn local_reminder_query(app:AppHandle,db:tauri::State<DbState>,agent_id:String,input:Query)->ChatResult<Value> {
+pub fn local_reminder_query(app:AppHandle,db:tauri::State<DbState>,agent_id:String,input:Query, mode_token:crate::mode::Token)->ChatResult<Value> {
+    crate::mode::LOCAL_TOKEN.sync_scope(mode_token, || {
     if identity::agents(&app)?.get(&agent_id).is_none() {return Err(ChatError::new("AGENT_NOT_FOUND","角色不存在"));}
     query(&*db_lock(&db)?,&agent_id,&input)
+
+    })
 }
 
 #[tauri::command]
-pub async fn local_manage_reminder(app:AppHandle,db:tauri::State<'_,DbState>,agent_id:String,change:Change)->ChatResult<Value> {
+pub async fn local_manage_reminder(app:AppHandle,db:tauri::State<'_,DbState>,agent_id:String,change:Change, mode_token:crate::mode::Token)->ChatResult<Value> {
+    crate::mode::LOCAL_TOKEN.scope(mode_token, async {
     if identity::agents(&app)?.get(&agent_id).is_none() {return Err(ChatError::new("AGENT_NOT_FOUND","角色不存在"));}
     let result={let mut conn=db_lock(&db)?;let tx=conn.transaction()?;
         let now=Local::now().naive_local();let draft=prepare(&tx,&agent_id,change,now)?;commit(&tx,&agent_id,&draft,now)?;
         let result=query(&tx,&agent_id,&Query::default())?;tx.commit()?;result};
     if let Err(error)=super::reminder_platform::synchronize(&app) {eprintln!("提醒系统调度等待重试：{}",error.message);}
     let _=app.emit("ppc:reminders-updated",json!({"agentId":agent_id}));Ok(result)
+
+    }).await
 }
 
 #[cfg(not(target_os="android"))]
@@ -176,6 +182,8 @@ fn notify(app:&AppHandle,id:i64,title:&str,body:&str)->Result<(),String> {
 pub fn start(app:AppHandle) {
     tauri::async_runtime::spawn(async move {loop {
         let result=(||->ChatResult<()> {
+            let mode=app.state::<crate::mode::Coordinator>();
+            if !mode.token().is_ok_and(|token|token.target==crate::mode::Target::Standalone) {return Ok(());}
             #[cfg(target_os="android")]
             {
                 super::reminder_platform::synchronize(&app)?;

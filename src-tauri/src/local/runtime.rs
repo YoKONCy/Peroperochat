@@ -10,7 +10,7 @@ struct RuntimeInner {
 }
 
 #[derive(Default)]
-pub struct ChatRuntime { inner: Mutex<RuntimeInner> }
+pub struct ChatRuntime { inner: Mutex<RuntimeInner>, mode:Option<crate::mode::Coordinator> }
 
 pub struct TurnLease<'a> {
     runtime: &'a ChatRuntime,
@@ -19,7 +19,14 @@ pub struct TurnLease<'a> {
 }
 
 impl ChatRuntime {
+    pub fn with_mode(mode:crate::mode::Coordinator)->Self {Self {inner:Mutex::new(RuntimeInner::default()),mode:Some(mode)}}
+    pub fn cancel_all(&self)->ChatResult<()> {
+        let inner=self.inner.lock().map_err(|_|ChatError::new("RUNTIME_ERROR","聊天运行状态不可用"))?;
+        for (_,sender) in inner.threads.values() {let _=sender.send(true);}Ok(())
+    }
+    pub fn is_idle(&self)->ChatResult<bool> {Ok(self.inner.lock().map_err(|_|ChatError::new("RUNTIME_ERROR","聊天运行状态不可用"))?.threads.is_empty())}
     pub fn reserve(&self, thread_id: &str, request_id: &str) -> ChatResult<TurnLease<'_>> {
+        let _gate=self.mode.as_ref().map(|mode|mode.local_gate()).transpose()?;
         let mut inner = self.inner.lock().map_err(|_| ChatError::new("RUNTIME_ERROR", "聊天运行状态不可用"))?;
         if inner.threads.contains_key("__maintenance__") || inner.threads.contains_key(thread_id) || inner.threads.values().any(|(id, _)| id == request_id) {
             return Err(ChatError::new("RESOURCE_BUSY", "该会话正在回复，请等待完成或先停止"));
@@ -32,6 +39,7 @@ impl ChatRuntime {
     }
 
     pub fn cancel(&self, request_id: &str) -> ChatResult<()> {
+        let _gate=self.mode.as_ref().map(|mode|mode.local_gate()).transpose()?;
         let mut inner = self.inner.lock().map_err(|_| ChatError::new("RUNTIME_ERROR", "聊天运行状态不可用"))?;
         if let Some((_, sender)) = inner.threads.values().find(|(id, _)| id == request_id) {
             let _ = sender.send(true);
@@ -44,6 +52,7 @@ impl ChatRuntime {
     }
 
     pub fn maintenance(&self) -> ChatResult<TurnLease<'_>> {
+        let _gate=self.mode.as_ref().map(|mode|mode.local_gate()).transpose()?;
         let mut inner = self.inner.lock().map_err(|_| ChatError::new("RUNTIME_ERROR", "聊天运行状态不可用"))?;
         if !inner.threads.is_empty() { return Err(ChatError::new("RESOURCE_BUSY", "请先停止回复，再修改角色或导入数据")); }
         let (sender, receiver) = watch::channel(false);

@@ -2,6 +2,7 @@ import { computed, shallowReactive } from 'vue'
 import { localChat, publishCharacterState } from '../services/localChat'
 import { activeAgentId } from './agents'
 import { displayMessage, visibleMessage } from '../utils/messageContent'
+import { onModeInvalidated, currentToken, assertToken } from './mode'
 
 const conversations = new Map()
 
@@ -46,6 +47,8 @@ export function useLocalConversation(channel = 'desktop') {
   }
 
   async function run(input, options = {}) {
+    const token = currentToken()
+    assertToken(token, 'standalone')
     const agentId = options.agentId || activeAgentId.value
     const entry = entryFor(channel === 'group' ? 'group:family' : `desktop:${agentId}`)
     if (entry.busy) throw new Error('该会话正在回复，请稍后重试')
@@ -57,6 +60,7 @@ export function useLocalConversation(channel = 'desktop') {
     let frameTimer = null
     const flushPreview = () => {
       frameTimer = null
+      try { assertToken(token, 'standalone') } catch { preview = null; return }
       if (!preview) return
       mergeMessage(entry, preview)
       if (agentId === activeAgentId.value && channel === 'desktop') {
@@ -168,6 +172,8 @@ export function clearConversationCache() {
     entry.revision++
   }
 }
+
+onModeInvalidated(clearConversationCache)
 
 export function projectNativeTurn(result) {
   if (!result) return

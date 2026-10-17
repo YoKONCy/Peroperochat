@@ -23,7 +23,7 @@ pub(super) fn state() -> DbState {
     let mut conn = database();
     repository::migrate(&mut conn,&[],&agents()).unwrap();
     for id in ["pero","nana"] { repository::ensure_thread(&conn,&repository::desktop_thread(id),id,"desktop").unwrap(); }
-    DbState { conn:Mutex::new(conn),diary:super::diary::DiaryStore::temporary() }
+    DbState { conn:Mutex::new(conn),diary:super::diary::DiaryStore::temporary(),mode:std::sync::OnceLock::new() }
 }
 
 pub(super) fn request(agent_id: &str, content: &str) -> TurnRequest {
@@ -34,6 +34,24 @@ pub(super) fn request(agent_id: &str, content: &str) -> TurnRequest {
 pub(super) fn settings(base: String, stream: bool) -> ModelSettings {
     ModelSettings { base,api_key:"test-key".into(),model:"测试模型".into(),temperature:Some(0.6),top_p:Some(0.8),
         frequency_penalty:Some(0.2),presence_penalty:Some(0.3),stream,memory_rounds:40,..Default::default() }
+}
+
+#[test]
+fn persistent_mode_fences_local_storage_and_runtime_even_after_returning_to_local() {
+    let path=std::env::temp_dir().join(format!("ppc-local-gate-{}",uuid::Uuid::new_v4())).join("runtime.sqlite");
+    let mode=crate::mode::Coordinator::initialize(path).unwrap();mode.activate().unwrap();
+    let old_token=mode.token().unwrap();
+    let db=state();assert!(db.mode.set(mode.clone()).is_ok());let runtime=ChatRuntime::with_mode(mode.clone());
+    let request_id=uuid::Uuid::new_v4().to_string();let lease=runtime.reserve("desktop:pero",&request_id).unwrap();
+    {let conn=super::db_lock(&db).unwrap();conn.execute("INSERT INTO topics(topic,agent_id) VALUES('保留的独立记录','pero')",[]).unwrap();}
+    mode.begin_switch(crate::mode::Target::Remote {profile_id:uuid::Uuid::new_v4().to_string()}).unwrap();
+    runtime.cancel_all().unwrap();assert!(*lease.cancel.borrow());assert!(super::db_lock(&db).is_err());assert!(runtime.maintenance().is_err());
+    drop(lease);assert!(runtime.is_idle().unwrap());mode.activate().unwrap();assert!(super::db_lock(&db).is_err());
+    mode.begin_switch(crate::mode::Target::Standalone).unwrap();mode.activate().unwrap();
+    crate::mode::LOCAL_TOKEN.sync_scope(old_token,|| {
+        assert!(super::db_lock(&db).is_err());assert!(runtime.maintenance().is_err());
+    });
+    let conn=super::db_lock(&db).unwrap();let count:i64=conn.query_row("SELECT COUNT(*) FROM topics",[],|r|r.get(0)).unwrap();assert_eq!(count,1);
 }
 
 // 使用真实 TCP 和 reqwest 验证请求体、流式拆包、HTTP 错误及持久化，不访问外网。

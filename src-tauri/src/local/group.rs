@@ -41,7 +41,8 @@ fn settings_from(config: &Value, agents: &Value) -> ChatResult<Vec<Member>> {
 }
 
 #[tauri::command]
-pub fn local_group_settings(app: AppHandle, members: Option<Value>) -> ChatResult<Vec<Member>> {
+pub fn local_group_settings(app: AppHandle, members: Option<Value>, mode_token:crate::mode::Token) -> ChatResult<Vec<Member>> {
+    crate::mode::LOCAL_TOKEN.sync_scope(mode_token, || {
     let db = app.state::<DbState>();
     let mut conn = db_lock(&db)?;
     let tx = conn.transaction()?;
@@ -51,6 +52,8 @@ pub fn local_group_settings(app: AppHandle, members: Option<Value>) -> ChatResul
     identity::set_value_in(&tx,"ppc.group.replySettings",&json!(serde_json::to_string(&result).map_err(|_| ChatError::new("INVALID_CONFIG","群聊回复设置无效"))?))?;
     tx.commit()?;
     Ok(result)
+
+    })
 }
 
 #[derive(Deserialize)]
@@ -113,7 +116,9 @@ pub async fn execute(service: &ConversationService<'_>, request: GroupRequest,
 }
 
 #[tauri::command]
-pub async fn local_group_chat(app: AppHandle, request: GroupRequest) -> ChatResult<TurnResult> {
+pub async fn local_group_chat(app: AppHandle, request: GroupRequest, mode_token:crate::mode::Token) -> ChatResult<TurnResult> {
+    crate::mode::LOCAL_TOKEN.scope(mode_token, async {
+    let mode=app.state::<crate::mode::Coordinator>();let mut changes=mode.subscribe();let token=mode.token()?;
     let runtime = app.state::<ChatRuntime>();
     let db = app.state::<DbState>();
     let mut config = identity::snapshot(&app)?;
@@ -121,9 +126,14 @@ pub async fn local_group_chat(app: AppHandle, request: GroupRequest) -> ChatResu
     let settings = identity::model_settings(&config)?;
     config["currentTime"] = json!(chrono::Local::now().format("%Y-%m-%d %H:%M:%S %:z").to_string());
     let service = ConversationService { db:&db,runtime:&runtime,agents:&agents,config:&config,settings:&settings };
-    let mut result=execute(&service,request,|event| { let _ = app.emit("local-chat-event",event); },|id,_|identity::state(&app,id)).await;
+    let mut result=tokio::select! {biased;
+        _=changes.changed()=>return Err(ChatError::new("MODE_INACTIVE","运行模式已切换")),
+        result=execute(&service,request,|event| {if let Ok(_gate)=mode.gate(Some(&token),true) {let _=app.emit("local-chat-event",event);}},|id,_|identity::state(&app,id))=>result,
+    };
     let sync=super::reminder_platform::synchronize(&app);
     if let Err(error)=&sync {eprintln!("群聊提交后的系统提醒同步等待恢复：{}",error.message);}
     if let Ok(result)=&mut result {result.state["backgroundSyncPending"]=json!(sync.is_err());}
     result
+
+    }).await
 }

@@ -2,6 +2,7 @@ export function normalizeError(value) {
   if (value instanceof Error) return value
   const error = new Error(typeof value === 'string' ? value : value?.message || '本地操作失败')
   error.code = value?.code || 'LOCAL_ERROR'
+  if (typeof value?.outcome === 'string') error.outcome = value.outcome
   return error
 }
 

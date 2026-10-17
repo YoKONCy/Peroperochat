@@ -37,7 +37,8 @@ fn read_memories(conn: &Connection) -> ChatResult<Vec<Memory>> {
 }
 
 #[tauri::command]
-pub fn local_export_data(app: AppHandle, db: tauri::State<DbState>, runtime: tauri::State<ChatRuntime>) -> ChatResult<Value> {
+pub fn local_export_data(app: AppHandle, db: tauri::State<DbState>, runtime: tauri::State<ChatRuntime>, mode_token:crate::mode::Token) -> ChatResult<Value> {
+    crate::mode::LOCAL_TOKEN.sync_scope(mode_token, || {
     let _lease = runtime.maintenance()?;
     let agents = identity::agents(&app)?;
     let conn = db_lock(&db)?;
@@ -75,6 +76,8 @@ pub fn local_export_data(app: AppHandle, db: tauri::State<DbState>, runtime: tau
     serde_json::to_value(Backup { version:"2.0".into(),config,agents,
         threads,messages,memories:read_memories(&conn)?,reminders,topics,revisions })
         .map_err(|_| ChatError::new("STORAGE_ERROR","无法生成备份"))
+
+    })
 }
 
 fn invalid() -> ChatError { ChatError::new("INVALID_BACKUP","备份格式无效，当前数据未被修改") }
@@ -226,7 +229,8 @@ fn write_backup(conn: &Connection, backup: &Backup) -> ChatResult<()> {
 }
 
 #[tauri::command]
-pub async fn local_import_data(app:AppHandle, db: tauri::State<'_,DbState>, runtime: tauri::State<'_,ChatRuntime>, data: Value) -> ChatResult<()> {
+pub async fn local_import_data(app:AppHandle, db: tauri::State<'_,DbState>, runtime: tauri::State<'_,ChatRuntime>, data: Value, mode_token:crate::mode::Token) -> ChatResult<()> {
+    crate::mode::LOCAL_TOKEN.scope(mode_token, async {
     let backup = parse_backup(data)?;
     let _lease = runtime.maintenance()?;
     let mut conn = db_lock(&db)?;
@@ -236,10 +240,13 @@ pub async fn local_import_data(app:AppHandle, db: tauri::State<'_,DbState>, runt
     let result=db.diary.synchronize(&conn);drop(conn);
     if let Err(error)=super::reminder_platform::synchronize(&app) {eprintln!("备份恢复后的系统提醒同步等待恢复：{}",error.message);}
     result
+
+    }).await
 }
 
 #[tauri::command]
-pub async fn local_reset_data(app:AppHandle, db: tauri::State<'_,DbState>, runtime: tauri::State<'_,ChatRuntime>, clear_config: bool) -> ChatResult<()> {
+pub async fn local_reset_data(app:AppHandle, db: tauri::State<'_,DbState>, runtime: tauri::State<'_,ChatRuntime>, clear_config: bool, mode_token:crate::mode::Token) -> ChatResult<()> {
+    crate::mode::LOCAL_TOKEN.scope(mode_token, async {
     let _lease = runtime.maintenance()?;
     let mut conn = db_lock(&db)?;
     let tx = conn.transaction()?;
@@ -250,6 +257,8 @@ pub async fn local_reset_data(app:AppHandle, db: tauri::State<'_,DbState>, runti
     let result=db.diary.synchronize(&conn);drop(conn);
     if let Err(error)=super::reminder_platform::synchronize(&app) {eprintln!("数据重置后的系统提醒取消等待恢复：{}",error.message);}
     result
+
+    }).await
 }
 
 #[cfg(test)]

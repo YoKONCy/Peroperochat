@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 安装运行身份、远程授权与展示缓存不随系统备份恢复。 -->
+<full-backup-content>
+    <exclude domain="root" path="data/control/" />
+    <exclude domain="root" path="data/remote/" />
+    <exclude domain="sharedpref" path="ppc.remote.credentials.xml" />
+    <exclude domain="sharedpref" path="ppc.reminder.dispatch.xml" />
+</full-backup-content>

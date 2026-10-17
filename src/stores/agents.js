@@ -1,6 +1,7 @@
 import { computed, reactive, ref } from 'vue'
 import defaults from '../../shared/defaultAgents.json'
 import { localInvoke } from '../services/localChat'
+import { onModeInvalidated, currentToken, assertToken } from './mode'
 
 export const DEFAULT_AGENTS = defaults
 export const AGENTS = reactive({})
@@ -12,6 +13,14 @@ let loading = null
 let mutations = Promise.resolve()
 let selections = Promise.resolve()
 let selectionVersion = 0
+
+onModeInvalidated(() => {
+  selectionVersion++
+  replaceAgents({})
+  activeAgentId.value = null
+  loading = null
+  agentsLoading.value = false
+})
 
 function replaceAgents(agents) {
   for (const id of Object.keys(AGENTS)) if (!agents[id]) delete AGENTS[id]
@@ -25,15 +34,16 @@ function announce() {
 export async function loadAgents() {
   if (loading) return loading
   agentsLoading.value = true
-  loading = (async () => {
+  const operation = (async () => {
     const version = selectionVersion
     replaceAgents(await localInvoke('local_agents'))
     const saved = await localInvoke('get_config', { key: 'ppc.activeAgent' })
     if (version === selectionVersion) activeAgentId.value = AGENTS[saved] ? saved : Object.keys(AGENTS)[0]
     return AGENTS
   })()
-  try { return await loading }
-  finally { loading = null; agentsLoading.value = false }
+  loading = operation
+  try { return await operation }
+  finally { if (loading === operation) { loading = null; agentsLoading.value = false } }
 }
 
 export async function loadActiveAgentId() {
@@ -44,8 +54,10 @@ export async function loadActiveAgentId() {
 export function getActiveAgentId() { return activeAgentId.value }
 
 export function setActiveAgentId(id) {
+  const token = currentToken()
   selectionVersion++
   const selected = selections.then(async () => {
+    assertToken(token, 'standalone')
     if (!AGENTS[id]) throw new Error('角色不存在')
     await localInvoke('save_config', { key: 'ppc.activeAgent', value: id })
     activeAgentId.value = id
@@ -57,7 +69,8 @@ export function setActiveAgentId(id) {
 }
 
 function mutate(action) {
-  const next = mutations.then(action)
+  const token = currentToken()
+  const next = mutations.then(() => { assertToken(token, 'standalone'); return action() })
   mutations = next.catch(() => {})
   return next
 }

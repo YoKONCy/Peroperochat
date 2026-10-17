@@ -18,6 +18,13 @@ class ReminderSyncArgs { lateinit var databasePath: String }
 @TauriPlugin
 class ReminderPlugin(private val activity: Activity): Plugin(activity) {
     @Command
+    fun suspend(invoke: Invoke) {
+        ReminderScheduler.executor.execute {
+            try { check(ReminderScheduler.suspend(activity.applicationContext)); invoke.resolve() }
+            catch (_: Throwable) { invoke.reject("旧系统提醒撤销失败") }
+        }
+    }
+    @Command
     fun synchronize(invoke: Invoke) {
         val args = invoke.parseArgs(ReminderSyncArgs::class.java)
         val context = activity.applicationContext

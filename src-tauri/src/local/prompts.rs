@@ -130,9 +130,15 @@ pub fn mutate(conn:&mut Connection,expected:u64,action:&str,bundle:Option<Bundle
 }
 
 #[tauri::command]
-pub fn local_prompt_workspace(app:AppHandle)->ChatResult<Workspace> { load(&identity::snapshot(&app)?) }
+pub fn local_prompt_workspace(app:AppHandle, mode_token:crate::mode::Token)->ChatResult<Workspace> {
+    crate::mode::LOCAL_TOKEN.sync_scope(mode_token, || { load(&identity::snapshot(&app)?)
+    })
+}
 #[tauri::command]
-pub fn local_manage_prompts(app:AppHandle,runtime:tauri::State<ChatRuntime>,expected_revision:u64,action:String,bundle:Option<Bundle>,note:Option<String>,release_id:Option<String>)->ChatResult<Workspace> {
+pub fn local_manage_prompts(app:AppHandle,runtime:tauri::State<ChatRuntime>,expected_revision:u64,action:String,bundle:Option<Bundle>,note:Option<String>,release_id:Option<String>, mode_token:crate::mode::Token)->ChatResult<Workspace> {
+    crate::mode::LOCAL_TOKEN.sync_scope(mode_token, || {
     let _lease=runtime.maintenance()?;let db=app.state::<DbState>();let mut conn=db_lock(&db)?;
     mutate(&mut conn,expected_revision,&action,bundle,&note.unwrap_or_default(),&release_id.unwrap_or_default())
+
+    })
 }

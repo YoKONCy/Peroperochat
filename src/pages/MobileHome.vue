@@ -20,7 +20,7 @@
       <ReminderStrip v-if="panelMode === 'rest' && !keyboardOpen && (reminderTotal || reminderError)" :entries="reminders" :total="reminderTotal" :error="reminderError" @open="drawer = 'reminders'" />
       <div v-if="loadError" class="room-load-error" role="alert"><span>{{ loadError }}</span><button @click="loadRoomData">重试</button></div>
       <div v-if="actionError" class="room-action-error" role="alert"><span>{{ actionError }}</span><button aria-label="关闭提示" @click="actionError = ''"><RoomIcon name="close" /></button></div>
-      <RoomChat :key="activeAgentId" ref="chatPanel" v-model="draft.text" v-model:mode="panelMode" :agent="agent" :messages="messages" :busy="isLoading" :activity="activityText" :image="draft.image" :keyboard-open="keyboardOpen" :jump-id="jumpId" @focus="onComposerFocus" @send="send" @stop="conversation.stop" @attach="fileInput?.click()" @remove-image="draft.image = null" @copy="copy" @delete="removeMessage" @regenerate="regenerate" @preview-image="openImage" />
+      <RoomChat :key="activeAgentId" ref="chatPanel" v-model="draft.text" v-model:mode="panelMode" :agent="agent" :messages="messages" :busy="isLoading" :activity="activityText" :image="draft.image" :keyboard-open="keyboardOpen" :jump-id="jumpId" @focus="onComposerFocus" @send="send" @stop="conversation.stop" @attach="fileInput?.click()" @remove-image="draft.image = null" @copy="copy" @delete="removeMessage" @regenerate="regenerate" @preview-image="openImage" @dock-size="restDockSpace = $event" />
       <input ref="fileInput" class="room-hidden-input" type="file" accept="image/*" aria-label="选择聊天图片" tabindex="-1" @change="attachImage" />
     </div>
 
@@ -44,7 +44,7 @@
         <button @click="drawer = 'wardrobe'"><RoomIcon name="hanger" /><span><strong>衣柜</strong><small>更换角色服装</small></span><RoomIcon name="arrow" /></button>
         <button @click="navigate('/settings')"><RoomIcon name="settings" /><span><strong>设置</strong><small>模型连接与聊天偏好</small></span><RoomIcon name="arrow" /></button>
       </div>
-      <details class="room-other-spaces"><summary>其他空间</summary><div class="room-secondary-links"><button @click="navigate('/group')"><RoomIcon name="group" />家庭群聊</button><button @click="navigate('/game/blackjack')"><RoomIcon name="game" />21 点小游戏</button><button @click="drawer = 'legacy'"><RoomIcon name="diary" />旧话题 <span v-if="topics.length">{{ topics.length }}</span></button><button @click="openRemote"><RoomIcon name="remote" />远程连接</button></div></details>
+      <details class="room-other-spaces"><summary>其他空间</summary><div class="room-secondary-links"><button @click="navigate('/group')"><RoomIcon name="group" />家庭群聊</button><button @click="navigate('/game/blackjack')"><RoomIcon name="game" />21 点小游戏</button><button class="room-remote-unavailable" disabled><RoomIcon name="remote" /><span>远程连接<small>暂未开放</small></span></button></div></details>
     </RoomDrawer>
 
     <RoomDrawer v-if="drawer === 'profile'" :title="`关于 ${agent.name}`" subtitle="角色资料" :tone="tone" @close="drawer = null">
@@ -60,12 +60,6 @@
     <RoomReminders v-if="drawer === 'reminders'" :key="agent.id" :agent="agent" :tone="tone" @close="drawer = null" @updated="reloadReminders" />
     <RoomDrawer v-if="drawer === 'image'" title="对话里的图片" :tone="tone" @close="drawer = null"><img :src="imagePreview" class="room-image-preview" alt="对话附件大图" /></RoomDrawer>
 
-    <RoomDrawer v-if="drawer === 'legacy'" title="旧话题" :tone="tone" @close="drawer = null">
-      <div v-if="legacyError" class="room-error">{{ legacyError }} <button class="room-text-button" @click="loadRoomData">重试</button></div>
-      <div v-if="!topics.length && !legacyError" class="room-empty">暂时没有旧话题。</div>
-      <h3 v-if="topics.length" class="legacy-heading">话题</h3>
-      <article v-for="topic in topics" :key="topic.id" class="legacy-entry"><p v-if="topic.revealed">{{ topic.topic }}</p><button v-else class="room-text-button" @click="revealTopic(topic)">揭开这个话题</button><button class="room-text-button" @click="removeTopic(topic)">删除话题</button></article>
-    </RoomDrawer>
   </div>
 </template>
 
@@ -88,7 +82,6 @@ import { AGENTS, activeAgentId, agentList, setActiveAgentId } from '../stores/ag
 import { useLocalConversation } from '../stores/conversations'
 import { useRoomViewport } from '../composables/useRoomViewport'
 import { localInvoke, publishCharacterState } from '../services/localChat'
-import { getTopics, deleteTopic, updateTopicStatus, setAppMode } from '../api'
 import { visibleMessage } from '../utils/messageContent'
 import '../styles/companion.css'
 
@@ -103,15 +96,14 @@ const drafts = reactive(new Map())
 const drawer = ref(null)
 const projection = ref({})
 const chatPanel = ref(null)
+const restDockSpace = ref(null)
 const fileInput = ref(null)
 const jumpId = ref(null)
 const imagePreview = ref('')
 const switching = ref(false)
 const loadError = ref('')
 const actionError = ref('')
-const legacyError = ref('')
 const { entries: reminders, total: reminderTotal, error: reminderError, reload: reloadReminders } = useReminders(activeAgentId)
-const topics = ref([])
 let disposed = false
 let loadVersion = 0
 let projectionVersion = 0
@@ -119,16 +111,17 @@ let imageReader = null
 let loadScheduled = false
 const draft = computed(() => drafts.get(activeAgentId.value))
 const panelMode = computed({ get: () => draft.value.mode, set: value => { draft.value.mode = value; if (value === 'rest') chatPanel.value?.blur() } })
-const roomStyle = computed(() => ({ ...viewportStyle.value, '--reminder-space': reminderTotal.value || reminderError.value ? '62px' : '0px', '--dock-height': keyboardOpen.value || panelMode.value === 'full' ? 'calc(100% - 96px - env(safe-area-inset-top))' : panelMode.value === 'peek' ? 'min(calc(100% - 96px - env(safe-area-inset-top)), max(280px, 43%))' : `calc(${messages.value.some(message => message.role === 'assistant' && message.status === 'active') || isLoading.value ? 126 : 86}px + env(safe-area-inset-bottom))` }))
+const roomStyle = computed(() => ({ ...viewportStyle.value, '--reminder-space': reminderTotal.value || reminderError.value ? '62px' : '0px', '--dock-height': keyboardOpen.value || panelMode.value === 'full' ? 'calc(100% - 96px - env(safe-area-inset-top))' : panelMode.value === 'peek' ? 'min(calc(100% - 96px - env(safe-area-inset-top)), max(280px, 43%))' : restDockSpace.value ? `${restDockSpace.value}px` : `calc(${messages.value.some(message => message.role === 'assistant' && message.status === 'active') || isLoading.value ? 126 : 86}px + env(safe-area-inset-bottom))` }))
 
 async function loadRoomData() {
   const id = activeAgentId.value
   const version = ++loadVersion
-  const results = await Promise.allSettled([conversation.load(), getTopics(id)])
-  if (disposed || version !== loadVersion || id !== activeAgentId.value) return
-  loadError.value = results[0].status === 'rejected' ? results[0].reason.message || '对话暂时没有加载出来' : ''
-  if (results[1].status === 'fulfilled') topics.value = results[1].value
-  legacyError.value = results[1].status === 'rejected' ? '旧话题暂时无法读取。' : ''
+  try {
+    await conversation.load()
+    if (!disposed && version === loadVersion && id === activeAgentId.value) loadError.value = ''
+  } catch (error) {
+    if (!disposed && version === loadVersion && id === activeAgentId.value) loadError.value = error.message || '对话暂时没有加载出来'
+  }
 }
 function scheduleRoomLoad() {
   if (loadScheduled) return
@@ -154,7 +147,6 @@ async function chooseRole(id) {
 function onComposerFocus() { actionError.value = ''; jumpId.value = null; if (panelMode.value === 'rest') panelMode.value = 'peek' }
 function openFullChat() { drawer.value = null; jumpId.value = null; panelMode.value = 'full' }
 function navigate(path) { drawer.value = null; chatPanel.value?.blur(); router.push(path) }
-function openRemote() { drawer.value = null; setAppMode('remote') }
 function openImage(url) { if (url) { imagePreview.value = url; drawer.value = 'image' } }
 function onHomeKeydown(event) {
   if (event.key !== 'Escape' || event.isComposing || drawer.value) return
@@ -233,23 +225,10 @@ async function openSource(ids) {
   drawer.value = null; jumpId.value = null; panelMode.value = 'full'
   await nextTick(); jumpId.value = message.id
 }
-async function revealTopic(topic) {
-  const id = activeAgentId.value
-  try { await updateTopicStatus(topic.id, true); if (!disposed && id === activeAgentId.value) topic.revealed = true }
-  catch (error) { ElMessage.error(error.message) }
-}
-async function removeTopic(topic) {
-  const id = activeAgentId.value
-  try { await ElMessageBox.confirm('删除后将无法继续查看这个话题。', '删除这个话题？', { confirmButtonText: '删除', cancelButtonText: '保留' }) }
-  catch { return }
-  if (disposed || id !== activeAgentId.value) return
-  try { await deleteTopic(topic.id); if (!disposed && id === activeAgentId.value) topics.value = topics.value.filter(item => item.id !== topic.id) }
-  catch (error) { ElMessage.error(error.message) }
-}
 function onAgentUpdated() { scheduleRoomLoad() }
 watch(activeAgentId, id => {
   if (!drafts.has(id)) drafts.set(id, { text: '', image: null, mode: 'rest' })
-  drawer.value = null; projection.value = {}; jumpId.value = null; actionError.value = ''; loadError.value = ''; topics.value = []; projectionVersion++
+  drawer.value = null; projection.value = {}; jumpId.value = null; actionError.value = ''; loadError.value = ''; restDockSpace.value = null; projectionVersion++
   scheduleRoomLoad()
 }, { immediate: true, flush: 'sync' })
 watch(drawer, value => { if (value) chatPanel.value?.blur() })
@@ -294,9 +273,9 @@ onBeforeUnmount(() => { disposed = true; loadVersion++; projectionVersion++; ima
 .room-header-actions button { background: #fffffff0; border: 1px solid #ffffffcc; border-bottom-color: var(--room-line); border-radius: 4px 10px 4px 4px; width: 38px; height: 40px; color: var(--room-ink); box-shadow: 0 3px 12px #28354d08; }
 .room-header-actions button svg { width: 18px; height: 18px; }
 .room-header-actions button:hover { border-bottom-color: var(--room-accent); }
-/* 原生模型画布的上方有透明留白，按可视区域对齐人物，而不是对齐画布。 */
-.room-character-stage { --actor-size: min(148vw, calc(var(--room-height, 100dvh) * .96), 920px); --actor-top: max(calc(90px + env(safe-area-inset-top) - var(--actor-size) * .2), calc(var(--room-height, 100dvh) * .5 - var(--actor-size) * .625 - 8px)); position: absolute; z-index: 5; left: 46%; top: var(--actor-top); width: var(--actor-size); aspect-ratio: 1; transform: translateX(-50%); transition: width .32s, top .32s, left .32s, opacity .2s; }
-.companion-home--peek .room-character-stage { --actor-top: calc(90px - var(--actor-size) * .2 + env(safe-area-inset-top)); }
+/* 人物可见底边约在画布的 98% 处，直接锚定输入区上沿，避免高屏手机中部悬空。 */
+.room-character-stage { --actor-size: min(104vw, calc((var(--room-height, 100dvh) - 180px - env(safe-area-inset-top) - env(safe-area-inset-bottom) - var(--reminder-space, 0px)) * 1.1), 680px); --actor-top: calc(var(--room-height, 100dvh) - var(--dock-height) - var(--reminder-space, 0px) - 8px - var(--actor-size) * .98); position: absolute; z-index: 5; left: 50%; top: var(--actor-top); width: var(--actor-size); aspect-ratio: 1; transform: translateX(-50%); transition: width .32s, top .32s, left .32s, opacity .2s; }
+.companion-home--peek .room-character-stage { --actor-top: calc(90px - var(--actor-size) * .12 + env(safe-area-inset-top)); }
 .companion-home--full .room-character-stage, .is-keyboard .room-character-stage { opacity: 0; pointer-events: none; }
 .companion-home--peek .room-background, .companion-home--full .room-background { transform: scale(1.03) translateY(-1%); }
 .room-quick-actions { position: absolute; z-index: 25; top: calc(91px + env(safe-area-inset-top)); right: 12px; display: flex; flex-direction: column; gap: 10px; }
@@ -349,6 +328,9 @@ onBeforeUnmount(() => { disposed = true; loadVersion++; projectionVersion++; ima
 .room-secondary-links button { display: flex; align-items: center; gap: 9px; padding: 14px 10px; border: 1px solid var(--room-line); border-radius: 12px; background: transparent; font-size: 12px; }
 .room-secondary-links svg { width: 17px; height: 17px; }
 .room-secondary-links button > span { margin-left: auto; }
+.room-secondary-links .room-remote-unavailable { opacity: 1; color: var(--room-muted); background: var(--room-subtle); }
+.room-secondary-links .room-remote-unavailable > span { margin-left: 0; display: flex; flex-direction: column; gap: 4px; }
+.room-remote-unavailable small { font-size: 10px; color: var(--room-muted); }
 .room-profile-identity { display: flex; align-items: center; gap: 20px; padding: 8px 0 25px; }
 .profile-avatar { width: 82px; height: 100px; border-radius: 3px 12px 3px 3px; }
 .room-profile-identity h3 { font-size: 25px; font-weight: 500; margin: 0 0 8px; }
@@ -361,10 +343,6 @@ onBeforeUnmount(() => { disposed = true; loadVersion++; projectionVersion++; ima
 .room-persona { margin-top: 25px; color: var(--room-muted); font-size: 12px; }
 .room-persona summary { padding: 12px 0; cursor: pointer; }
 .room-persona p { white-space: pre-wrap; line-height: 1.85; max-height: 300px; overflow-y: auto; overflow-wrap: anywhere; padding: 12px; background: white; border: 1px solid var(--room-line); border-radius: 12px; }
-.legacy-heading { font-size: 13px; color: var(--room-muted); font-weight: 500; margin: 25px 0 10px; }
-.legacy-entry { padding: 16px; border: 1px solid var(--room-line); border-radius: 14px; margin-bottom: 10px; line-height: 1.8; }
-.legacy-entry time { font-size: 11px; color: var(--room-muted); }
-.legacy-entry p { margin: 8px 0; white-space: pre-wrap; }
 .room-image-preview { display: block; width: 100%; height: auto; border-radius: 14px; }
 @media (min-width: 960px) {
   .room-header { padding: calc(22px + env(safe-area-inset-top)) 28px 12px; }
@@ -376,5 +354,5 @@ onBeforeUnmount(() => { disposed = true; loadVersion++; projectionVersion++; ima
   .room-load-error { left: auto; right: 28px; width: 420px; }
 }
 @media (max-width: 360px) { .room-header { padding-left: 12px; padding-right: 12px; } .room-selector-status { max-width: 110px; } .room-quick-actions { right: 10px; gap: 12px; } }
-@media (max-height: 540px) and (max-width: 959px) { .room-character-stage { --actor-size: min(118vw, calc(var(--room-height, 100dvh) * 1.25)); --actor-top: calc(82px - var(--actor-size) * .2); } .room-quick-actions { top: 90px; gap: 8px; } .room-quick-actions button > span { width: 32px; height: 34px; } }
+@media (max-height: 540px) and (max-width: 959px) { .room-quick-actions { top: 90px; gap: 8px; } .room-quick-actions button > span { width: 32px; height: 34px; } }
 </style>

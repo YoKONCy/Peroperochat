@@ -1,19 +1,20 @@
 <template>
   <div class="app companion-surface" :data-tone="tone">
-    <RemoteHubView v-if="appMode.current === 'remote'" />
-    <router-view v-else />
+    <router-view v-if="isStandalone" />
+    <RemoteWorkspace v-else-if="isRemote" :key="`${modeState.snapshot.installationId}:${modeState.snapshot.activationEpoch}:${modeState.snapshot.activeTarget.profileId}`" />
+    <p v-else role="status">{{ modeState.error || '正在恢复运行模式…' }}</p>
   </div>
 </template>
 
 <script setup>
-import { appMode } from './api'
-import { computed, defineAsyncComponent, watch } from 'vue'
+import { computed, watch } from 'vue'
 import { activeAgentId } from './stores/agents'
+import { isStandalone, isRemote, modeState } from './stores/mode'
+import RemoteWorkspace from './pages/RemoteWorkspace.vue'
 import './styles/companion.css'
 import './styles/controls.css'
-const tone = computed(() => activeAgentId.value === 'nana' ? 'nana' : 'pero')
+const tone = computed(() => isStandalone.value && activeAgentId.value === 'nana' ? 'nana' : 'pero')
 watch(tone, value => { document.documentElement.dataset.tone = value }, { immediate: true })
-const RemoteHubView = defineAsyncComponent(() => import('./pages/RemoteHubView.vue'))
 </script>
 
 <style>

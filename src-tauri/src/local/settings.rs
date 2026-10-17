@@ -45,10 +45,13 @@ pub fn save_in(conn:&mut Connection,section:&str,values:&Value)->ChatResult<()> 
 }
 
 #[tauri::command]
-pub fn local_save_settings(app:AppHandle,section:String,values:Value)->ChatResult<()> {
+pub fn local_save_settings(app:AppHandle,section:String,values:Value, mode_token:crate::mode::Token)->ChatResult<()> {
+    crate::mode::LOCAL_TOKEN.sync_scope(mode_token, || {
     let db=app.state::<DbState>();
     let mut conn=db_lock(&db)?;
     save_in(&mut conn,&section,&values)
+
+    })
 }
 
 #[cfg(test)]

@@ -113,10 +113,13 @@ fn load(conn:&Connection, agent_id:&str) -> ChatResult<Option<Game>> {
 }
 
 #[tauri::command]
-pub fn local_blackjack_snapshot(app:AppHandle, agent_id:String) -> ChatResult<Option<Value>> {
+pub fn local_blackjack_snapshot(app:AppHandle, agent_id:String, mode_token:crate::mode::Token) -> ChatResult<Option<Value>> {
+    crate::mode::LOCAL_TOKEN.sync_scope(mode_token, || {
     let db=app.state::<DbState>();
     let conn=db_lock(&db)?;
     Ok(load(&conn,&agent_id)?.map(|g|g.projection()))
+
+    })
 }
 
 fn play_in(conn:&mut Connection, request:&PlayRequest)->ChatResult<Value> {
@@ -191,7 +194,9 @@ pub async fn execute(service:&ConversationService<'_>, request:PlayRequest, on_e
 }
 
 #[tauri::command]
-pub async fn local_blackjack_play(app:AppHandle, request:PlayRequest)->ChatResult<PlayResult> {
+pub async fn local_blackjack_play(app:AppHandle, request:PlayRequest, mode_token:crate::mode::Token)->ChatResult<PlayResult> {
+    crate::mode::LOCAL_TOKEN.scope(mode_token, async {
+    let mode=app.state::<crate::mode::Coordinator>();let mut changes=mode.subscribe();let token=mode.token()?;
     let runtime=app.state::<ChatRuntime>();
     let db=app.state::<DbState>();
     let mut config=identity::snapshot(&app)?;
@@ -199,7 +204,12 @@ pub async fn local_blackjack_play(app:AppHandle, request:PlayRequest)->ChatResul
     let settings=identity::model_settings(&config)?;
     config["currentTime"]=json!(chrono::Local::now().format("%Y-%m-%d %H:%M:%S %:z").to_string());
     let service=ConversationService { db:&db,runtime:&runtime,agents:&agents,config:&config,settings:&settings };
-    execute(&service,request,|event| { let _=app.emit("local-chat-event",event); },|id,_|identity::state(&app,id)).await
+    tokio::select! {biased;
+        _=changes.changed()=>Err(ChatError::new("MODE_INACTIVE","运行模式已切换")),
+        result=execute(&service,request,|event| {if let Ok(_gate)=mode.gate(Some(&token),true) {let _=app.emit("local-chat-event",event);}},|id,_|identity::state(&app,id))=>result,
+    }
+
+    }).await
 }
 
 #[cfg(test)]

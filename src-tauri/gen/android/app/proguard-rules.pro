@@ -24,3 +24,6 @@
 -keep class com.peroperochat.mobile.ReminderBridge { *; }
 -keep class com.peroperochat.mobile.ReminderPlugin { *; }
 -keep class com.peroperochat.mobile.ReminderSyncArgs { *; }
+# 远程凭据插件通过 Tauri 反射调用，压缩后仍须保留参数与命令。
+-keep class com.peroperochat.mobile.RemoteVaultPlugin { *; }
+-keep class com.peroperochat.mobile.RemoteSecretArgs { *; }

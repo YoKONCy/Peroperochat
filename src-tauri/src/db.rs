@@ -57,27 +57,28 @@ pub struct Topic {
 pub struct DbState {
     pub conn: Mutex<Connection>,
     pub diary: crate::local::diary::DiaryStore,
+    pub mode: std::sync::OnceLock<crate::mode::Coordinator>,
 }
 
 pub fn init_db(app: &AppHandle) -> Result<DbState, Box<dyn std::error::Error>> {
     let app_dir = app.path().app_data_dir()?;
     let data_dir = app_dir.join("data");
-    
+
     if !data_dir.exists() {
         std::fs::create_dir_all(&data_dir)?;
     }
-    
+
     let db_path = data_dir.join("peropero.db");
-    
+
     // Migration: Check if old DB exists in root and move it
     let old_db_path = app_dir.join("peropero.db");
     if old_db_path.exists() && !db_path.exists() {
         let _ = std::fs::rename(old_db_path, &db_path);
     }
-    
+
     let conn = Connection::open(db_path)?;
     conn.busy_timeout(std::time::Duration::from_secs(5))?;
-    
+
     // Initialize tables
     conn.execute(
         "CREATE TABLE IF NOT EXISTS memories (
@@ -144,25 +145,32 @@ pub fn init_db(app: &AppHandle) -> Result<DbState, Box<dyn std::error::Error>> {
     Ok(DbState {
         conn: Mutex::new(conn),
         diary: crate::local::diary::DiaryStore::new(data_dir.join("diary")),
+        mode: std::sync::OnceLock::new(),
     })
 }
 
 // --- Memory Commands ---
 
 #[tauri::command]
-pub fn get_memories(state:tauri::State<DbState>,agent_id:String,limit:u32,offset:u32)->Result<Vec<Memory>,crate::local::types::ChatError> {
-    let conn=state.conn.lock().map_err(|_|crate::local::types::ChatError::new("STORAGE_ERROR","本地数据库不可用"))?;
+pub fn get_memories(state:tauri::State<DbState>,agent_id:String,limit:u32,offset:u32, mode_token:crate::mode::Token)->Result<Vec<Memory>,crate::local::types::ChatError> {
+    crate::mode::LOCAL_TOKEN.sync_scope(mode_token, || {
+    let conn=crate::local::db_lock(&state)?;
     Ok(state.diary.query(&conn,&agent_id,&crate::local::diary::Query { limit:limit as usize,offset:offset as usize,..Default::default() })?
         .into_iter().map(|e|Memory { id:Some(e.id),content:e.content,tags:e.tags,importance:5,timestamp:e.timestamp,msg_timestamp:Some(e.timestamp),
             type_:"event".into(),source:"diary".into(),agent_id:e.agent_id,source_message_id:e.source_message_ids.last().copied(),diary_date:Some(e.date),revision:e.revision,source_message_ids:e.source_message_ids }).collect())
+
+    })
 }
 
 #[tauri::command]
-pub fn delete_memory(state:tauri::State<DbState>,runtime:tauri::State<crate::local::runtime::ChatRuntime>,agent_id:String,id:i64)->Result<(),crate::local::types::ChatError> {
+pub fn delete_memory(state:tauri::State<DbState>,runtime:tauri::State<crate::local::runtime::ChatRuntime>,agent_id:String,id:i64, mode_token:crate::mode::Token)->Result<(),crate::local::types::ChatError> {
+    crate::mode::LOCAL_TOKEN.sync_scope(mode_token, || {
     let _lease=runtime.maintenance()?;
-    let mut conn=state.conn.lock().map_err(|_|crate::local::types::ChatError::new("STORAGE_ERROR","本地数据库不可用"))?;
+    let mut conn=crate::local::db_lock(&state)?;
     let tx=conn.transaction()?;crate::local::diary::delete(&tx,&agent_id,id)?;tx.commit()?;
     state.diary.synchronize(&conn)
+
+    })
 }
 
 fn ensure_reminders_columns(conn: &Connection) -> SqlResult<()> {
@@ -199,12 +207,13 @@ fn ensure_reminders_columns(conn: &Connection) -> SqlResult<()> {
 // --- Topic Commands ---
 
 #[tauri::command]
-pub fn get_topics(state: tauri::State<DbState>, agent_id: String) -> Result<Vec<Topic>, String> {
-    let conn = state.conn.lock().map_err(|e| e.to_string())?;
+pub fn get_topics(state: tauri::State<DbState>, agent_id: String, mode_token:crate::mode::Token) -> Result<Vec<Topic>, String> {
+    crate::mode::LOCAL_TOKEN.sync_scope(mode_token, || {
+    let conn = crate::local::db_lock(&state).map_err(|e|e.message)?;
     let mut stmt = conn.prepare(
         "SELECT id, topic, revealed, timestamp, agent_id, time FROM topics WHERE agent_id = ?1 ORDER BY timestamp DESC"
     ).map_err(|e| e.to_string())?;
-    
+
     let iter = stmt.query_map(params![agent_id], |row| {
         Ok(Topic {
             id: row.get(0)?,
@@ -215,26 +224,34 @@ pub fn get_topics(state: tauri::State<DbState>, agent_id: String) -> Result<Vec<
             time: row.get(5)?,
         })
     }).map_err(|e| e.to_string())?;
-    
+
     let mut items = Vec::new();
     for item in iter {
         items.push(item.map_err(|e| e.to_string())?);
     }
     Ok(items)
+
+    })
 }
 
 #[tauri::command]
-pub fn update_topic_status(state: tauri::State<DbState>, id: i64, revealed: bool) -> Result<(), String> {
-    let conn = state.conn.lock().map_err(|e| e.to_string())?;
+pub fn update_topic_status(state: tauri::State<DbState>, id: i64, revealed: bool, mode_token:crate::mode::Token) -> Result<(), String> {
+    crate::mode::LOCAL_TOKEN.sync_scope(mode_token, || {
+    let conn = crate::local::db_lock(&state).map_err(|e|e.message)?;
     conn.execute("UPDATE topics SET revealed = ?1 WHERE id = ?2", params![revealed, id])
         .map_err(|e| e.to_string())?;
     Ok(())
+
+    })
 }
 
 #[tauri::command]
-pub fn delete_topic(state: tauri::State<DbState>, id: i64) -> Result<(), String> {
-    let conn = state.conn.lock().map_err(|e| e.to_string())?;
+pub fn delete_topic(state: tauri::State<DbState>, id: i64, mode_token:crate::mode::Token) -> Result<(), String> {
+    crate::mode::LOCAL_TOKEN.sync_scope(mode_token, || {
+    let conn = crate::local::db_lock(&state).map_err(|e|e.message)?;
     conn.execute("DELETE FROM topics WHERE id = ?1", params![id])
         .map_err(|e| e.to_string())?;
     Ok(())
+
+    })
 }

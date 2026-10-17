@@ -1,5 +1,5 @@
 <template>
-  <section class="room-chat" :class="[`room-chat--${mode}`, { 'room-chat--keyboard': keyboardOpen }]" aria-label="聊天面板">
+  <section ref="panelElement" class="room-chat" :class="[`room-chat--${mode}`, { 'room-chat--keyboard': keyboardOpen }]" aria-label="聊天面板">
     <div class="chat-handle-area" @pointerdown="startDrag" @pointerup="finishDrag" @pointercancel="drag = null">
       <button class="chat-handle" :aria-label="mode === 'rest' ? '展开对话' : '调整对话面板高度'" @click="cycleMode"><span /></button>
     </div>
@@ -70,7 +70,8 @@ const props = defineProps({
   mode: { type: String, default: 'rest' }, busy: Boolean, keyboardOpen: Boolean, image: { type: String, default: null },
   activity: { type: String, default: '' }, jumpId: { type: Number, default: null },
 })
-const emit = defineEmits(['update:modelValue', 'update:mode', 'send', 'stop', 'focus', 'attach', 'remove-image', 'copy', 'delete', 'regenerate', 'preview-image'])
+const emit = defineEmits(['update:modelValue', 'update:mode', 'send', 'stop', 'focus', 'attach', 'remove-image', 'copy', 'delete', 'regenerate', 'preview-image', 'dock-size'])
+const panelElement = ref(null)
 const input = ref(null)
 const list = ref(null)
 const selectedId = ref(null)
@@ -96,6 +97,14 @@ let jumpTimer = null
 let freshTimer = null
 let suppressClickUntil = 0
 let disposed = false
+let dockObserver = null
+
+// 房间模式按实际输入栏、最近回复与底部安全区占位定位人物，避免固定高度估算造成悬空。
+function reportDockSize() {
+  if (disposed || props.mode !== 'rest' || !panelElement.value) return
+  const bottom = Number.parseFloat(getComputedStyle(panelElement.value).bottom) || 0
+  emit('dock-size', Math.ceil(panelElement.value.getBoundingClientRect().height + bottom))
+}
 
 function cycleMode() {
   if (Date.now() < suppressClickUntil) return
@@ -179,11 +188,16 @@ watch(() => props.messages.at(-1)?.id, (id, previousId) => {
   freshTimer = setTimeout(() => { freshId.value = null }, 320)
 })
 watch(() => [props.messages.at(-1)?.id, props.messages.at(-1)?.content, props.messages.at(-1)?.reasoning, props.busy], () => scrollToLatest())
-watch(() => props.mode, mode => { if (mode !== 'rest') scrollToLatest() })
+watch(() => props.mode, mode => { if (mode !== 'rest') scrollToLatest(); else nextTick(reportDockSize) })
 watch(() => props.jumpId, jumpTo)
 watch(() => props.modelValue, () => nextTick(resizeInput))
-onMounted(() => { resizeInput(); if (props.jumpId) jumpTo(props.jumpId); else scrollToLatest(true) })
-onBeforeUnmount(() => { disposed = true; clearPress(); clearTimeout(jumpTimer); clearTimeout(freshTimer) })
+onMounted(() => {
+  resizeInput(); reportDockSize()
+  if (typeof ResizeObserver !== 'undefined') { dockObserver = new ResizeObserver(reportDockSize); dockObserver.observe(panelElement.value) }
+  window.addEventListener('resize', reportDockSize)
+  if (props.jumpId) jumpTo(props.jumpId); else scrollToLatest(true)
+})
+onBeforeUnmount(() => { disposed = true; dockObserver?.disconnect(); window.removeEventListener('resize', reportDockSize); clearPress(); clearTimeout(jumpTimer); clearTimeout(freshTimer) })
 defineExpose({ focus: () => input.value?.focus({ preventScroll: true }), blur: () => input.value?.blur() })
 </script>
 

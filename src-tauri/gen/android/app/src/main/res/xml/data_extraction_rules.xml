@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 换设备和云恢复都不能恢复旧安装的执行权或加密凭据。 -->
+<data-extraction-rules>
+    <cloud-backup>
+        <exclude domain="root" path="data/control/" />
+        <exclude domain="root" path="data/remote/" />
+        <exclude domain="sharedpref" path="ppc.remote.credentials.xml" />
+        <exclude domain="sharedpref" path="ppc.reminder.dispatch.xml" />
+    </cloud-backup>
+    <device-transfer>
+        <exclude domain="root" path="data/control/" />
+        <exclude domain="root" path="data/remote/" />
+        <exclude domain="sharedpref" path="ppc.remote.credentials.xml" />
+        <exclude domain="sharedpref" path="ppc.reminder.dispatch.xml" />
+    </device-transfer>
+</data-extraction-rules>

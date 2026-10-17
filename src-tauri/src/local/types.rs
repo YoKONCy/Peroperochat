@@ -6,12 +6,15 @@ use serde_json::Value;
 pub struct ChatError {
     pub code: String,
     pub message: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub outcome: Option<String>,
 }
 
 impl ChatError {
     pub fn new(code: &str, message: impl Into<String>) -> Self {
-        Self { code: code.into(), message: message.into() }
+        Self { code: code.into(), message: message.into(), outcome: None }
     }
+    pub fn with_outcome(mut self, outcome: &str) -> Self { self.outcome = Some(outcome.into()); self }
 }
 
 impl From<rusqlite::Error> for ChatError {

@@ -5,20 +5,29 @@ use tauri::{AppHandle, Manager};
 
 mod db;
 mod local;
+mod mode;
+mod remote;
 
 #[tauri::command]
-async fn save_api_key(app: AppHandle, key: String) -> Result<(), local::types::ChatError> {
+async fn save_api_key(app: AppHandle, key: String, mode_token:crate::mode::Token) -> Result<(), local::types::ChatError> {
+    crate::mode::LOCAL_TOKEN.scope(mode_token, async {
     if key.len()>16000 || key.contains(['\r','\n']) {return Err(local::types::ChatError::new("INVALID_CONFIG","API 密钥格式无效"));}
     local::identity::set_config(&app, "api_key", key.trim())
+
+    }).await
 }
 
 #[tauri::command]
-async fn get_api_key(app: AppHandle) -> Result<String, local::types::ChatError> {
+async fn get_api_key(app: AppHandle, mode_token:crate::mode::Token) -> Result<String, local::types::ChatError> {
+    crate::mode::LOCAL_TOKEN.scope(mode_token, async {
     local::identity::config(&app, "api_key")
+
+    }).await
 }
 
 #[tauri::command]
-async fn save_config(app: AppHandle, key: String, value: String) -> Result<(), local::types::ChatError> {
+async fn save_config(app: AppHandle, key: String, value: String, mode_token:crate::mode::Token) -> Result<(), local::types::ChatError> {
+    crate::mode::LOCAL_TOKEN.scope(mode_token, async {
     if key!="ppc.activeAgent" && !key.starts_with("ppc.ui.") {
         return Err(local::types::ChatError::new("INVALID_CONFIG","业务配置请通过对应的管理接口保存"));
     }
@@ -27,42 +36,99 @@ async fn save_config(app: AppHandle, key: String, value: String) -> Result<(), l
         return Err(local::types::ChatError::new("AGENT_NOT_FOUND","角色不存在"));
     }
     local::identity::set_config(&app, &key, &value)
+
+    }).await
 }
 
 #[tauri::command]
-async fn get_config(app: AppHandle, key: String) -> Result<String, local::types::ChatError> {
+async fn get_config(app: AppHandle, key: String, mode_token:crate::mode::Token) -> Result<String, local::types::ChatError> {
+    crate::mode::LOCAL_TOKEN.scope(mode_token, async {
     local::identity::config(&app, &key)
+
+    }).await
 }
 
 #[tauri::command]
-async fn fetch_models(app:AppHandle,api_base:String,api_key:String,api_format:Option<String>,headers:Option<serde_json::Map<String,serde_json::Value>>)->Result<serde_json::Value,local::types::ChatError> {
+async fn fetch_models(app:AppHandle,api_base:String,api_key:String,api_format:Option<String>,headers:Option<serde_json::Map<String,serde_json::Value>>, mode_token:crate::mode::Token)->Result<serde_json::Value,local::types::ChatError> {
+    crate::mode::LOCAL_TOKEN.scope(mode_token, async {
+    let mode=app.state::<mode::Coordinator>();let mut changes=mode.subscribe();let token=mode.token()?;
+    {let _gate=mode.gate(Some(&token),true)?;}
     let mut settings=local::identity::model_settings(&local::identity::snapshot(&app)?)?;
     settings.base=api_base;settings.api_key=api_key;
     if let Some(format)=api_format {settings.api_format=format;}
     if let Some(headers)=headers {settings.headers=headers;}
-    local::provider::list_models(&settings).await
+    tokio::select! {biased;
+        _=changes.changed()=>Err(local::types::ChatError::new("MODE_INACTIVE","运行模式已切换")),
+        result=local::provider::list_models(&settings)=>result,
+    }
+
+    }).await
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
   tauri::Builder::default()
     .setup(|app| {
+        // 控制状态先关闭旧代次，存储迁移期间任何冷启动入口都不能恢复业务。
+        let control_path=app.path().app_data_dir()?.join("data/control/runtime.sqlite");
+        let mode=mode::Coordinator::initialize(control_path).map_err(|error|error.message)?;
+        app.manage(mode.clone());
+        app.manage(local::runtime::ChatRuntime::with_mode(mode.clone()));
         // 初始化数据库
         let db_state = db::init_db(app.handle())?;
         app.manage(db_state);
 
-        local::initialize(app.handle()).map_err(|error| error.message)?;
+        app.state::<db::DbState>().mode.set(mode.clone()).map_err(|_|"运行控制重复初始化")?;
+        // 原生插件需要主事件循环处理回调；初始化返回后再撤销系统登记并开放运行门。
+        let handle=app.handle().clone();
+        let startup_switch=mode.switch_lock.clone().try_lock_owned().map_err(|_|"运行控制初始化冲突")?;
+        tauri::async_runtime::spawn(async move {
+            let _switch=startup_switch;
+            use tauri::Emitter;
+            let result=async {
+                local::reminder_platform::suspend_async(handle.clone()).await?;
+                let selection=mode.snapshot()?.selected_target;
+                match selection {
+                    mode::Target::Standalone=>mode::prepare_standalone(&handle)?,
+                    mode::Target::Remote {profile_id}=> {remote::profiles::get(&mode,&profile_id)?;},
+                }
+                mode::cleanup_local(&handle)?;
+                mode.activate()
+            }.await;
+            let state=match result {Ok(state)=>Some(state),Err(error)=> {eprintln!("运行模式恢复失败：{}",error.message);mode.fail().ok()}};
+            if let Some(state)=state {let _=handle.emit("mode-event",state);}
+        });
         // 启动后台提醒轮询器
         local::reminders::start(app.handle().clone());
         local::environment::start(app.handle().clone());
+        remote::start(app.handle().clone());
         Ok(())
     })
-    .manage(local::runtime::ChatRuntime::default())
+    .manage(remote::Runtime::default())
     .plugin(tauri_plugin_shell::init())
     .plugin(tauri_plugin_notification::init())
     .plugin(tauri_plugin_haptics::init())
     .plugin(local::reminder_platform::init())
+    .plugin(remote::vault::init())
     .invoke_handler(tauri::generate_handler![
+        mode::mode_snapshot,
+        mode::mode_switch,
+        remote::profiles::remote_profiles,
+        remote::profiles::remote_save_profile,
+        remote::profiles::remote_delete_profile,
+        remote::remote_query,
+        remote::remote_action,
+        remote::remote_chat,
+        remote::remote_connect,
+        remote::remote_subscribe,
+        remote::remote_surface_input,
+        remote::remote_pending_requests,
+        remote::remote_review_request,
+        remote::remote_reconcile_request,
+        remote::presentation::remote_ui_read,
+        remote::presentation::remote_ui_write,
+        remote::resources::remote_upload,
+        remote::resources::remote_resource,
         db::get_memories,
         db::delete_memory,
         local::reminders::local_reminder_query,
@@ -73,8 +139,8 @@ pub fn run() {
         db::get_topics,
         db::update_topic_status,
         db::delete_topic,
-        save_api_key, 
-        get_api_key, 
+        save_api_key,
+        get_api_key,
         save_config,
         get_config,
         fetch_models,

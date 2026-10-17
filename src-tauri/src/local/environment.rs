@@ -48,6 +48,8 @@ async fn get(client:&reqwest::Client, url:&str)->ChatResult<Value> {
 }
 
 async fn refresh(app:&AppHandle, client:&reqwest::Client)->ChatResult<()> {
+    let mode=app.state::<crate::mode::Coordinator>();let token=mode.token()?;
+    if token.target!=crate::mode::Target::Standalone {return Ok(());}
     let config=identity::snapshot(app)?;
     if fresh(&config,chrono::Utc::now().timestamp_millis()) { return Ok(()); }
     let first=get(client,"https://ipapi.co/json/").await.and_then(|v|location(&v));
@@ -60,6 +62,8 @@ async fn refresh(app:&AppHandle, client:&reqwest::Client)->ChatResult<()> {
     let result={
         let db=app.state::<DbState>();
         let mut conn=db_lock(&db)?;
+        // db_lock 已持有控制事务，此处用其保护下的快照核对网络请求归属。
+        if mode.token()?!=token {return Ok(());}
         let tx=conn.transaction()?;
         let current=identity::snapshot_in(&tx)?;
         // 请求期间发生备份恢复或缓存更新时，丢弃旧请求，避免覆盖新环境。
@@ -82,7 +86,13 @@ pub fn start(app:AppHandle) {
             Ok(client)=>client,Err(_)=> { eprintln!("环境信息客户端初始化失败"); return; }
         };
         loop {
-            if let Err(error)=refresh(&app,&client).await { eprintln!("环境信息刷新失败，保留已有缓存：{}",error.message); }
+            let mode=app.state::<crate::mode::Coordinator>();let mut changes=mode.subscribe();
+            if mode.token().is_ok_and(|token|token.target==crate::mode::Target::Standalone) {
+                tokio::select! {biased;
+                    _=changes.changed()=>{},
+                    result=refresh(&app,&client)=>if let Err(error)=result {eprintln!("环境信息刷新失败，保留已有缓存：{}",error.message);},
+                }
+            }
             tokio::time::sleep(Duration::from_secs(60)).await;
         }
     });
