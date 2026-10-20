@@ -7,6 +7,7 @@
       <div class="remote-home-greeting"><span>{{ agent?.name || '你的伙伴' }}<RemoteIcon v-if="decoration !== 'none'" :name="decoration" artwork /></span><p>{{ state?.vibe || state?.mood || agent?.description || '从这里，继续上次的对话。' }}</p></div>
     </div>
     <div class="remote-home-content">
+      <ModeSwitchEntry remote class="remote-home-mode-entry" @open="$emit('connections')" />
       <button class="remote-resume-card" @click="$emit(selection ? 'resume' : 'threads')"><RemoteIcon class="remote-resume-art" name="landscape" artwork /><span class="remote-eyebrow"><RemoteIcon name="diamond" />{{ selection ? '继续上次会话' : '开始一段对话' }}</span><h2>{{ selection?.title || '选择你的伙伴' }}</h2><p>{{ selection ? '会话、任务和记忆，与你连接的 infOS 同步。' : '选择角色和会话，把熟悉的陪伴带在身边。' }}</p><span class="remote-resume-arrow"><RemoteIcon name="arrow" /></span></button>
       <p v-if="error" class="room-error" role="alert">{{ error }}<button class="room-text-button" @click="reload">重试</button></p>
       <div class="remote-home-section-title"><h3><RemoteIcon name="diamond" />进行中的任务</h3><button class="room-text-button" @click="$emit('tasks')">查看全部<RemoteIcon name="arrow" /></button></div>
@@ -23,6 +24,7 @@
 <script setup>
 import { computed, ref, watch, onBeforeUnmount } from 'vue'
 import RemoteIcon from './RemoteIcon.vue'
+import ModeSwitchEntry from '../ModeSwitchEntry.vue'
 import RemoteAvatar from './RemoteAvatar.vue'
 import RemoteFileCover from './RemoteFileCover.vue'
 import { readRemote, remoteViews, remoteState } from '../../stores/remote'

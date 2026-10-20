@@ -12,7 +12,7 @@
 | 独立运行隔离 | 本地 IPC 必须携带 `modeToken`；同步／异步命令使用 task-local 保留原代次；独立数据库、运行租约和取消入口统一门控 | 覆盖切出、恢复本地后拒绝旧令牌，以及保留独立数据 |
 | Android 冷启动 | JNI 在数据库访问前校验控制状态与代次；闹铃携带模式令牌；通知展示与系统登记使用原生短事务门；暂停撤销本地登记与通知 | JNI 核心纳入桌面 Rust 测试；Kotlin 与系统行为尚未真机验证 |
 | 原生凭据 | Windows DPAPI；Android Keystore AES-GCM；前端仅接触输入中的令牌，不通过查询接口取回 | Windows 代码随 Rust 测试编译；系统保护与 Android 加解密尚未应用联调 |
-| 连接与传输 | 实例身份探测、地址规范化、Bearer 认证、禁止重定向、REST、聊天 SSE、Gateway v1 握手／心跳／RPC | 本机模拟 HTTP 验证地址前缀、鉴权与重定向；未连接真实 infOS |
+| 连接与传输 | 实例身份探测、地址规范化、Bearer 认证、禁止重定向、REST 队列、Gateway v1 握手／心跳／RPC | 本机模拟 HTTP 验证地址前缀、鉴权与重定向；未连接真实 infOS |
 | 恢复 | Gateway 断线重连与有界退避、订阅重建；认证／身份／协议错误暂停自动重连；写请求不自动重放 | 代码实现，实际服务端与多客户端恢复尚未联调 |
 | 远程数据 | 每个不可变连接配置单独 SQLite 分区、投影缓存、写请求指纹与墓碑、待核对记录 | 已有请求墓碑持久化及分区用例；不替代服务端幂等 |
 | 业务适配 | 主体角色、会话／Surface、待审批／问题、任务／行动清单／提醒、据点、事件记忆／资料、附件／工作区读接口及有限写接口 | 已对照当前 Router；尚未做真实业务闭环验收 |
@@ -49,7 +49,7 @@ phase / switchId / lastError
 | `remote_profiles`、`remote_save_profile`、`remote_delete_profile` | `remoteConnections`；不返回凭据；当前选中配置不能删除 |
 | `remote_query` | 受限的主体只读目录；可显式要求只读当前分区缓存 |
 | `remote_action` | 受限写意图，每次携带稳定 `requestId` |
-| `remote_chat` | 观察服务端聊天 SSE，Surface／终态通过 `remote-event` 返回 |
+| `remote_chat` | 以持久客户端 UUID 提交服务端消息队列；Surface 从 Gateway 接收，执行与入队状态分别展示 |
 | `remote_connect`、`remote_subscribe` | Gateway 身份握手与主体流订阅，原生负责重连 |
 | `remote_surface_input` | 根据服务端请求确定角色，再获取输入席位并提交审批／回答 |
 | `remote_pending_requests` | 查询当前分区尚待核对的写请求，不代表服务端任务状态 |

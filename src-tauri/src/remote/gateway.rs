@@ -30,6 +30,7 @@ pub(super) fn accept_push(app:&AppHandle,token:&Token,value:Value)->ChatResult<(
     if value["protocolVersion"]!=1 || value["type"]!="push" || !value["id"].as_str().is_some_and(|id|!id.is_empty() && id.len()<=1024) {
         return Err(ChatError::new("REMOTE_PROTOCOL","Gateway 补发事件身份或版本无效"));
     }
+    if value["payload"]["action"]=="surface" {super::validate_frame(&value["payload"]["frame"])?;}
     let mode=app.state::<Coordinator>();let _gate=mode.gate(Some(token),false)?;
     let runtime=app.state::<super::Runtime>();
     let id=value["id"].as_str().ok_or_else(super::inactive)?;

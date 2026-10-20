@@ -36,9 +36,10 @@
 .standalone-design.companion-surface .room-display-toggle button { display: grid; place-items: center; width: 29px; height: 30px; border: 0; background: transparent; border-radius: 9px; color: var(--room-muted); box-shadow: none; }
 .standalone-design.companion-surface .room-display-toggle button[aria-pressed='true'] { background: var(--room-accent-soft); color: var(--room-accent); }
 .standalone-design.companion-surface .room-display-toggle svg { width: 17px; height: 17px; }
+.standalone-design.companion-surface .room-mode-entry { position: absolute; z-index: 28; left: 18px; right: 18px; top: calc(82px + env(safe-area-inset-top)); width: calc(100% - 36px); }
 /* 两种显示各自按原始比例布局，人物底部对齐实际输入栏，不拉伸画布。 */
-.standalone-design.companion-surface .room-character-stage { --actor-size: min(90vw, calc(var(--room-height, 100dvh) * .62), 560px); position: absolute; left: 50%; top: auto; bottom: calc(var(--dock-height) + 5px); width: var(--actor-size); height: auto; aspect-ratio: 1; transform: translateX(-50%); transition: opacity .2s, bottom .28s, width .28s; }
-.standalone-design.companion-surface .display-illustration .room-character-stage { width: min(85vw, 480px); height: calc(var(--room-height, 100dvh) * var(--figure-ratio, .57)); aspect-ratio: auto; }
+.standalone-design.companion-surface .room-character-stage { --actor-size: min(90vw, calc(var(--room-height, 100dvh) * .62), 560px); --actor-height: var(--actor-size); position: absolute; left: 50%; top: auto; bottom: calc(var(--room-rest-dock, 86px) + 5px); width: var(--actor-size); height: auto; aspect-ratio: 1; transform: translate3d(-50%, 0, 0); transform-origin: 50% 100%; will-change: transform; transition: opacity .18s, transform .24s var(--room-spring); }
+.standalone-design.companion-surface .display-illustration .room-character-stage { --actor-height: min(calc(var(--room-height, 100dvh) * var(--figure-ratio, .57) * 1.1), calc(var(--room-height, 100dvh) - var(--room-rest-dock, 86px) - 174px - env(safe-area-inset-top))); width: min(94vw, 528px); height: var(--actor-height); aspect-ratio: auto; }
 .standalone-design.companion-surface .room-static-character { display: block; position: absolute; inset: 0; width: 100%; height: 100%; border: 0; padding: 0; background: transparent; }
 .standalone-design.companion-surface .room-static-character img { display: block; width: 100%; height: 100%; object-fit: contain; object-position: center bottom; }
 .standalone-design.companion-surface .room-static-character:active { transform: none; }
@@ -48,12 +49,9 @@
 .standalone-design.companion-surface .character-fallback-avatar { border-radius: 50%; aspect-ratio: 1; }
 .standalone-design.companion-surface .room-character-canvas #live2d { filter: none; }
 .standalone-design.companion-surface .room-character-canvas.is-loading #waifu { visibility: hidden; }
-.standalone-design.companion-surface .companion-home--peek .room-character-stage { top: calc(76px + env(safe-area-inset-top)); bottom: auto; left: 74%; width: 52%; height: 36%; aspect-ratio: auto; }
-.standalone-design.companion-surface .companion-home--peek.display-live2d .room-character-stage { width: min(64vw, 360px); height: auto; aspect-ratio: 1; }
-.standalone-design.companion-surface .companion-home--peek .room-static-character img { object-position: center top; }
+.standalone-design.companion-surface .companion-home--peek .room-character-stage { transform: translate3d(-18%, calc(85px + env(safe-area-inset-top) - var(--room-height, 100dvh) + var(--room-rest-dock, 86px) + var(--actor-height) * .58), 0) scale(.58); }
 .standalone-design.companion-surface .companion-home--full .room-character-stage, .standalone-design.companion-surface .is-keyboard .room-character-stage { opacity: 0; pointer-events: none; }
-.standalone-design.companion-surface .is-wardrobe .room-character-stage { top: calc(90px + env(safe-area-inset-top)); bottom: auto; height: 48%; }
-.standalone-design.companion-surface .is-wardrobe.display-live2d .room-character-stage { height: auto; aspect-ratio: 1; }
+.standalone-design.companion-surface .is-wardrobe .room-character-stage { transform: translate3d(-50%, calc(95px + env(safe-area-inset-top) - var(--room-height, 100dvh) + var(--room-rest-dock, 86px) + var(--actor-height) * .68), 0) scale(.68); }
 .standalone-design.companion-surface .room-character-speech { top: -70px; left: calc(50% - 50vw + 18px); transform: none; width: max-content; min-width: 100px; max-width: min(calc(100vw - 104px), 320px); padding: 16px 15px 13px; border: 1px solid var(--room-accent-bright); border-radius: 16px 18px 16px 5px; background: #fffffff0; box-shadow: 0 3px 9px #466c9a09; }
 .standalone-design.companion-surface .room-character-speech::before { top: auto; bottom: -5px; left: 31px; width: 9px; height: 9px; border: 0; border-right: 1px solid var(--room-accent-bright); border-bottom: 1px solid var(--room-accent-bright); border-radius: 0; }
 .standalone-design.companion-surface .room-character-speech:active { transform: scale(.98); }
@@ -67,14 +65,16 @@
 .standalone-design.companion-surface .reminder-strip { bottom: calc(var(--dock-height) + 13px); left: 16px; width: auto; max-width: calc(100% - 32px); min-height: 33px; gap: 7px; padding: 7px 10px; border: 1px solid #ffffffb8; border-radius: 12px; background: var(--room-glass); backdrop-filter: blur(18px); box-shadow: 0 3px 12px #355a8e08; }
 .standalone-design.companion-surface .reminder-strip-icon { width: 20px; height: 20px; background: transparent; }.standalone-design.companion-surface .reminder-strip-copy { gap: 2px; }.standalone-design.companion-surface .reminder-strip strong { font-size: 10px; }
 /* 对话继续保留流式、思考、图片和消息管理，统一气泡与输入栏外观。 */
-.standalone-design.companion-surface .room-chat { border: 1px solid #ffffffa8; border-bottom: 0; border-radius: 25px 25px 0 0; background: rgb(245 249 255 / var(--local-glass, .8)); backdrop-filter: blur(18px) saturate(1.05); }
+.standalone-design.companion-surface .room-chat { border: 1px solid #ffffffa8; border-bottom: 0; border-radius: 25px 25px 0 0; background: linear-gradient(150deg, #ffffffed, rgb(245 249 255 / max(.94, var(--local-glass, .8)))); backdrop-filter: none; }
 .standalone-design.companion-surface .room-chat--rest { border: 0; background: transparent; backdrop-filter: none; }
-.standalone-design.companion-surface .room-composer { align-items: center; gap: 5px; min-height: 58px; margin: 6px 12px 0; padding: 7px; border: 1px solid #ffffffbd; border-radius: 18px; background: var(--room-glass); backdrop-filter: blur(18px) saturate(1.08); }
+.standalone-design.companion-surface .room-composer { align-items: center; gap: 5px; min-height: 58px; margin: 6px 12px 0; padding: 7px; border: 1px solid #ffffffbd; border-radius: 18px; background: var(--room-glass); backdrop-filter: none; }
 .standalone-design.companion-surface .room-chat--rest .room-composer { margin: 0; border: 1px solid #ffffffbd; border-radius: 18px; background: #ffffffdc; box-shadow: inset 0 1px 0 #ffffffbc, 0 3px 12px #355a8e08; }
 .standalone-design.companion-surface .room-composer textarea { padding: 8px 3px; font-size: 14px; line-height: 22px; }
 .standalone-design.companion-surface .attachment-button { color: var(--room-accent); width: 34px; height: 38px; }
 .standalone-design.companion-surface .composer-send { width: 40px; height: 40px; border-radius: 50%; background: var(--room-accent); }
 .standalone-design.companion-surface .last-reply { border-radius: 14px; border-color: #ffffffbd; background: var(--room-glass); box-shadow: none; }
+/* 小面积保留实景玻璃；大面板使用透光底色，避免叠加全屏模糊采样。 */
+.standalone-design.companion-surface .room-selector, .standalone-design.companion-surface .room-header-actions > button, .standalone-design.companion-surface .room-display-toggle, .standalone-design.companion-surface .room-quick-actions button, .standalone-design.companion-surface .reminder-strip, .standalone-design.companion-surface .last-reply { backdrop-filter: blur(8px); }
 .standalone-design.companion-surface .chat-role-avatar, .standalone-design.companion-surface .intro-avatar { border-radius: 50%; aspect-ratio: 1; }
 .standalone-design.companion-surface .chat-role-avatar { width: 28px; height: 28px; }
 .standalone-design.companion-surface .chat-messages { padding: 16px 15px; }.standalone-design.companion-surface .chat-heading { padding-left: 17px; }
@@ -85,9 +85,9 @@
 .standalone-design.companion-surface .user .message-body { border-radius: 16px 5px 16px 16px; background: var(--room-user-bubble); }
 .standalone-design.companion-surface .message-actions { border-radius: 14px; backdrop-filter: blur(18px); }
 /* 抽屉、衣柜与设置沿用同一套轻薄玻璃和更柔和的圆角。 */
-.standalone-design.companion-surface.room-drawer-overlay { background: #2b446633; backdrop-filter: blur(5px); }
+.standalone-design.companion-surface.room-drawer-overlay { background: #2b446633; backdrop-filter: none; }
 .standalone-design.companion-surface.room-drawer-overlay--wardrobe { background: linear-gradient(180deg, transparent 35%, #2b446620); backdrop-filter: none; }
-.standalone-design.companion-surface .room-drawer-panel { border: 1px solid #ffffffc9; border-bottom: 0; border-radius: 26px 26px 0 0; background: #f8fbfff0; box-shadow: 0 12px 50px #355a8e15; backdrop-filter: blur(22px) saturate(1.08); }
+.standalone-design.companion-surface .room-drawer-panel { border: 1px solid #ffffffc9; border-bottom: 0; border-radius: 26px 26px 0 0; background: #f8fbfff0; box-shadow: 0 12px 50px #355a8e15; backdrop-filter: none; }
 .standalone-design.companion-surface .room-drawer-header { padding: 22px 22px 18px; }.standalone-design.companion-surface .room-drawer-content { padding: 0 22px 22px; }
 .standalone-design.companion-surface .room-drawer-header h2 { font-size: 18px; font-weight: 600; }.standalone-design.companion-surface .drawer-emblem { width: 24px; opacity: .75; }
 .standalone-design.companion-surface .room-drawer-header > .room-icon-button { border-radius: 12px; background: #edf3fb80; }
@@ -120,8 +120,9 @@
 }
 @media (min-width: 960px) {
   .standalone-design.companion-surface .room-header { padding: calc(22px + env(safe-area-inset-top)) 28px 12px; }
-  .standalone-design.companion-surface .room-character-stage, .standalone-design.companion-surface .companion-home--peek .room-character-stage { left: calc((100% - 480px) / 2); bottom: 58px; top: auto; width: min(calc(100vw - 540px), 65vh, 560px); height: auto; aspect-ratio: 1; }
-  .standalone-design.companion-surface .display-illustration .room-character-stage { width: min(calc(100vw - 540px), 480px); height: min(calc(var(--room-height, 100dvh) * var(--figure-ratio, .57)), 650px); aspect-ratio: auto; }
+  .standalone-design.companion-surface .room-mode-entry { left: 28px; right: auto; top: calc(98px + env(safe-area-inset-top)); width: min(320px, calc(100% - 550px)); }
+  .standalone-design.companion-surface .room-character-stage, .standalone-design.companion-surface .companion-home--peek .room-character-stage, .standalone-design.companion-surface .is-wardrobe .room-character-stage { left: calc((100% - 480px) / 2); bottom: 58px; top: auto; width: min(calc(100vw - 540px), 65vh, 560px); height: auto; aspect-ratio: 1; transform: translate3d(-50%, 0, 0); }
+  .standalone-design.companion-surface .display-illustration .room-character-stage { width: min(calc(100vw - 540px), 528px); height: min(calc(var(--room-height, 100dvh) * var(--figure-ratio, .57) * 1.1), calc(var(--room-height, 100dvh) - 238px - env(safe-area-inset-top)), 715px); aspect-ratio: auto; }
   .standalone-design.companion-surface .room-chat { right: 28px; bottom: 24px; width: 420px; border-radius: 24px; border-bottom: 1px solid #ffffffa8; }
   .standalone-design.companion-surface .room-chat--rest { border: 0; }.standalone-design.companion-surface .room-quick-actions { right: 28px; top: 105px; flex-direction: row; }
   .standalone-design.companion-surface .room-character-speech { left: 50%; top: -65px; transform: translateX(-50%); max-width: min(calc(100vw - 550px), 320px); }

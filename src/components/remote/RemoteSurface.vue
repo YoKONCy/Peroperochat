@@ -1,7 +1,7 @@
 <template>
   <section class="remote-surface" :aria-label="label">
     <template v-for="node in nodes" :key="`${surface.generation}:${node.nodeId}`">
-      <div v-if="node.kind === 'markdown'" class="markdown-body" v-html="remoteMarkdown(node.props.source)" />
+      <div v-if="node.kind === 'markdown'" class="markdown-body" v-html="renderMarkdown(node.props.source)" />
       <RemoteToolTrace v-else-if="['tool-call', 'tool-result'].includes(node.kind)" :node="node" :thread-id="surface.threadId" />
       <RemoteReasoning v-else-if="['native-reasoning', 'thinking'].includes(node.kind)" :node="node" :active="surface.state === 'open'" />
       <details v-else-if="node.kind === 'model-retry'" class="remote-model-retry" :data-state="node.props.state"><summary><RoomIcon name="refresh" /><strong>{{ retryStatus(node.props.state) }}</strong><span v-if="Number.isSafeInteger(node.props.attempt)">已重试 {{ node.props.attempt }} 次<span v-if="Number.isSafeInteger(node.props.maxRetries)"> / 最多 {{ node.props.maxRetries }} 次</span></span></summary><p>{{ node.props.reason || '上游模型请求发生重试。' }}</p><p v-if="node.props.partialResponse" class="remote-help">上次请求已返回部分内容，请结合后续记录查看。</p></details>
@@ -22,7 +22,7 @@
       <div v-else-if="node.kind === 'table'" class="remote-table"><table><thead><tr><th v-for="column in node.props.columns" :key="column.key">{{ column.label }}</th></tr></thead><tbody><tr v-for="(row, index) in node.props.rows" :key="index"><td v-for="column in node.props.columns" :key="column.key">{{ row[column.key] }}</td></tr></tbody></table></div>
       <div v-else-if="node.kind === 'progress'" class="remote-progress"><span>{{ node.props.stage || '服务端尚未提供阶段说明' }}</span><template v-if="progressValue(node.props.value) !== null"><progress :value="node.props.value" max="100" :aria-label="node.props.stage || '任务进度'" /><small>{{ node.props.value }}%</small></template></div>
       <section v-else-if="node.kind === 'notification'" class="remote-notification"><h3>{{ node.props.title }}</h3><p>{{ node.props.message }}</p></section>
-      <section v-else-if="node.kind === 'document'"><div v-if="node.props.format === 'markdown'" class="markdown-body" v-html="remoteMarkdown(node.props.content)" /><pre v-else>{{ typeof node.props.content === 'string' ? node.props.content : format(node.props.content) }}</pre></section>
+      <section v-else-if="node.kind === 'document'"><div v-if="node.props.format === 'markdown'" class="markdown-body" v-html="renderMarkdown(node.props.content)" /><pre v-else>{{ typeof node.props.content === 'string' ? node.props.content : format(node.props.content) }}</pre></section>
       <p v-else class="remote-help">此内容适合在 infOS 桌面端查看。</p>
     </template>
     <p v-if="preview && surface.nodes.some(node => ['approval', 'input'].includes(node.kind))" class="remote-help">正在同步可操作的请求…</p>
@@ -38,10 +38,12 @@ import RemoteReasoning from './RemoteReasoning.vue'
 import { traceRows } from '../../utils/remoteTrace'
 import '../../styles/remote-trace.css'
 import { remoteMarkdown, remoteStatus } from '../../utils/remoteMarkdown'
+import { createTextRenderCache } from '../../utils/textRenderCache'
 import { submitRemoteInput } from '../../stores/remote'
 import { currentToken, assertToken } from '../../stores/mode'
 const props = defineProps({ surface: { type: Object, required: true }, label: String, disabled: Boolean })
 const emit = defineEmits(['resource', 'updated'])
+const renderMarkdown = createTextRenderCache(remoteMarkdown, 12, 180000)
 const busy = ref(false), error = ref(''), messages = reactive({}), selections = reactive({}), taskMessage = ref('')
 const preview = computed(() => props.surface.surfaceId.startsWith('conversation:'))
 const nodes = computed(() => traceRows(props.surface.nodes))

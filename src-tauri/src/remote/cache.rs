@@ -84,13 +84,6 @@ fn invalidate(conn:&Connection)->ChatResult<()> {
     // 写入前后同时失效投影与读票据，拒绝跨写操作晚到的旧查询。
     conn.execute_batch("DELETE FROM projections; DELETE FROM projection_reads;")?;Ok(())
 }
-pub fn observe(app:&AppHandle,token:&Token,id:&str,facts:&Value)->ChatResult<()> {
-    let mode=app.state::<Coordinator>();let _gate=mode.gate(Some(token),false)?;let conn=connection(app,token)?;
-    let raw:Option<String>=conn.query_row("SELECT result FROM requests WHERE id=?1",[id],|r|r.get(0))?;
-    let mut result=raw.and_then(|raw|serde_json::from_str::<Value>(&raw).ok()).unwrap_or_else(||serde_json::json!({}));
-    for (key,value) in facts.as_object().ok_or_else(super::inactive)? {result[key]=value.clone();}
-    conn.execute("UPDATE requests SET result=?2 WHERE id=?1",params![id,result.to_string()])?;Ok(())
-}
 pub fn settle(app:&AppHandle,token:&Token,id:&str,result:ChatResult<Value>)->ChatResult<Value> {
     settle_when(app,token,id,result,None)
 }

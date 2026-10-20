@@ -1,7 +1,7 @@
 <template>
   <div class="companion-home companion-surface" :data-tone="tone" :class="[`companion-home--${panelMode}`, `display-${displayPreferences.displayMode}`, { 'is-keyboard': keyboardOpen, 'is-wardrobe': drawer === 'wardrobe' }]" :style="roomStyle" @keydown="onHomeKeydown">
     <div class="room-main" :inert="drawer ? true : undefined">
-      <div class="room-scenery" aria-hidden="true"><Transition name="room-change"><img :key="background" :src="background" alt="" class="room-background" @error="backgroundFailed = true" /></Transition><div class="room-vignette" /></div>
+      <div class="room-scenery" aria-hidden="true"><Transition name="room-change"><img :key="background" :src="background" alt="" decoding="async" class="room-background" @error="backgroundFailed = true" /></Transition><div class="room-vignette" /></div>
       <header class="room-header">
         <button class="room-selector" aria-label="切换角色与房间" @click="drawer = 'roles'">
           <CharacterAvatar :key="activeAgentId" class="header-avatar" :src="agent.avatar" :label="agent.name" />
@@ -12,7 +12,8 @@
           <button class="room-icon-button" aria-label="打开房间菜单" title="菜单" @click="drawer = 'menu'"><RoomIcon name="menu" /></button>
         </nav>
       </header>
-      <div class="room-character-stage"><Live2DWidget :renderer="displayPreferences.displayMode" :presentation="presentation" :active="panelMode !== 'full' && !keyboardOpen && (!drawer || drawer === 'wardrobe')" :quiet="panelMode !== 'rest' || keyboardOpen || !!drawer" :interactive="panelMode !== 'full' && !keyboardOpen && !drawer" @projection="onProjection" @open-chat="panelMode = 'peek'" @open-display="drawer = 'appearance'" /></div>
+      <Transition name="room-actions"><ModeSwitchEntry v-show="panelMode === 'rest' && !keyboardOpen" class="room-mode-entry" @open="drawer = 'remote'" /></Transition>
+      <div class="room-character-stage"><Live2DWidget :renderer="displayPreferences.displayMode" :presentation="presentation" :active="panelMode === 'rest' && !keyboardOpen && (!drawer || drawer === 'wardrobe')" :quiet="panelMode !== 'rest' || keyboardOpen || !!drawer" :interactive="panelMode === 'rest' && !keyboardOpen && !drawer" @projection="onProjection" @open-chat="panelMode = 'peek'" @open-display="drawer = 'appearance'" /></div>
       <Transition name="room-actions"><nav v-show="panelMode === 'rest' && !keyboardOpen" class="room-quick-actions" aria-label="角色互动">
         <button aria-label="展开聊天记录" @click="panelMode = 'peek'"><span><RoomIcon name="chat" /></span><small>聊天</small></button>
         <button aria-label="打开衣柜" @click="drawer = 'wardrobe'"><span><RoomIcon name="hanger" /></span><small>换装</small></button>
@@ -73,6 +74,7 @@ import { computed, reactive, ref, watch, onMounted, onBeforeUnmount, nextTick } 
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import Live2DWidget from '../components/Live2DWidget.vue'
+import ModeSwitchEntry from '../components/ModeSwitchEntry.vue'
 import RoomChat from '../components/companion/RoomChat.vue'
 import RoomDrawer from '../components/companion/RoomDrawer.vue'
 import RoomJournal from '../components/companion/RoomJournal.vue'
@@ -122,7 +124,13 @@ let imageReader = null
 let loadScheduled = false
 const draft = computed(() => drafts.get(activeAgentId.value))
 const panelMode = computed({ get: () => draft.value.mode, set: value => { draft.value.mode = value; if (value === 'rest') chatPanel.value?.blur() } })
-const roomStyle = computed(() => ({ ...viewportStyle.value, '--reminder-space': reminderTotal.value || reminderError.value ? '62px' : '0px', '--dock-height': keyboardOpen.value || panelMode.value === 'full' ? 'calc(100% - 96px - env(safe-area-inset-top))' : panelMode.value === 'peek' ? 'min(calc(100% - 96px - env(safe-area-inset-top)), max(300px, 73%))' : restDockSpace.value ? `${restDockSpace.value}px` : `calc(${messages.value.some(message => message.role === 'assistant' && message.status === 'active') || isLoading.value ? 126 : 86}px + env(safe-area-inset-bottom))` }))
+const restDockHeight = computed(() => restDockSpace.value ? `${restDockSpace.value}px` : `calc(${messages.value.some(message => message.role === 'assistant' && message.status === 'active') || isLoading.value ? 126 : 86}px + env(safe-area-inset-bottom))`)
+const roomStyle = computed(() => ({
+  ...viewportStyle.value,
+  '--reminder-space': reminderTotal.value || reminderError.value ? '62px' : '0px',
+  '--room-rest-dock': restDockHeight.value,
+  '--dock-height': keyboardOpen.value || panelMode.value === 'full' ? 'calc(100% - 96px - env(safe-area-inset-top))' : panelMode.value === 'peek' ? 'min(calc(100% - 96px - env(safe-area-inset-top)), max(300px, 73%))' : restDockHeight.value,
+}))
 
 async function loadRoomData() {
   const id = activeAgentId.value
@@ -292,11 +300,9 @@ onBeforeUnmount(() => { disposed = true; loadVersion++; projectionVersion++; ima
 .room-header-actions button { background: #fffffff0; border: 1px solid #ffffffcc; border-bottom-color: var(--room-line); border-radius: 4px 10px 4px 4px; width: 38px; height: 40px; color: var(--room-ink); box-shadow: 0 3px 12px #28354d08; }
 .room-header-actions button svg { width: 18px; height: 18px; }
 .room-header-actions button:hover { border-bottom-color: var(--room-accent); }
-/* 人物可见底边约在画布的 98% 处，直接锚定输入区上沿，避免高屏手机中部悬空。 */
-.room-character-stage { --actor-size: min(104vw, calc((var(--room-height, 100dvh) - 180px - env(safe-area-inset-top) - env(safe-area-inset-bottom) - var(--reminder-space, 0px)) * 1.1), 680px); --actor-top: calc(var(--room-height, 100dvh) - var(--dock-height) - var(--reminder-space, 0px) - 8px - var(--actor-size) * .98); position: absolute; z-index: 5; left: 50%; top: var(--actor-top); width: var(--actor-size); aspect-ratio: 1; transform: translateX(-50%); transition: width .32s, top .32s, left .32s, opacity .2s; }
-.companion-home--peek .room-character-stage { --actor-top: calc(90px - var(--actor-size) * .12 + env(safe-area-inset-top)); }
+/* 几何尺寸由共享样式固定，聊天展开只合成位移与缩放，避免复杂立绘逐帧重新栅格化。 */
+.room-character-stage { position: absolute; z-index: 5; }
 .companion-home--full .room-character-stage, .is-keyboard .room-character-stage { opacity: 0; pointer-events: none; }
-.companion-home--peek .room-background, .companion-home--full .room-background { transform: scale(1.03) translateY(-1%); }
 .room-quick-actions { position: absolute; z-index: 25; top: calc(91px + env(safe-area-inset-top)); right: 12px; display: flex; flex-direction: column; gap: 10px; }
 .room-quick-actions::before { content: ''; position: absolute; left: 50%; top: 18px; bottom: 18px; width: 1px; background: #ffffffa8; z-index: -1; }
 .room-quick-actions button { border: 0; padding: 3px; min-width: 44px; display: flex; flex-direction: column; align-items: center; gap: 4px; background: transparent; color: var(--room-ink); }
@@ -365,8 +371,6 @@ onBeforeUnmount(() => { disposed = true; loadVersion++; projectionVersion++; ima
 .room-image-preview { display: block; width: 100%; height: auto; border-radius: 14px; }
 @media (min-width: 960px) {
   .room-header { padding: calc(22px + env(safe-area-inset-top)) 28px 12px; }
-  .room-character-stage, .companion-home--peek .room-character-stage { left: calc((100% - 480px) / 2); --actor-size: min(76vw, calc(var(--room-height, 100dvh) * 1.1), 1000px); --actor-top: max(calc(100px + env(safe-area-inset-top) - var(--actor-size) * .2), calc(var(--room-height, 100dvh) * .5 - var(--actor-size) * .625 + 8px)); opacity: 1; pointer-events: auto; }
-  .companion-home--full .room-character-stage { opacity: 1; pointer-events: auto; }
   .room-quick-actions { right: 28px; top: calc(97px + env(safe-area-inset-top)); flex-direction: row; gap: 13px; }
   .room-quick-actions::before { display: none; }
   .room-action-error { left: auto; right: 28px; width: 420px; }

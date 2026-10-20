@@ -8,7 +8,7 @@
       </div>
       <label class="appearance-label">点缀配色<select v-model="draft.palette"><option value="auto">跟随角色</option><option v-for="(palette, id) in appearancePalettes" :key="id" :value="id">{{ palette.label }}</option></select></label>
       <label class="appearance-label">玻璃底色 <output>{{ draft.glass }}%</output><input v-model.number="draft.glass" type="range" min="60" max="94" /></label>
-      <label class="appearance-label">静态立绘高度 <output>{{ draft.figureSize }}%</output><input v-model.number="draft.figureSize" type="range" min="44" max="64" /></label>
+      <label class="appearance-label">静态立绘大小 <output>{{ draft.figureSize }}%</output><input v-model.number="draft.figureSize" type="range" min="44" max="64" /></label>
       <label class="appearance-motion"><span><strong>轻量交互动效</strong><small>系统减少动态效果时优先遵循系统设置</small></span><input v-model="draft.motion" type="checkbox" role="switch" /></label>
       <p class="appearance-note">静态立绘与完整 CG 随角色保存，可在角色管理中设置。Pio 为通用 Live2D 模型，服装选择仅对 Live2D 生效。</p>
       <button type="submit" class="room-primary-button" :disabled="!dirty && !appearanceError">{{ appearanceBusy ? '正在保存…' : '保存显示设置' }}</button>

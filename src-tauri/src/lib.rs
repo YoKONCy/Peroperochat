@@ -69,6 +69,8 @@ async fn fetch_models(app:AppHandle,api_base:String,api_key:String,api_format:Op
 pub fn run() {
   tauri::Builder::default()
     .setup(|app| {
+        #[cfg(mobile)]
+        app.handle().plugin(tauri_plugin_barcode_scanner::init())?;
         // 控制状态先关闭旧代次，存储迁移期间任何冷启动入口都不能恢复业务。
         let control_path=app.path().app_data_dir()?.join("data/control/runtime.sqlite");
         let mode=mode::Coordinator::initialize(control_path).map_err(|error|error.message)?;
@@ -114,6 +116,7 @@ pub fn run() {
         mode::mode_snapshot,
         mode::mode_switch,
         remote::profiles::remote_profiles,
+        remote::profiles::remote_decode_pairing,
         remote::profiles::remote_save_profile,
         remote::profiles::remote_delete_profile,
         remote::remote_query,

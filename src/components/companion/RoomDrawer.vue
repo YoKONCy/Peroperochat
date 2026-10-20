@@ -44,12 +44,12 @@ function handleKeydown(event) {
   if (event.shiftKey && (document.activeElement === first || document.activeElement === panel.value)) { event.preventDefault(); last.focus() }
   else if (!event.shiftKey && (document.activeElement === last || document.activeElement === panel.value)) { event.preventDefault(); first.focus() }
 }
-onMounted(async () => { previousFocus = document.activeElement; await nextTick(); panel.value?.focus() })
+onMounted(async () => { previousFocus = document.activeElement; await nextTick(); panel.value?.focus({ preventScroll: true }) })
 onBeforeUnmount(() => { if (previousFocus?.isConnected) previousFocus.focus({ preventScroll: true }) })
 </script>
 
 <style scoped>
-.room-drawer-overlay { position: fixed; inset: var(--room-top, 0px) 0 auto; height: var(--room-height, 100dvh); z-index: 1500; background: #202c424f; backdrop-filter: blur(4px); display: flex; align-items: flex-end; justify-content: center; padding-top: max(24px, env(safe-area-inset-top)); }
+.room-drawer-overlay { position: fixed; inset: var(--room-top, 0px) 0 auto; height: var(--room-height, 100dvh); z-index: 1500; background: #202c424f; display: flex; align-items: flex-end; justify-content: center; padding-top: max(24px, env(safe-area-inset-top)); }
 .room-drawer-panel { width: min(100%, 520px); max-height: calc(var(--room-height, 100dvh) - max(24px, env(safe-area-inset-top))); display: flex; flex-direction: column; background: var(--room-surface); border: 1px solid var(--room-line); border-bottom: 0; border-radius: 5px 18px 0 0; box-shadow: 0 18px 60px #16243b1f; padding-bottom: env(safe-area-inset-bottom); outline: 0; }
 .room-drawer-header { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 20px 18px 18px; flex: none; }
 .drawer-emblem { width: 26px; height: 24px; color: var(--room-accent); flex: none; }

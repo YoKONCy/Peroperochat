@@ -153,6 +153,13 @@ pub async fn remote_query(app:AppHandle,token:Token,query:operations::Query,#[al
     if let operations::Query::Conversation {id,..}=&query {
         if data["threadId"]!=*id {return Err(ChatError::new("REMOTE_PROTOCOL","服务端投影会话身份不匹配"));}
     }
+    if let operations::Query::AgentState {id,thread_id}=&query {
+        if data["agentId"]!=*id || data["threadId"]!=json!(thread_id) {return Err(ChatError::new("REMOTE_PROTOCOL","角色状态不属于当前会话"));}
+    }
+    if let operations::Query::Queue {id}=&query {validate_queue(&data,id)?;}
+    if let operations::Query::QueueLive {id}=&query {
+        if !data.is_null() && (data["threadId"]!=*id || !matches!(data["state"].as_str(),Some("open"|"committed"|"failed"|"disposed")) || !data["nodes"].is_array()) {return Err(ChatError::new("REMOTE_PROTOCOL","队列流式投影身份无效"));}
+    }
     if !cache::save(&app,&token,&key,ticket,&data)? {return Err(ChatError::new("REMOTE_STALE_READ","读取期间远程状态已刷新或发生操作，请重新读取"));}
     Ok(json!({"modeToken":token,"cached":false,"data":data}))
 }
@@ -186,48 +193,30 @@ async fn chat_inner(app:AppHandle,token:Token,request:ChatRequest)->ChatResult<V
     operations::segment(&request.thread_id)?;operations::segment(&request.agent_id)?;
     let mode=app.state::<Coordinator>();let mut changes=mode.subscribe();validate_token(&app,&token)?;
     let session=tokio::select! {biased;_ =changes.changed()=>return Err(inactive()),result=session(&app,&token)=>result?,};
-    cache::prepare(&app,&token,&request.request_id,&json!({"kind":"chat","input":request}))?;
-    let mut body=json!({"threadId":request.thread_id,"agentId":request.agent_id,"content":request.content,"attachmentIds":request.attachment_ids});
+    cache::prepare(&app,&token,&request.request_id,&json!({"kind":"chat","transport":"queue","input":request}))?;
+    let mut body=json!({"clientMessageId":request.request_id,"threadId":request.thread_id,"agentId":request.agent_id,"content":request.content,"attachmentIds":request.attachment_ids});
     if let Some(image_mode)=&request.image_mode {body["imageMode"]=json!(image_mode);}
     let result=tokio::select! {biased;
         _=changes.changed()=>return Err(inactive().with_outcome("unknown")),
-        result=async {
-            let response=tokio::time::timeout(std::time::Duration::from_secs(45),session.client.post(format!("{}/api/chat/stream",session.profile.endpoint)).bearer_auth(&session.secret).json(&body).send())
-                .await.map_err(|_|transport::network())?.map_err(transport::send_error)?;
-            let response=checked_response(&session,response).await?;
-            let mut observed=json!({});
-            transport::stream(response,|kind,data| {
-                if kind=="surface" {
-                    validate_frame(&data)?;
-                    let operation=&data["operation"];
-                    let frame_thread=match operation["type"].as_str() {
-                        Some("surface.open")=>operation.get("threadId"),
-                        Some("surface.commit")=>operation["surface"].get("threadId"),_=>None,
-                    };
-                    if frame_thread.is_some_and(|thread|thread!=&Value::String(request.thread_id.clone())) {return Err(ChatError::new("REMOTE_PROTOCOL","Surface 帧会话身份不匹配"));}
-                    let principal=match operation["type"].as_str() {
-                        Some("surface.open")=>operation.get("principalId"),
-                        Some("surface.commit")=>operation["surface"].get("principalId"),_=>None,
-                    };
-                    if principal.is_some_and(|principal|principal!=&Value::String(request.agent_id.clone())) {return Err(ChatError::new("REMOTE_PROTOCOL","Surface 帧角色身份不匹配"));}
-                }
-                if kind=="done" && data["threadId"]!=request.thread_id {return Err(ChatError::new("REMOTE_PROTOCOL","远程执行终态会话身份不匹配"));}
-                let mut facts=json!({});
-                for name in ["executionId","messageId"] {
-                    let value=if kind=="surface" && name=="messageId" {&data["operation"]["surface"][name]} else {&data[name]};
-                    if value.as_str().is_some_and(|value|!value.is_empty() && value.len()<=1024) && observed[name]!=*value {facts[name]=value.clone();observed[name]=value.clone();}
-                }
-                if facts.as_object().is_some_and(|value|!value.is_empty()) {cache::observe(&app,&token,&request.request_id,&facts)?;}
-                let _gate=mode.gate(Some(&token),false)?;
-                app.emit("remote-event",json!({"modeToken":token,"kind":kind,"requestId":request.request_id,"threadId":request.thread_id,"data":data}))
-                    .map_err(|_|ChatError::new("REMOTE_EVENT_ERROR","远程显示事件投递失败"))?;Ok(())
-            }).await?;
-            Ok(json!({"threadId":request.thread_id,"state":"completed"}))
-        }=>result,
-    };
-    cache::settle(&app,&token,&request.request_id,result)?;
-    Ok(json!({"modeToken":token,"requestId":request.request_id,"threadId":request.thread_id,"state":"completed"}))
+        result=perform(&session,operations::Route {method:reqwest::Method::POST,path:format!("/chat/queue/{}",operations::segment(&request.thread_id)?),params:Vec::new(),body:Some(body)})=>result,
+    }.and_then(|data| {
+        validate_queue(&data,&request.thread_id)?;
+        if !data["items"].as_array().is_some_and(|items|items.iter().any(|item|item["id"]==request.request_id && item["input"]["agentId"]==request.agent_id)) {
+            return Err(ChatError::new("REMOTE_PROTOCOL","服务端队列未确认当前消息身份，请刷新核对").with_outcome("unknown"));
+        }
+        Ok(data)
+    });
+    let data=cache::settle(&app,&token,&request.request_id,result)?;
+    // 入队回执只表示服务端已接收，后续执行状态由队列及 Gateway 投影继续同步。
+    Ok(json!({"modeToken":token,"requestId":request.request_id,"threadId":request.thread_id,"state":"accepted","data":data}))
 }
+fn validate_queue(data:&Value,thread:&str)->ChatResult<()> {
+    if data["threadId"]!=thread || !data["paused"].is_boolean() || !data["items"].is_array() {
+        return Err(ChatError::new("REMOTE_PROTOCOL","服务端队列身份或格式无效"));
+    }
+    Ok(())
+}
+
 fn validate_frame(value:&Value)->ChatResult<()> {
     if value["protocolVersion"]!=1 || !value["surfaceId"].is_string() || !value["generation"].is_string() || !value["operationId"].is_string()
         || value["sequence"].as_u64().is_none() || value["revision"].as_u64().is_none() || !value["operation"]["type"].is_string() {
@@ -450,6 +439,29 @@ pub async fn remote_reconcile_request(app:AppHandle,token:Token,request_id:Strin
     let record=cache::request(&app,&token,&request_id)?;
     if record["state"]!="unknown" {return Ok(json!({"modeToken":token,"requestId":request_id,"state":record["state"]}));}
     let input=&record["context"]["input"];
+    if record["context"]["transport"]=="queue" {
+        let thread=input["threadId"].as_str().ok_or_else(inactive)?;
+        let agent=input["agentId"].as_str().ok_or_else(inactive)?;
+        let session=session(&app,&token).await?;
+        let snapshot=perform(&session,operations::Query::Queue {id:thread.into()}.route()?).await?;
+        validate_token(&app,&token)?;validate_queue(&snapshot,thread)?;
+        // 只用服务端保存的客户端消息 UUID 确认入队，不能按正文猜测或自动重发。
+        let mut accepted=snapshot["items"].as_array().is_some_and(|items|items.iter().any(|item|item["id"]==request_id && item["input"]["agentId"]==agent));
+        if !accepted {
+            let projection=perform(&session,operations::Query::Conversation {id:thread.into(),before_cursor:None,page_size:60}.route()?).await?;
+            validate_token(&app,&token)?;
+            if projection["protocolVersion"]!=1 || projection["threadId"]!=thread {return Err(ChatError::new("REMOTE_PROTOCOL","队列核对返回了其他会话"));}
+            let pair=format!("queue_{request_id}");
+            accepted=projection["messages"].as_array().is_some_and(|messages|messages.iter().any(|message|message["role"]=="user" && message["threadId"]==thread && message["pairId"]==pair));
+        }
+        if accepted {
+            match cache::confirm(&app,&token,&request_id,Ok(json!({"threadId":thread,"queueItemId":request_id,"accepted":true}))) {
+                Ok(_)=>{},Err(error) if error.code=="REQUEST_STATE_CHANGED"=>{},Err(error)=>return Err(error),
+            }
+            return Ok(json!({"modeToken":token,"requestId":request_id,"state":cache::request(&app,&token,&request_id)?["state"]}));
+        }
+        return Ok(json!({"modeToken":token,"requestId":request_id,"state":"unknown"}));
+    }
     // 只凭已经观察到的持久消息身份确认；不按相同文本、时间或列表中缺少消息来猜测结果。
     if record["context"]["kind"]=="chat" {
         if let (Some(thread),Some(agent),Some(message))=(input["threadId"].as_str(),input["agentId"].as_str(),record["result"]["messageId"].as_str()) {

@@ -21,6 +21,8 @@ let notificationTimer = null
 let notificationVersion = 0
 let resuming = null
 let lastResumeAt = 0
+let queuedFrames = []
+let queuedFrame = null
 const blockedCodes = new Set(['REMOTE_AUTH_REQUIRED', 'REMOTE_IDENTITY_CHANGED', 'REMOTE_INCOMPATIBLE', 'REMOTE_PROTOCOL', 'CREDENTIAL_UNAVAILABLE', 'PROFILE_NOT_FOUND', 'INVALID_PROFILE'])
 const offlineCodes = new Set(['REMOTE_NETWORK', 'REMOTE_HTTP', 'REMOTE_RATE_LIMIT'])
 
@@ -35,6 +37,7 @@ function blockConnection(error) {
 function key(query) { return JSON.stringify(query) }
 export function clearRemoteState() {
   generation++
+  cancelAnimationFrame(queuedFrame); queuedFrame = null; queuedFrames = []
   clearTimeout(refreshTimer)
   refreshTimer = null
   clearTimeout(bootstrapTimer)
@@ -130,7 +133,7 @@ export async function reconcileRemotePendingRequests() {
   if (reconciliation?.version === version) return reconciliation.promise
   const promise = (async () => {
     await refreshRemotePendingRequests()
-    const candidates = [...remotePendingRequests.values()].filter(item => item.state === 'unknown' && item.context?.kind === 'chat' && item.result?.messageId)
+    const candidates = [...remotePendingRequests.values()].filter(item => item.state === 'unknown' && item.context?.kind === 'chat' && (item.context?.transport === 'queue' || item.result?.messageId))
     const workers = Array.from({ length: Math.min(2, candidates.length) }, async () => {
       while (candidates.length) {
         assertToken(token, 'remote')
@@ -189,6 +192,10 @@ async function listenOnce() {
       } else scheduleRefresh()
     }
     if (event.kind === 'gateway' || event.kind === 'snapshot_required') {
+      if (event.kind === 'gateway' && event.data?.payload?.action === 'surface') {
+        scheduleQueuedSurface(event.data.payload.frame)
+        return
+      }
       // Gateway 只触发读模型失效；不把通知回放当作新消息或自行计算业务状态。
       for (const view of remoteViews.values()) view.stale = true
       scheduleRefresh()
@@ -363,9 +370,11 @@ export async function sendRemoteChat(input, { requestId = crypto.randomUUID() } 
   }
   remoteExecutions.set(requestId, execution)
   try {
-    await remoteClient.chat(input, { requestId, token })
+    const result = await remoteClient.chat(input, { requestId, token })
     assertToken(token, 'remote')
-    execution.state = 'completed'
+    execution.state = 'accepted'
+    const query = { kind: 'queue', id: input.threadId }
+    remoteViews.set(key(query), { query, data: result.data, cached: false, stale: false, loading: false })
   } catch (error) {
     try { assertToken(token, 'remote') } catch { throw error }
     execution.state = ['not_sent', 'rejected', 'failed'].includes(error.outcome) ? error.outcome : 'unknown'
@@ -382,6 +391,62 @@ export async function sendRemoteChat(input, { requestId = crypto.randomUUID() } 
     } catch { /* 断线保留原分区待核对状态，恢复后显式读取。 */ }
   }
   return execution
+}
+
+function queueExecution(id, threadId) {
+  const key = `queue-live:${id}`
+  if (!remoteExecutions.has(key)) {
+    for (const [existing, value] of remoteExecutions) {
+      if (remoteExecutions.size < 30) break
+      if (value.state !== 'observing') remoteExecutions.delete(existing)
+    }
+    if (remoteExecutions.size >= 30) return null
+    remoteExecutions.set(key, reactive({ requestId: key, threadId, state: 'observing', presentation: createRemoteSurfaceState(), revision: 0, needsRefresh: false, error: null }))
+  }
+  return remoteExecutions.get(key)
+}
+export function installQueuedLive(surface) {
+  if (!surface || surface.state !== 'open') return
+  const execution = queueExecution(surface.surfaceId, surface.threadId)
+  if (!execution) return
+  if (execution.presentation.retired.get(surface.surfaceId) === surface.generation) return
+  const current = execution.presentation.surfaces.get(surface.surfaceId)
+  if (current?.generation === surface.generation && current.sequence >= surface.sequence) return
+  installRemoteProjection(execution.presentation, { protocolVersion: 1, threadId: surface.threadId, surfaces: [surface] })
+  execution.state = 'observing'; execution.revision++
+}
+function applyQueuedSurface(frame) {
+  if (!frame?.surfaceId || !frame.operation) return
+  const operation = frame.operation
+  const execution = operation.type === 'surface.open' ? queueExecution(frame.surfaceId, operation.threadId) : remoteExecutions.get(`queue-live:${frame.surfaceId}`)
+  if (!execution) return
+  try {
+    applyRemoteFrame(execution.presentation, frame); execution.frame = frame; execution.revision++
+    execution.needsRefresh ||= execution.presentation.needsRefresh
+    if (['surface.commit', 'surface.fail', 'surface.dispose'].includes(operation.type)) {
+      execution.state = operation.type === 'surface.fail' ? 'failed' : 'completed'; execution.needsRefresh = true
+      for (const view of remoteViews.values()) if (['conversation', 'queue', 'queue_live', 'agent_state', 'active_executions'].includes(view.query.kind)) view.stale = true
+      scheduleRefresh()
+    }
+  } catch (error) { execution.needsRefresh = true; execution.error = error.message }
+}
+function scheduleQueuedSurface(frame) {
+  if (queuedFrames.length >= 256) {
+    queuedFrames = []
+    for (const view of remoteViews.values()) view.stale = true
+    scheduleRefresh()
+    return
+  }
+  queuedFrames.push(frame)
+  if (queuedFrame !== null) return
+  const token = currentToken()
+  // 保留帧顺序，每个显示帧统一合成一次；后台积压超限时回到权威快照。
+  queuedFrame = requestAnimationFrame(() => {
+    queuedFrame = null
+    const frames = queuedFrames; queuedFrames = []
+    try { assertToken(token, 'remote') } catch { return }
+    for (const item of frames) applyQueuedSurface(item)
+  })
 }
 export async function reconnectRemote() {
   const token = currentToken()

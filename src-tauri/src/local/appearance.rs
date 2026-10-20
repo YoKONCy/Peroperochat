@@ -76,9 +76,15 @@ fn valid_image(value: &str) -> bool {
 pub fn normalize_assets(fields: &mut Map<String, Value>, id: &str) -> ChatResult<()> {
     let (image, room, layout) = match id {
         "pero" => ("/companion/pero-standing.svg", "/companion/sunlit-room.png", "standing"),
-        "nana" => ("/companion/nana-cg.png", "/rooms/nana.svg", "card"),
+        "nana" => ("/companion/nana-standing.png", "/rooms/nana.svg", "standing"),
         _ => ("", "/companion/sunlit-room.png", "standing"),
     };
+    // 仅迁移旧版内置素材组合，自定义图片和显式空值保持原样。
+    if id == "nana" && fields.get("standing_image").and_then(Value::as_str) == Some("/companion/nana-cg.png") &&
+        fields.get("illustration_layout").and_then(Value::as_str).is_none_or(|value| value == "card") {
+        fields.insert("standing_image".into(), json!(image));
+        fields.insert("illustration_layout".into(), json!(layout));
+    }
     for (key, fallback) in [("standing_image", image), ("room_background", room)] {
         if !fields.contains_key(key) { fields.insert(key.into(), json!(fallback)); }
         let value = fields.get(key).and_then(Value::as_str).ok_or_else(|| ChatError::new("INVALID_CONFIG", "角色立绘和房间地址必须为文本"))?;
@@ -99,4 +105,30 @@ pub fn presentation(config: &Value, agent_id: &str) -> ChatResult<Value> {
         "layout": agent["illustration_layout"],
         "background": agent["room_background"].as_str().filter(|value| !value.is_empty()).unwrap_or("/companion/sunlit-room.png"),
     }))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn migrate_legacy_nana_card_to_cutout() {
+        let mut fields = json!({ "standing_image": "/companion/nana-cg.png", "illustration_layout": "card" }).as_object().unwrap().clone();
+        normalize_assets(&mut fields, "nana").unwrap();
+        assert_eq!(fields["standing_image"], "/companion/nana-standing.png");
+        assert_eq!(fields["illustration_layout"], "standing");
+    }
+
+    #[test]
+    fn preserve_custom_artwork_and_explicit_empty_value() {
+        for image in ["https://example.com/nana.png", ""] {
+            let mut fields = json!({ "standing_image": image, "illustration_layout": "card" }).as_object().unwrap().clone();
+            normalize_assets(&mut fields, "nana").unwrap();
+            assert_eq!(fields["standing_image"], image);
+            assert_eq!(fields["illustration_layout"], "card");
+        }
+        let mut fields = json!({ "standing_image": "/companion/nana-cg.png", "illustration_layout": "standing" }).as_object().unwrap().clone();
+        normalize_assets(&mut fields, "nana").unwrap();
+        assert_eq!(fields["standing_image"], "/companion/nana-cg.png");
+    }
 }

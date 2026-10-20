@@ -9,12 +9,14 @@ pub enum Query {
     Agents,
     Tools,
     Agent {id:String},
-    AgentState {id:String},
+    AgentState {id:String,#[serde(default,rename="threadId")] thread_id:Option<String>},
     AgentTexts {id:String},
     Threads {#[serde(rename="agentId")] agent_id:String,page:u32,#[serde(rename="pageSize")] page_size:u32},
     Thread {id:String},
     Conversation {id:String,#[serde(rename="beforeCursor")] before_cursor:Option<String>,#[serde(rename="pageSize")] page_size:u32},
     ThreadTools {id:String},
+    Queue {id:String},
+    QueueLive {id:String},
     ActiveExecutions,
     Approvals,
     Questions,
@@ -55,7 +57,7 @@ impl Query {
             Self::Agents=>route("/agents".into()),
             Self::Tools=> {let mut r=route("/agents/tools".into());param(&mut r,"includeAdvanced","true")?;r},
             Self::Agent {id}=>route(format!("/agents/{}",segment(id)?)),
-            Self::AgentState {id}=>route(format!("/agents/{}/pet-state",segment(id)?)),
+            Self::AgentState {id,thread_id}=> {let mut r=route(format!("/agents/{}/pet-state",segment(id)?));if let Some(thread)=thread_id {segment(thread)?;param(&mut r,"threadId",thread)?;}r},
             Self::AgentTexts {id}=>route(format!("/agents/{}/texts",segment(id)?)),
             Self::Threads {agent_id,page:n,page_size}=> {let mut r=route("/chat/threads".into());param(&mut r,"agentId",agent_id)?;param(&mut r,"channel","desktop")?;page(&mut r,*n,*page_size)?;r},
             Self::Thread {id}=> {let mut r=route(format!("/chat/threads/{}",segment(id)?));param(&mut r,"pageSize","1")?;r},
@@ -65,6 +67,8 @@ impl Query {
                 if let Some(cursor)=before_cursor {param(&mut r,"beforeCursor",cursor)?;}r
             },
             Self::ThreadTools {id}=>route(format!("/chat/threads/{}/tools",segment(id)?)),
+            Self::Queue {id}=>route(format!("/chat/queue/{}",segment(id)?)),
+            Self::QueueLive {id}=>route(format!("/chat/queue/{}/live",segment(id)?)),
             Self::ActiveExecutions=>route("/chat/tasks".into()),
             Self::Approvals=>route("/approvals".into()),Self::Questions=>route("/agent-inputs".into()),
             Self::Tasks {agent_id,status,page:n,page_size}=> {let mut r=route("/background-tasks".into());page(&mut r,*n,*page_size)?;
@@ -98,6 +102,9 @@ pub enum Action {
     CreateThread {#[serde(rename="agentId")] agent_id:String,title:String},
     RenameThread {id:String,title:String},DeleteThread {id:String},
     StopChat {#[serde(rename="threadId")] thread_id:String},
+    QueueItem {#[serde(rename="threadId")] thread_id:String,id:String,revision:u64,action:String,content:Option<String>},
+    QueueControl {#[serde(rename="threadId")] thread_id:String,paused:bool},
+    QueueOrder {#[serde(rename="threadId")] thread_id:String,order:Vec<QueuePosition>},
     InteractionMode {id:String,mode:String},ExecutionMode {id:String,mode:String},
     ThreadTools {id:String,#[serde(rename="disabledTools")] disabled_tools:Vec<String>},
     EditMessage {#[serde(rename="threadId")] thread_id:String,id:String,content:String},
@@ -108,6 +115,9 @@ pub enum Action {
     DispatchTask {#[serde(rename="agentId")] agent_id:String,instruction:String,title:Option<String>,#[serde(rename="targetThreadId")] target_thread_id:Option<String>},
     RoomMessage {id:String,content:String,mentions:Vec<String>},
 }
+#[derive(Debug,Clone,Serialize,Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct QueuePosition {id:String,revision:u64}
 impl Action {
     pub fn route(&self)->ChatResult<Route> {
         let (method,path,body)=match self {
@@ -115,6 +125,19 @@ impl Action {
             Self::RenameThread {id,title}=> {if title.encode_utf16().count()>100 {return Err(invalid());}("PATCH",format!("/chat/threads/{}",segment(id)?),json!({"title":title}))},
             Self::DeleteThread {id}=> ("DELETE",format!("/chat/threads/{}",segment(id)?),json!({})),
             Self::StopChat {thread_id}=> ("POST","/chat/stop".into(),json!({"threadId":thread_id})),
+            Self::QueueItem {thread_id,id,revision,action,content}=> {
+                if *revision==0 || *revision>9_007_199_254_740_991 || !["edit","cancel","immediate","continue"].contains(&action.as_str()) ||
+                    (action=="edit" && content.as_ref().is_none_or(|value|value.trim().is_empty() || value.len()>128*1024)) {return Err(invalid());}
+                let mut body=json!({"revision":revision,"action":action});
+                if action=="edit" {body["content"]=json!(content);}
+                ("PATCH",format!("/chat/queue/{}/items/{}",segment(thread_id)?,segment(id)?),body)
+            },
+            Self::QueueControl {thread_id,paused}=> ("POST",format!("/chat/queue/{}/control",segment(thread_id)?),json!({"paused":paused})),
+            Self::QueueOrder {thread_id,order}=> {
+                let mut ids=std::collections::HashSet::new();
+                if order.len()>100 || order.iter().any(|item|segment(&item.id).is_err() || item.revision==0 || item.revision>9_007_199_254_740_991 || !ids.insert(&item.id)) {return Err(invalid());}
+                ("POST",format!("/chat/queue/{}/order",segment(thread_id)?),json!({"order":order}))
+            },
             Self::InteractionMode {id,mode}=> {if !["minimal","chat","work"].contains(&mode.as_str()) {return Err(invalid());}("PUT",format!("/chat/threads/{}/interaction-mode",segment(id)?),json!({"interactionMode":mode}))},
             Self::ExecutionMode {id,mode}=> {if !["manual","auto","auto_approve","full"].contains(&mode.as_str()) {return Err(invalid());}("PUT",format!("/chat/threads/{}/execution-mode",segment(id)?),json!({"executionMode":mode}))},
             Self::ThreadTools {id,disabled_tools}=> {if disabled_tools.len()>500 {return Err(invalid());}("PUT",format!("/chat/threads/{}/tools",segment(id)?),json!({"disabledTools":disabled_tools}))},
@@ -151,5 +174,16 @@ mod tests {
         assert!(Query::Threads {agent_id:"pero".into(),page:0,page_size:20}.route().is_err());
         assert!(Action::TaskControl {id:"t".into(),action:"reset".into()}.route().is_err());
         assert!(Action::Rewind {id:"t".into(),message_id:None,whole_thread:false}.route().is_err());
+    }
+    #[test]
+    fn state_and_queue_routes_preserve_thread_identity_and_revisions() {
+        let state=Query::AgentState {id:"nana".into(),thread_id:Some("thread-2".into())}.route().unwrap();
+        assert_eq!(state.params,vec![("threadId".into(),"thread-2".into())]);
+        assert_eq!(Query::Queue {id:"a/b".into()}.route().unwrap().path,"/chat/queue/a%2Fb");
+        let action=Action::QueueItem {thread_id:"t".into(),id:"m".into(),revision:2,action:"immediate".into(),content:None}.route().unwrap();
+        assert_eq!(action.body.unwrap(),json!({"revision":2,"action":"immediate"}));
+        assert!(Action::QueueItem {thread_id:"t".into(),id:"m".into(),revision:0,action:"cancel".into(),content:None}.route().is_err());
+        assert!(Action::QueueItem {thread_id:"t".into(),id:"m".into(),revision:1,action:"edit".into(),content:Some(" ".into())}.route().is_err());
+        assert!(Action::QueueOrder {thread_id:"t".into(),order:vec![QueuePosition {id:"m".into(),revision:1},QueuePosition {id:"m".into(),revision:2}]}.route().is_err());
     }
 }

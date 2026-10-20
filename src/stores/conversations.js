@@ -16,9 +16,12 @@ function entryFor(threadId) {
 function mergeMessage(entry, message) {
   const items = entry.messages.slice()
   const index = items.findIndex(item => item.id === message.id)
-  if (index < 0) items.push(message)
-  else items[index] = message
-  entry.messages = items.sort((a, b) => a.id - b.id)
+  if (index < 0) {
+    const insertion = items.findIndex(item => item.id > message.id)
+    if (insertion < 0) items.push(message)
+    else items.splice(insertion, 0, message)
+  } else items[index] = message
+  entry.messages = items
   entry.revision++
 }
 

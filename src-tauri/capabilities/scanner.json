@@ -1,0 +1,7 @@
+{
+  "identifier": "mobile-scanner",
+  "description": "仅在原生移动端允许用户主动扫描 infOS 配对二维码",
+  "windows": ["main"],
+  "platforms": ["iOS", "android"],
+  "permissions": ["barcode-scanner:allow-scan", "barcode-scanner:allow-cancel", "barcode-scanner:allow-check-permissions", "barcode-scanner:allow-request-permissions"]
+}

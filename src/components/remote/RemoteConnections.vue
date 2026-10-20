@@ -1,6 +1,7 @@
 <template>
-  <RoomDrawer title="连接与运行模式" subtitle="把 infOS 的陪伴与进展带在身边" :busy="busy" @close="$emit('close')">
+  <RoomDrawer title="连接与运行模式" subtitle="把 infOS 的陪伴与进展带在身边" :busy="busy || scanning" @close="$emit('close')">
     <div class="remote-mode-intro"><RoomIcon name="connection" /><div><strong>{{ activeId ? '当前运行于 infOS 客户端' : '从独立空间，前往 infOS' }}</strong><p>远程聊天与任务由服务端执行。独立空间暂停，两套角色、记忆与草稿分别保存。</p></div></div>
+    <div class="remote-notification-status"><span><RoomIcon name="bell" /><strong>在线通知</strong><small>{{ activeId && remoteState.connection === 'online' ? '已连接' : '连接后接收' }}</small></span><span><strong>退出后的系统推送</strong><small>暂未开放</small></span><p>应用进程退出后暂不接收远程通知；再次连接时，补收服务端保留的待阅通知。</p></div>
     <p v-if="pendingCount" class="remote-notice">当前连接有 {{ pendingCount }} 项操作待核对，切换后仍保留在原连接中。</p>
     <p v-if="error" class="room-error" role="alert">{{ error }}</p>
     <p v-if="savedName" class="remote-notice">「{{ savedName }}」已保存到本机，可以从连接卡再次进入。</p>
@@ -19,6 +20,9 @@
     </div>
     <form class="remote-connection-form" @submit.prevent="save">
       <h3>{{ editingId ? '重新授权原连接' : '新的连接' }}</h3>
+      <div class="remote-pairing-actions"><button type="button" class="room-secondary-button" :disabled="busy || scanning" @click="scanPairing"><RoomIcon name="scan" />扫描 infOS 二维码</button><button type="button" class="room-text-button" :disabled="busy || scanning" @click="showLinkInput = !showLinkInput">粘贴配对链接</button></div>
+      <div v-if="showLinkInput" class="remote-pairing-link"><label>配对链接<textarea v-model="pairingLink" rows="2" maxlength="4096" placeholder="粘贴 infOS 的二维码链接" :disabled="busy || scanning" /></label><button type="button" class="room-text-button" :disabled="busy || scanning || !pairingLink.trim()" @click="readPairingLink">读取地址与配对码</button></div>
+      <p v-if="pairingNotice" class="remote-notice">{{ pairingNotice }}</p>
       <p v-if="editingId" class="remote-help">确认同一 infOS 实例后更新设备会话，保留草稿与阅读记录。</p>
       <label>服务地址<input v-model="endpoint" type="url" placeholder="https://infos.example.com 或 http://电脑IP:9122" autocomplete="url" required :disabled="busy || !!editingId" /></label>
       <small class="remote-help">使用手机可访问的服务地址。局域网连接填写电脑 IP，不能使用电脑上的 localhost。</small>
@@ -27,12 +31,13 @@
       <template v-if="method !== 'bearer'"><label>设备名称<input v-model="deviceName" required maxlength="80" :disabled="busy" /></label><label class="remote-checkbox"><input v-model="remember" type="checkbox" :disabled="busy" />保持登录 30 天</label></template>
       <small v-if="method !== 'bearer' && !remember" class="remote-help">授权仅在当前应用进程内保留，完全退出后需重新配对。</small>
       <p v-if="method === 'pair'" class="remote-help">配对码五分钟内有效，仅可兑换一次。</p>
-      <label v-if="/^http:/i.test(endpoint.trim())" class="remote-checkbox"><input v-model="allowInsecure" type="checkbox" :disabled="busy" />允许此地址使用明文 HTTP</label>
-      <button class="room-primary-button" type="submit" :disabled="busy || !endpoint.trim() || !secret.trim()">{{ busy ? progressLabel : editingId ? '更新授权并进入' : '连接并进入' }}</button>
+      <label v-if="/^http:/i.test(endpoint.trim())" class="remote-checkbox"><input v-model="allowInsecure" type="checkbox" :disabled="busy || scanning" />允许此地址使用明文 HTTP</label>
+      <button class="room-primary-button" type="submit" :disabled="busy || scanning || !endpoint.trim() || !secret.trim()">{{ busy ? progressLabel : editingId ? '更新授权并进入' : '连接并进入' }}</button>
       <button v-if="editingId" class="room-text-button" type="button" :disabled="busy" @click="newConnection">改为新建连接</button>
     </form>
     <template #footer><button v-if="activeId" class="room-secondary-button" :disabled="busy" @click="standalone"><RoomIcon name="back" />回到独立模式</button><span v-else class="remote-help">凭据交由系统安全存储。</span><button v-if="currentProfile?.device && !logoutConfirm" class="room-text-button" :disabled="busy" @click="logoutConfirm = true">撤销此设备授权…</button><div v-if="logoutConfirm" class="remote-inline-confirm"><span>撤销授权后需要重新配对，原连接记录保留。</span><button :disabled="busy" @click="logout">确认撤销</button><button :disabled="busy" @click="logoutConfirm = false">保留授权</button></div></template>
   </RoomDrawer>
+  <Teleport to="body"><div v-if="scanning" class="remote-scanner-controls" role="status"><span>将镜头对准 infOS 配对二维码</span><button type="button" @click="cancelScan">取消扫描</button></div></Teleport>
 </template>
 <script setup>
 import { computed, ref, onMounted, onBeforeUnmount, nextTick } from 'vue'
@@ -40,18 +45,56 @@ import RoomDrawer from '../companion/RoomDrawer.vue'
 import RoomIcon from './RemoteIcon.vue'
 import { remoteConnections, remoteClient } from '../../services/remote'
 import { modeState, switchMode, refreshMode, currentToken } from '../../stores/mode'
-import { remotePendingRequests } from '../../stores/remote'
+import { remotePendingRequests, remoteState } from '../../stores/remote'
 const props = defineProps({ prepareSwitch: Function })
 const emit = defineEmits(['close'])
 const profiles = ref([]), endpoint = ref(''), secret = ref(''), allowInsecure = ref(false), busy = ref(false), error = ref(''), removing = ref(null)
 const method = ref('pair'), deviceName = ref('PeroperoChat'), remember = ref(true), editingId = ref(null)
 const logoutConfirm = ref(false)
+const scanning = ref(false), showLinkInput = ref(false), pairingLink = ref(''), pairingNotice = ref('')
+let scanner = null, scanVersion = 0
 const secretInput = ref(null), profilesLoading = ref(false), listError = ref(''), savedName = ref(''), step = ref('preparing')
 const activeId = computed(() => modeState.snapshot?.selectedTarget?.mode === 'remote' ? modeState.snapshot.selectedTarget.profileId : null)
 const pendingCount = computed(() => remotePendingRequests.size)
 const currentProfile = computed(() => profiles.value.find(profile => profile.id === activeId.value))
 const progressLabel = computed(() => ({ preparing: '正在保存当前空间…', authorizing: '正在核对设备授权…', switching: '正在切换运行模式…', removing: '正在移除连接…', revoking: '正在撤销设备授权…' }[step.value]))
 let disposed = false, listVersion = 0
+async function applyPairingLink(raw) {
+  const version = scanVersion
+  const link = await remoteConnections.decodePairing(raw)
+  if (disposed || version !== scanVersion) return
+  if (editingId.value && endpoint.value !== link.endpoint) throw new Error('二维码来自另一个服务地址，请先改为新建连接')
+  endpoint.value = link.endpoint; secret.value = link.code; method.value = 'pair'; allowInsecure.value = false
+  pairingLink.value = ''; showLinkInput.value = false
+  pairingNotice.value = link.requiresInsecure ? '已读取配对信息。请核对地址，并勾选允许 HTTP 后再连接。' : '已读取配对信息，请核对地址后连接。'
+}
+async function readPairingLink() {
+  error.value = ''
+  try { await applyPairingLink(pairingLink.value) } catch (failure) { if (!disposed) error.value = failure.message }
+}
+async function scanPairing() {
+  if (busy.value || scanning.value) return
+  const version = ++scanVersion
+  scanning.value = true; error.value = ''; pairingNotice.value = ''
+  try {
+    scanner = await import('@tauri-apps/plugin-barcode-scanner')
+    if (disposed || version !== scanVersion) return
+    const permission = await scanner.requestPermissions()
+    if (disposed || version !== scanVersion) return
+    if (permission !== 'granted') throw new Error('相机权限未开放，可以手动输入配对码或粘贴配对链接')
+    document.body.classList.add('ppc-pairing-scanning')
+    const result = await scanner.scan({ windowed: true, formats: [scanner.Format.QRCode], cameraDirection: 'back' })
+    if (!disposed && version === scanVersion) await applyPairingLink(result.content)
+  } catch (failure) { if (!disposed && version === scanVersion) error.value = typeof failure?.message === 'string' ? failure.message : '扫描未完成，桌面端可使用粘贴配对链接或手动输入' }
+  finally { if (version === scanVersion) { document.body.classList.remove('ppc-pairing-scanning'); if (!disposed) scanning.value = false } }
+}
+async function cancelScan() {
+  const version = ++scanVersion
+  document.body.classList.remove('ppc-pairing-scanning')
+  try { if (scanner) await scanner.cancel() }
+  catch { /* 扫描已经结束时无需再取消。 */ }
+  finally { if (version === scanVersion) scanning.value = false }
+}
 async function loadProfiles() {
   const version = ++listVersion; profilesLoading.value = true; listError.value = ''
   try { const data = await remoteConnections.list(); if (!disposed && version === listVersion) profiles.value = data }
@@ -59,7 +102,7 @@ async function loadProfiles() {
   finally { if (!disposed && version === listVersion) profilesLoading.value = false }
 }
 async function run(action) {
-  if (busy.value) return
+  if (busy.value || scanning.value) return
   busy.value = true; error.value = ''; savedName.value = ''; step.value = 'preparing'
   try { await action() } catch (failure) { if (!disposed) error.value = failure.message } finally { if (!disposed) busy.value = false }
 }
@@ -93,9 +136,16 @@ async function logout() { await run(async () => { await prepare(); step.value = 
 async function standalone() { await run(async () => { await prepare(); step.value = 'switching'; await switchMode({ mode: 'standalone' }); emit('close') }) }
 async function remove(id) { await run(async () => { step.value = 'removing'; await remoteConnections.remove(id); await loadProfiles(); removing.value = null; if (editingId.value === id) newConnection() }) }
 onMounted(loadProfiles)
-onBeforeUnmount(() => { disposed = true; listVersion++; secret.value = '' })
+onBeforeUnmount(() => { disposed = true; listVersion++; secret.value = ''; pairingLink.value = ''; cancelScan() })
 </script>
+<style>
+body.ppc-pairing-scanning { background: transparent !important; }
+body.ppc-pairing-scanning > * { visibility: hidden; }
+body.ppc-pairing-scanning > .remote-scanner-controls { visibility: visible; }
+</style>
 <style scoped>
+.remote-notification-status { padding: 13px 15px; margin-bottom: 18px; border: 1px solid var(--room-line); border-radius: 14px; background: var(--room-subtle); }.remote-notification-status > span { display: flex; align-items: center; gap: 7px; margin-bottom: 9px; }.remote-notification-status strong { font-size: 11px; font-weight: 500; }.remote-notification-status small { margin-left: auto; font-size: 10px; color: var(--room-muted); }.remote-notification-status svg { width: 14px; height: 14px; color: var(--room-accent); }.remote-notification-status p { margin: 0; color: var(--room-muted); font-size: 10px; line-height: 1.8; }
+.remote-pairing-actions { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin: 14px 0; }.remote-pairing-actions svg { width: 20px; height: 20px; }.remote-pairing-link textarea { width: 100%; padding: 10px; border-radius: 10px; border: 1px solid var(--room-line); background: var(--room-subtle); color: var(--room-ink); font: inherit; }.remote-scanner-controls { position: fixed; bottom: max(24px, env(safe-area-inset-bottom)); left: 16px; right: 16px; z-index: 99999; display: flex; align-items: center; gap: 12px; justify-content: space-between; padding: 14px; border-radius: 16px; background: #1b243beb; color: white; font-size: 12px; }.remote-scanner-controls button { flex: none; background: white; color: #33466b; border: 0; padding: 10px 15px; border-radius: 12px; }
 .remote-mode-intro { display: flex; gap: 13px; align-items: flex-start; padding: 15px; margin-bottom: 18px; border: 1px solid var(--room-line); border-radius: 15px; background: var(--room-accent-soft); }.remote-mode-intro > svg { width: 25px; height: 25px; flex: none; color: var(--room-accent); }.remote-mode-intro strong { font-size: 13px; font-weight: 600; }.remote-mode-intro p { font-size: 11px; line-height: 1.8; color: var(--room-muted); margin: 7px 0 0; }
 .remote-connections-heading { display: flex; align-items: center; justify-content: space-between; }.remote-connections-heading h3 { font-size: 13px; font-weight: 600; margin: 10px 0; }.remote-connect-progress { display: flex; gap: 9px; align-items: center; font-size: 11px; color: var(--room-accent); }.remote-connect-progress svg { width: 15px; height: 15px; }.remote-profile-list { display: grid; gap: 10px; }.remote-profile-list article { border: 1px solid var(--room-line); border-radius: 15px; padding: 8px 12px; background: var(--room-glass); }.remote-profile-select { padding: 8px 0; width: 100%; border: 0; background: transparent; text-align: left; display: flex; align-items: center; gap: 10px; }.remote-profile-select > svg { width: 22px; height: 22px; color: var(--room-accent); flex: none; }.remote-profile-select > span:first-of-type { flex: 1; min-width: 0; display: grid; gap: 5px; }.remote-profile-select strong { font-size: 13px; font-weight: 600; }.remote-profile-select small { font-size: 10px; color: var(--room-muted); overflow-wrap: anywhere; }.remote-profile-select > span:last-child { font-size: 11px; color: var(--room-accent); flex: none; }
 .remote-connection-form { margin-top: 24px; }.remote-connection-form h3 { font-size: 15px; font-weight: 600; }.remote-connection-form label { display: grid; gap: 8px; margin: 16px 0 0; font-size: 12px; }.remote-connection-form :is(input:not([type='checkbox']), select) { width: 100%; min-height: 42px; border: 1px solid var(--room-line); border-radius: 11px; background: var(--room-subtle); color: var(--room-ink); padding: 10px 12px; font: inherit; }.remote-connection-form .remote-checkbox { display: flex; align-items: center; gap: 8px; }.remote-connection-form > .room-primary-button { width: 100%; margin-top: 18px; }.remote-help { font-size: 11px; line-height: 1.8; color: var(--room-muted); }.remote-connection-form > small { display: block; margin-top: 7px; }.remote-notice { font-size: 11px; line-height: 1.8; padding: 11px 13px; border: 1px solid var(--room-line); border-radius: 11px; background: var(--room-accent-soft); }.remote-inline-confirm { display: flex; gap: 9px; align-items: center; flex-wrap: wrap; width: 100%; font-size: 11px; padding: 9px 0; }.remote-inline-confirm span { flex: 1; min-width: 120px; line-height: 1.7; }.remote-inline-confirm button { border: 1px solid var(--room-line); padding: 6px 10px; border-radius: 8px; background: var(--room-surface); }

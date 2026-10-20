@@ -18,6 +18,7 @@ pub fn init()->tauri::plugin::TauriPlugin<tauri::Wry> {
 }
 
 pub fn save(app:&AppHandle,id:&str,secret:&str)->ChatResult<()> {
+    if uuid::Uuid::parse_str(id).is_err() || secret.is_empty() || secret.len()>4096 {return Err(error());}
     #[cfg(target_os="android")]
     {app.state::<Native>().0.run_mobile_plugin::<serde_json::Value>("save",serde_json::json!({"id":id,"secret":secret}))
         .map_err(|_|error())?;Ok(())}
@@ -28,27 +29,49 @@ pub fn save(app:&AppHandle,id:&str,secret:&str)->ChatResult<()> {
         std::fs::write(&temporary,bytes).map_err(|_|error())?;
         std::fs::rename(&temporary,&file).map_err(|_|error())?;Ok(())
     }
-    #[cfg(not(any(windows,target_os="android")))]
+    #[cfg(target_os="ios")]
+    {let _=app;security_framework::passwords::set_generic_password_options(secret.as_bytes(),ios_options(id)).map_err(|_|error())}
+    #[cfg(not(any(windows,target_os="android",target_os="ios")))]
     {let _=(app,id,secret);Err(error())}
 }
 pub fn load(app:&AppHandle,id:&str)->ChatResult<String> {
+    if uuid::Uuid::parse_str(id).is_err() {return Err(error());}
     #[cfg(target_os="android")]
     {let result:serde_json::Value=app.state::<Native>().0.run_mobile_plugin("load",serde_json::json!({"id":id})).map_err(|_|error())?;
         result["secret"].as_str().map(str::to_owned).ok_or_else(error)}
     #[cfg(windows)]
     {let bytes=std::fs::read(path(app,id)?).map_err(|_|error())?;String::from_utf8(protect(&bytes,true)?).map_err(|_|error())}
-    #[cfg(not(any(windows,target_os="android")))]
+    #[cfg(target_os="ios")]
+    {let _=app;let bytes=security_framework::passwords::generic_password(ios_options(id)).map_err(|_|error())?;String::from_utf8(bytes).map_err(|_|error())}
+    #[cfg(not(any(windows,target_os="android",target_os="ios")))]
     {let _=(app,id);Err(error())}
 }
 pub fn delete(app:&AppHandle,id:&str)->ChatResult<()> {
+    if uuid::Uuid::parse_str(id).is_err() {return Err(error());}
     #[cfg(target_os="android")]
     {app.state::<Native>().0.run_mobile_plugin::<serde_json::Value>("delete",serde_json::json!({"id":id})).map_err(|_|error())?;Ok(())}
     #[cfg(windows)]
     {let file=path(app,id)?;if file.exists() {std::fs::remove_file(file).map_err(|_|error())?;}Ok(())}
-    #[cfg(not(any(windows,target_os="android")))]
+    #[cfg(target_os="ios")]
+    {
+        let _=app;
+        match security_framework::passwords::delete_generic_password_options(ios_options(id)) {
+            Ok(())=>Ok(()),Err(value) if value.code()==-25300=>Ok(()),Err(_)=>Err(error()),
+        }
+    }
+    #[cfg(not(any(windows,target_os="android",target_os="ios")))]
     {let _=(app,id);Err(error())}
 }
 fn error()->ChatError {ChatError::new("CREDENTIAL_UNAVAILABLE","系统凭据存储不可用，请重新保存连接；此平台尚未支持时不会降级为明文存储")}
+
+#[cfg(target_os="ios")]
+fn ios_options(id:&str)->security_framework::passwords::PasswordOptions {
+    let mut options=security_framework::passwords::PasswordOptions::new_generic_password("com.peroperochat.mobile.remote.v1",id);
+    // 使用本设备的数据保护钥匙串，不把远程设备授权同步到 iCloud。
+    options.set_access_synchronized(Some(false));
+    options.use_protected_keychain();
+    options
+}
 
 #[cfg(windows)]
 fn path(app:&AppHandle,id:&str)->ChatResult<std::path::PathBuf> {

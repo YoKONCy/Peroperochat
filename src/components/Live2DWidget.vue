@@ -1,6 +1,6 @@
 <template>
   <div class="room-character" :class="{ 'is-quiet': quiet, 'is-reacting': reacting, 'is-static': renderer === 'illustration', 'is-cg': presentation.layout === 'card' }" @pointerdown="startTouch" @pointerup="finishTouch" @pointercancel="touch = null">
-    <button v-if="renderer === 'illustration' && presentation.illustration && !imageFailed" :key="presentation.illustration" type="button" class="room-static-character" :class="{ 'room-static-character--card': presentation.layout === 'card' }" :aria-label="`${agent.name} 的立绘，打开聊天`" @click="$emit('open-chat')"><img :src="presentation.illustration" :alt="`${agent.name} 的角色立绘`" draggable="false" @error="imageFailed = true" /></button>
+    <button v-if="renderer === 'illustration' && presentation.illustration && !imageFailed" :key="presentation.illustration" type="button" class="room-static-character" :class="{ 'room-static-character--card': presentation.layout === 'card' }" :aria-label="`${agent.name} 的立绘，打开聊天`" @click="$emit('open-chat')"><img :src="presentation.illustration" :alt="`${agent.name} 的角色立绘`" decoding="async" draggable="false" @error="imageFailed = true" /></button>
     <div v-else-if="renderer === 'illustration'" class="character-fallback"><CharacterAvatar class="character-fallback-avatar" :src="agent.avatar" :label="agent.name" /><span>{{ imageFailed ? '角色图片暂时无法显示' : '还没有设置角色立绘' }}</span><button type="button" @click="$emit('open-display')">选择显示方式</button></div>
     <div v-show="renderer === 'live2d'" id="l2d-panel" class="room-character-canvas" :class="{ 'has-error': modelError, 'is-loading': loading }" :aria-label="`${agent.name} 的 Live2D 角色`">
       <div v-if="modelError" class="character-fallback"><CharacterAvatar class="character-fallback-avatar" :src="agent.avatar" :label="agent.name" /><span>{{ modelError }}</span><button type="button" @click="initializeModel">重新加载角色</button><button type="button" @click="$emit('open-display')">改用静态立绘</button></div>
@@ -134,7 +134,7 @@ async function saveModelPreferences(modelId, textureId, agentId = getActiveAgent
   if (!disposed && agentId === getActiveAgentId()) await loadProjection()
 }
 watch(() => props.renderer, updateRenderer)
-watch(() => props.active, syncActivity)
+watch(() => props.active, syncActivity, { flush: 'sync' })
 watch(() => props.presentation.illustration, () => { imageFailed.value = false })
 onMounted(async () => {
   mounted = true

@@ -13,6 +13,7 @@
 
     <RemoteHome v-if="tab === 'home'" :agent="agent" :state="characterState" :profile="profile" :selection="selection" :image="cg" :show-cg="display.showCg" :decoration="theme.decoration" :inbox-count="inboxCount" @art="drawer = 'art'" @connections="drawer = 'connections'" @appearance="drawer = 'appearance'" @resume="changeTab('chat')" @threads="showThreads" @tasks="changeTab('tasks')" @library="changeTab('library')" @inbox="changeTab('inbox')" @detail="detail = $event" />
     <section v-show="tab === 'chat'" class="remote-conversation">
+      <RemoteQueue v-if="selection" :key="selection.threadId" :thread-id="selection.threadId" :agent-id="selection.agentId" :visible="tab === 'chat'" @updated="refreshConversation" />
       <div v-if="selection && isCached" class="remote-cache-note">缓存内容 · 更新完成前可能与服务端不同</div>
       <div ref="transcript" class="remote-transcript" aria-label="会话消息" @scroll.passive="onScroll" @click="openLink">
         <div v-if="!selection" class="remote-chat-empty"><span class="remote-empty-emblem"><RoomIcon name="chat" /></span><span class="remote-eyebrow">从这里，继续陪伴</span><h1>{{ remoteState.agents.length ? '选一条对话，接着聊吧' : '正在等你的伙伴上线' }}</h1><p>这里的对话、记忆与任务，保存在你连接的 infOS 中。</p><button class="room-primary-button" @click="showThreads">选择会话</button><button class="room-text-button" @click="drawer = 'connections'">管理连接</button></div>
@@ -32,7 +33,7 @@
       <form v-if="selection" class="remote-composer" @submit.prevent="send">
         <div class="remote-composer-modes"><button v-for="item in interactionModes" :key="item.id" type="button" :class="{ selected: interactionMode === item.id }" :disabled="!online || !verified || busy || changingInteraction" @click="setInteraction(item.id)"><RoomIcon :name="item.icon" />{{ item.label }}</button><span>{{ changingInteraction ? '正在保存…' : '远程会话' }}</span></div>
         <div v-if="attachments.length" class="remote-draft-attachments"><span v-for="(file, index) in attachments" :key="file.id"><RoomIcon name="document" />{{ file.name }}<button type="button" :aria-label="`移除附件 ${file.name}`" @click="attachments.splice(index, 1); draftChanged()"><RoomIcon name="close" /></button></span></div>
-        <div class="remote-composer-line"><button type="button" class="room-icon-button" :disabled="!online || !verified || uploading || attachments.length >= 5" aria-label="添加附件" @click="fileInput.click()"><RoomIcon name="plus" /></button><textarea ref="composer" v-model="draft" :disabled="!sessionReady" rows="1" maxlength="131072" :placeholder="`和 ${agent?.name || '伙伴'} 接着聊…`" @input="draftChanged" @keydown="composeKey" /><button v-if="busy" type="button" class="remote-send" aria-label="停止远程回复" :disabled="stopping || !online || sending?.phase === 'preparing'" @click="stop"><RoomIcon name="stop" /></button><button v-else type="submit" class="remote-send" :disabled="!canSend" aria-label="发送消息"><RoomIcon name="send" /></button></div>
+        <div class="remote-composer-line"><button type="button" class="room-icon-button" :disabled="!online || !verified || uploading || attachments.length >= 5" aria-label="添加附件" @click="fileInput.click()"><RoomIcon name="plus" /></button><textarea ref="composer" v-model="draft" :disabled="!sessionReady" rows="1" maxlength="131072" :placeholder="`和 ${agent?.name || '伙伴'} 接着聊…`" @input="draftChanged" @keydown="composeKey" /><button v-if="busy" type="button" class="remote-send" aria-label="停止远程回复" :disabled="stopping || !online || sending?.phase === 'preparing'" @click="stop"><RoomIcon name="stop" /></button><button type="submit" class="remote-send" :disabled="!canSend" :aria-label="busy ? '加入消息队列' : '发送消息'"><RoomIcon name="send" /></button></div>
         <span class="remote-composer-status">{{ uploading ? '附件正在上传…' : !verified ? '等待服务端确认会话' : agent?.isEnabled === false ? '角色已停用，可以继续阅读历史' : busy ? '角色正在回复，离开页面后服务端仍可继续执行' : '对话保存在当前 infOS' }}</span>
         <input ref="fileInput" type="file" hidden @change="attach" />
       </form>
@@ -73,6 +74,7 @@ import RemoteDetail from '../components/remote/RemoteDetail.vue'
 import RemoteResource from '../components/remote/RemoteResource.vue'
 import RemoteSurface from '../components/remote/RemoteSurface.vue'
 import RemoteHome from '../components/remote/RemoteHome.vue'
+import RemoteQueue from '../components/remote/RemoteQueue.vue'
 import RemoteAppearance from '../components/remote/RemoteAppearance.vue'
 import { useRemoteTheme, defaultCharacterAppearance, characterCg } from '../services/remoteTheme'
 import { useRoomViewport } from '../composables/useRoomViewport'
@@ -113,13 +115,14 @@ const agent = computed(() => {
 })
 const tone = computed(() => theme.value.mode === 'dark' ? 'nana' : 'pero')
 const interactionMode = computed(() => selection.value ? remoteViews.get(JSON.stringify({ kind: 'thread', id: selection.value.threadId }))?.data?.thread?.interactionMode || 'chat' : 'chat')
-const characterState = computed(() => agent.value ? remoteViews.get(JSON.stringify({ kind: 'agent_state', id: agent.value.id }))?.data : null)
+const characterQuery = computed(() => agent.value ? { kind: 'agent_state', id: agent.value.id, threadId: selection.value?.agentId === agent.value.id ? selection.value.threadId : null } : null)
+const characterState = computed(() => characterQuery.value ? remoteViews.get(JSON.stringify(characterQuery.value))?.data : null)
 const snapshots = computed(() => pages.value.map(page => ({ ...page, data: remoteViews.get(JSON.stringify(page.query))?.data || page.snapshot })).filter(page => page.data))
 const oldestSnapshot = computed(() => snapshots.value[0]?.data)
 const isCached = computed(() => pages.value.some(page => { const view = remoteViews.get(JSON.stringify(page.query)); return view?.cached || !view && page.snapshot }))
 const serverExecution = computed(() => remoteItems(remoteViews.get(JSON.stringify({ kind: 'active_executions' }))?.data).find(item => item.threadId === selection.value?.threadId && ['running', 'paused'].includes(item.state)))
 const busy = computed(() => !!selection.value && (!!serverExecution.value || sending.value?.threadId === selection.value.threadId || [...remoteExecutions.values()].some(item => item.threadId === selection.value.threadId && item.state === 'observing')))
-const canSend = computed(() => online.value && verified.value && agent.value?.isEnabled !== false && !busy.value && !changingInteraction.value && !uploading.value && !loading.value && !!draft.value.trim())
+const canSend = computed(() => online.value && verified.value && agent.value?.isEnabled !== false && !sending.value && !changingInteraction.value && !uploading.value && !loading.value && !!draft.value.trim())
 const visibleAgents = computed(() => { const keyword = agentSearch.value.trim().toLowerCase(); return remoteState.agents.filter(item => !keyword || `${item.name} ${item.id}`.toLowerCase().includes(keyword)).slice(0, 24) })
 const threads = computed(() => remoteItems(threadQuery.value && remoteViews.get(JSON.stringify(threadQuery.value))?.data))
 const moreThreads = computed(() => { const data = threadQuery.value && remoteViews.get(JSON.stringify(threadQuery.value))?.data; return typeof data?.total === 'number' ? threadPage.value * 30 < data.total : threads.value.length >= 30 })
@@ -154,7 +157,7 @@ async function loadCharacterAppearance() {
     const saved = await readPresentation({ kind: 'character', agentId: id }, token); guard(request)
     if (agent.value?.id !== id) return
     Object.assign(appearance, defaultCharacterAppearance(), saved || {}, { expanded: false })
-    await Promise.allSettled([readRemote({ kind: 'agent', id }), readRemote({ kind: 'agent_state', id })])
+    await Promise.allSettled([readRemote({ kind: 'agent', id }), readRemote({ kind: 'agent_state', id, threadId: selection.value?.agentId === id ? selection.value.threadId : null })])
   } catch (failure) { if (!disposed && request === version) storageError.value = failure.message }
 }
 async function saveCharacter(value) {
@@ -235,10 +238,12 @@ async function restoreScroll(saved = reading) {
   if (disposed || request !== version || restore !== scrollRestore) { if (restore === scrollRestore) suppressScroll = false; return }
   const list = transcript.value
   if (list) {
-    const anchor = [...list.querySelectorAll('[data-anchor]')].find(element => element.dataset.anchor === saved.anchor)
-    if (!saved.atEnd && anchor) list.scrollTop += anchor.getBoundingClientRect().top - list.getBoundingClientRect().top - saved.offset
-    else if (saved.atEnd) list.scrollTop = list.scrollHeight
-    else if (rows.value.length) error.value = '上次阅读的消息暂未找到，可以继续加载历史或回到最新。'
+    if (saved.atEnd) list.scrollTop = list.scrollHeight
+    else {
+      const anchor = [...list.querySelectorAll('[data-anchor]')].find(element => element.dataset.anchor === saved.anchor)
+      if (anchor) list.scrollTop += anchor.getBoundingClientRect().top - list.getBoundingClientRect().top - saved.offset
+      else if (rows.value.length) error.value = '上次阅读的消息暂未找到，可以继续加载历史或回到最新。'
+    }
   }
   await nextTick(); if (restore === scrollRestore) suppressScroll = false
 }
@@ -278,7 +283,7 @@ async function selectConversation(item) {
       if (results[0].status === 'rejected') throw results[0].reason
       if (pages.value[0]) pages.value[0].snapshot = results[0].value
       await restoreScroll({ ...reading }); guard(request)
-      readRemote({ kind: 'agent_state', id: item.agentId }).catch(() => {})
+      readRemote({ kind: 'agent_state', id: item.agentId, threadId: item.threadId }).catch(() => {})
       readRemote({ kind: 'agent', id: item.agentId }).catch(() => {})
       if (online.value) remoteClient.subscribe({ kind: 'thread', id: item.threadId }, token).catch(failure => { if (!disposed && request === version) error.value = failure.message })
     } catch (failure) { if (!disposed && request === version) error.value = failure.message }

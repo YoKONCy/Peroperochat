@@ -15,7 +15,7 @@
       <RoomIcon name="chat" /><span>{{ busy ? activity || '正在想怎么回答你…' : lastReply }}</span><RoomIcon name="up" />
     </button></Transition>
 
-    <div v-show="mode !== 'rest'" ref="list" class="chat-messages" @scroll="onScroll">
+    <div v-if="historyMounted" v-show="mode !== 'rest'" ref="list" class="chat-messages" @scroll.passive="onScroll">
       <button v-if="messages.length > visibleCount" class="earlier-button" @click="showEarlier">查看更早的对话</button>
       <div v-if="!messages.length" class="chat-intro">
         <CharacterAvatar class="intro-avatar" :src="agent.avatar" :label="agent.name" /><p>想和 {{ agent.name }} 聊点什么？</p>
@@ -27,11 +27,11 @@
           <div v-if="message.content === '__loading__'" class="typing-indicator" aria-label="正在思考"><i /><i /><i /></div>
           <template v-else-if="Array.isArray(message.content)">
             <template v-for="(part, partIndex) in message.content" :key="partIndex">
-              <div v-if="part.type === 'text'" class="markdown-body" v-html="roomMarkdown(part.text)" />
+              <div v-if="part.type === 'text'" class="markdown-body" v-html="renderMarkdown(part.text)" />
               <button v-else-if="part.type === 'image_url'" class="message-attachment" aria-label="查看对话图片" @click="$emit('preview-image', safeImage(part.image_url?.url))"><img :src="safeImage(part.image_url?.url)" alt="对话附件" loading="lazy" @load="imageLoaded" /></button>
             </template>
           </template>
-          <div v-else class="markdown-body" v-html="roomMarkdown(message.content)" />
+          <div v-else class="markdown-body" v-html="renderMarkdown(message.content)" />
           <p v-if="message.error && visibleMessage(message.content) !== message.error" class="message-error">{{ message.error }}</p>
           <span v-if="['cancelled', 'interrupted'].includes(message.status)" class="message-status">{{ message.status === 'cancelled' ? '已停止' : '上次回复中断了' }}</span>
         </div>
@@ -63,6 +63,7 @@ import { computed, ref, watch, nextTick, onMounted, onBeforeUnmount } from 'vue'
 import RoomIcon from './RoomIcon.vue'
 import CharacterAvatar from './CharacterAvatar.vue'
 import { roomMarkdown } from '../../utils/roomMarkdown'
+import { createTextRenderCache } from '../../utils/textRenderCache'
 import { visibleMessage } from '../../utils/messageContent'
 
 const props = defineProps({
@@ -75,7 +76,9 @@ const panelElement = ref(null)
 const input = ref(null)
 const list = ref(null)
 const selectedId = ref(null)
-const visibleCount = ref(80)
+const visibleCount = ref(24)
+const historyMounted = ref(false)
+const renderMarkdown = createTextRenderCache(roomMarkdown)
 const following = ref(true)
 const jumpedId = ref(null)
 const freshId = ref(null)
@@ -98,12 +101,17 @@ let freshTimer = null
 let suppressClickUntil = 0
 let disposed = false
 let dockObserver = null
+let scrollFrame = null
+let inputFrame = null
+let forceScroll = false
+let lastDockSize = 0
 
 // 房间模式按实际输入栏、最近回复与底部安全区占位定位人物，避免固定高度估算造成悬空。
 function reportDockSize() {
   if (disposed || props.mode !== 'rest' || !panelElement.value) return
   const bottom = Number.parseFloat(getComputedStyle(panelElement.value).bottom) || 0
-  emit('dock-size', Math.ceil(panelElement.value.getBoundingClientRect().height + bottom))
+  const size = Math.ceil(panelElement.value.getBoundingClientRect().height + bottom)
+  if (size !== lastDockSize) { lastDockSize = size; emit('dock-size', size) }
 }
 
 function cycleMode() {
@@ -126,7 +134,11 @@ function finishDrag(event) {
   else collapse()
 }
 function collapse() { input.value?.blur(); selectedId.value = null; emit('update:mode', 'rest') }
-function updateInput(event) { emit('update:modelValue', event.target.value); resizeInput() }
+function updateInput(event) { emit('update:modelValue', event.target.value) }
+function scheduleInputResize() {
+  if (inputFrame !== null) return
+  inputFrame = requestAnimationFrame(() => { inputFrame = null; if (!disposed) resizeInput() })
+}
 function resizeInput() {
   if (!input.value) return
   input.value.style.height = 'auto'
@@ -150,17 +162,23 @@ function onScroll() {
   if (!list.value || props.mode === 'rest') return
   following.value = list.value.scrollHeight - list.value.scrollTop - list.value.clientHeight < 72
 }
-async function scrollToLatest(force = false) {
-  if (!force && !following.value) return
-  await nextTick()
-  if (disposed || (!force && !following.value)) return
-  if (list.value) list.value.scrollTop = list.value.scrollHeight
-  if (force) following.value = true
+function scrollToLatest(force = false) {
+  if (props.mode === 'rest' || !force && !following.value) return
+  forceScroll ||= force
+  if (scrollFrame !== null) return
+  scrollFrame = requestAnimationFrame(async () => {
+    scrollFrame = null
+    const requested = forceScroll; forceScroll = false
+    await nextTick()
+    if (disposed || props.mode === 'rest' || !requested && !following.value) return
+    if (list.value) list.value.scrollTop = list.value.scrollHeight
+    if (requested) following.value = true
+  })
 }
 async function showEarlier() {
   const height = list.value.scrollHeight
   const position = list.value.scrollTop
-  visibleCount.value += 80
+  visibleCount.value += 24
   await nextTick()
   if (list.value) list.value.scrollTop = position + list.value.scrollHeight - height
 }
@@ -188,21 +206,24 @@ watch(() => props.messages.at(-1)?.id, (id, previousId) => {
   freshTimer = setTimeout(() => { freshId.value = null }, 320)
 })
 watch(() => [props.messages.at(-1)?.id, props.messages.at(-1)?.content, props.messages.at(-1)?.reasoning, props.busy], () => scrollToLatest())
-watch(() => props.mode, mode => { if (mode !== 'rest') scrollToLatest(); else nextTick(reportDockSize) })
+watch(() => props.mode, mode => { if (mode !== 'rest') { historyMounted.value = true; scrollToLatest() } else nextTick(reportDockSize) }, { immediate: true })
 watch(() => props.jumpId, jumpTo)
-watch(() => props.modelValue, () => nextTick(resizeInput))
+watch(() => props.modelValue, scheduleInputResize)
 onMounted(() => {
   resizeInput(); reportDockSize()
   if (typeof ResizeObserver !== 'undefined') { dockObserver = new ResizeObserver(reportDockSize); dockObserver.observe(panelElement.value) }
   window.addEventListener('resize', reportDockSize)
   if (props.jumpId) jumpTo(props.jumpId); else scrollToLatest(true)
 })
-onBeforeUnmount(() => { disposed = true; dockObserver?.disconnect(); window.removeEventListener('resize', reportDockSize); clearPress(); clearTimeout(jumpTimer); clearTimeout(freshTimer) })
+onBeforeUnmount(() => { disposed = true; dockObserver?.disconnect(); cancelAnimationFrame(scrollFrame); cancelAnimationFrame(inputFrame); window.removeEventListener('resize', reportDockSize); clearPress(); clearTimeout(jumpTimer); clearTimeout(freshTimer) })
 defineExpose({ focus: () => input.value?.focus({ preventScroll: true }), blur: () => input.value?.blur() })
 </script>
 
 <style scoped>
-.room-chat { position: absolute; z-index: 20; inset: auto 0 0; width: 100%; height: var(--dock-height); display: flex; flex-direction: column; background: var(--room-subtle); border: 1px solid var(--room-line); border-bottom: 0; border-radius: 5px 18px 0 0; box-shadow: 0 -3px 16px #263b510a; padding-bottom: env(safe-area-inset-bottom); transition: height .32s cubic-bezier(.2,.7,.2,1), background .2s; }
+.room-chat { position: absolute; z-index: 20; inset: auto 0 0; width: 100%; height: var(--dock-height); display: flex; flex-direction: column; background: var(--room-subtle); border: 1px solid var(--room-line); border-bottom: 0; border-radius: 5px 18px 0 0; box-shadow: 0 -3px 16px #263b510a; padding-bottom: env(safe-area-inset-bottom); }
+.room-chat:not(.room-chat--rest) { animation: chat-panel-open .2s var(--room-spring); }
+@keyframes chat-panel-open { from { opacity: .65; transform: translateY(18px); } to { opacity: 1; transform: translateY(0); } }
+@media (prefers-reduced-motion: reduce) { .room-chat:not(.room-chat--rest) { animation: none; } }
 .room-chat--rest { inset: auto 12px calc(12px + env(safe-area-inset-bottom)); width: auto; height: auto; padding: 0; border: 0; background: transparent; box-shadow: none; }
 .room-chat--rest .chat-handle-area { display: none; }
 .chat-handle-area { flex: none; height: 22px; display: flex; justify-content: center; touch-action: none; }

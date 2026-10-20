@@ -1,5 +1,4 @@
 use std::time::Duration;
-use futures::StreamExt;
 use serde::{Deserialize,Serialize};
 use serde_json::Value;
 use crate::local::types::*;
@@ -73,59 +72,9 @@ pub async fn probe(endpoint:&str,token:&str)->ChatResult<Identity> {
     Ok(identity)
 }
 
-/// 按字节缓冲，避免网络分块截断中文；行尾可在两个分块之间拆开。
-#[derive(Default)]
-pub struct Sse {pending:Vec<u8>,event:String,data:Vec<String>,size:usize}
-impl Sse {
-    pub fn push(&mut self,bytes:&[u8])->ChatResult<Vec<(String,Value)>> {
-        if self.pending.len()+bytes.len()>MAX_BODY {return Err(ChatError::new("REMOTE_TOO_LARGE","流事件过大"));}
-        self.pending.extend_from_slice(bytes);let mut events=Vec::new();
-        while let Some(end)=self.pending.iter().position(|byte|*byte==b'\n') {
-            let line=self.pending.drain(..=end).collect::<Vec<_>>();
-            let line=std::str::from_utf8(&line[..line.len()-1]).map_err(|_|ChatError::new("REMOTE_PROTOCOL","流事件编码无效"))?.trim_end_matches('\r');
-            self.size+=line.len();if self.size>MAX_BODY {return Err(ChatError::new("REMOTE_TOO_LARGE","流事件过大"));}
-            if line.is_empty() {
-                if !self.data.is_empty() {
-                    let value=serde_json::from_str(&self.data.join("\n")).map_err(|_|ChatError::new("REMOTE_PROTOCOL","流事件内容无效"))?;
-                    events.push((std::mem::take(&mut self.event),value));self.data.clear();
-                }
-                self.event.clear();self.size=0;
-            } else if let Some((field,value))=line.split_once(':') {
-                let value=value.strip_prefix(' ').unwrap_or(value);
-                match field {"event"=>self.event=value.to_owned(),"data"=>self.data.push(value.to_owned()),_=>{}}
-            }
-        }
-        Ok(events)
-    }
-}
-
-pub async fn stream(response:reqwest::Response,mut on_event:impl FnMut(&str,Value)->ChatResult<()>)->ChatResult<()> {
-    status(response.status())?;
-    if !response.headers().get(reqwest::header::CONTENT_TYPE).and_then(|v|v.to_str().ok()).is_some_and(|v|v.starts_with("text/event-stream")) {
-        return Err(ChatError::new("REMOTE_PROTOCOL","服务端未返回聊天事件流"));
-    }
-    let mut chunks=response.bytes_stream();let mut parser=Sse::default();
-    while let Some(chunk)=tokio::time::timeout(Duration::from_secs(60),chunks.next()).await.map_err(|_|network())? {
-        for (kind,value) in parser.push(&chunk.map_err(|_|network())?)? {
-            if kind=="heartbeat" {continue;}
-            if !["surface","done","error","rag_progress"].contains(&kind.as_str()) {return Err(ChatError::new("REMOTE_PROTOCOL","服务端流事件版本不兼容"));}
-            on_event(&kind,value)?;
-            if kind=="done" {return Ok(());}
-            if kind=="error" {return Err(ChatError::new("REMOTE_EXECUTION_FAILED","远程执行返回错误，请查看服务端会话状态").with_outcome("failed"));}
-        }
-    }
-    Err(ChatError::new("REMOTE_STATUS_UNKNOWN","流已结束但未收到执行终态；请刷新会话，不要自动重发"))
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
-    #[test]
-    fn sse_handles_split_chinese_crlf_and_does_not_invent_terminal() {
-        let bytes="event: surface\r\ndata: {\"source\":\"你好\"}\r\n\r\nevent: done\ndata: {}\n\n".as_bytes();
-        let mut parser=Sse::default();let mut result=Vec::new();for b in bytes {result.extend(parser.push(&[*b]).unwrap());}
-        assert_eq!(result[0].1["source"],"你好");assert_eq!(result[1].0,"done");assert_eq!(result.len(),2);
-    }
     fn server(status:u16,body:String,headers:&str)->(String,std::sync::mpsc::Receiver<String>) {
         use std::io::{BufRead,Write};
         let listener=std::net::TcpListener::bind("127.0.0.1:0").unwrap();let address=listener.local_addr().unwrap();

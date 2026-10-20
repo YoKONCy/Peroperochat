@@ -21,6 +21,7 @@ async function control(command, args) {
   try { return await invoke(command, args) } catch (error) { throw normalizeError(error) }
 }
 export const remoteConnections = {
+  decodePairing: raw => control('remote_decode_pairing', { raw, modeToken: currentToken() }),
   list: () => control('remote_profiles'),
   save: input => control('remote_save_profile', { input, modeToken: currentToken() }),
   remove: id => control('remote_delete_profile', { id }),

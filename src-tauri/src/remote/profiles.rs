@@ -23,6 +23,32 @@ pub struct ProfileInput {
 fn device_name()->String {"PeroperoChat".into()}
 fn remember()->bool {true}
 
+#[derive(Serialize)]
+#[serde(rename_all="camelCase")]
+pub struct PairingLink {endpoint:String,code:String,requires_insecure:bool}
+fn decode_pairing(raw:&str)->ChatResult<PairingLink> {
+    let invalid=||ChatError::new("INVALID_PAIRING_QR","这不是有效的 infOS 配对二维码，请在 infOS「局域网与设备」重新生成");
+    if raw.len()>4096 || raw.chars().any(char::is_control) {return Err(invalid());}
+    let mut url=reqwest::Url::parse(raw.trim()).map_err(|_|invalid())?;
+    if !matches!(url.scheme(),"http"|"https") || !url.username().is_empty() || url.password().is_some() || url.query().is_some() {return Err(invalid());}
+    let fragment=url.fragment().ok_or_else(invalid)?;
+    let (page,query)=fragment.split_once('?').ok_or_else(invalid)?;
+    if page!="/app" {return Err(invalid());}
+    let pairs=reqwest::Url::parse(&format!("https://pair.invalid/?{query}")).map_err(|_|invalid())?.query_pairs().map(|(key,value)|(key.into_owned(),value.into_owned())).collect::<Vec<_>>();
+    if pairs.len()!=1 || pairs[0].0!="pair" || pairs[0].1.len()!=10 || !pairs[0].1.bytes().all(|value|value.is_ascii_hexdigit()) {return Err(invalid());}
+    let code=pairs[0].1.to_ascii_uppercase();
+    if matches!(url.host_str(),Some("localhost"|"127.0.0.1"|"::1"|"[::1]"|"0.0.0.0")) {return Err(ChatError::new("INVALID_PAIRING_QR","二维码地址指向本机，请在 infOS 中选择手机可访问的电脑地址"));}
+    let requires_insecure=url.scheme()=="http";
+    url.set_fragment(None);
+    Ok(PairingLink {endpoint:normalize_endpoint(url.as_str(),true)?,code,requires_insecure})
+}
+#[tauri::command]
+pub fn remote_decode_pairing(app:AppHandle,raw:String,mode_token:Token)->ChatResult<PairingLink> {
+    let mode=app.state::<Coordinator>();let _gate=mode.gate(Some(&mode_token),false)?;
+    // 扫码只校验并填表，不自动兑换配对码，也不替用户允许明文 HTTP。
+    decode_pairing(&raw)
+}
+
 pub fn normalize_endpoint(raw:&str,allow_insecure:bool)->ChatResult<String> {
     let mut url=reqwest::Url::parse(raw.trim()).map_err(|_|ChatError::new("INVALID_ENDPOINT","请输入完整的 infOS 服务地址"))?;
     if raw.len()>2048 || !["http","https"].contains(&url.scheme()) || url.host_str().is_none() || !url.username().is_empty() || url.password().is_some() || url.query().is_some() || url.fragment().is_some() {
@@ -125,5 +151,12 @@ mod tests {
         assert_eq!(normalize_endpoint("https://example.com/infos/api/",false).unwrap(),"https://example.com/infos");
         for url in ["https://u:p@example.com","https://example.com/?token=abc","file:///tmp","https://example.com/#x","http://192.168.1.2"] {assert!(normalize_endpoint(url,false).is_err());}
         assert!(normalize_endpoint("http://192.168.1.2:9120",true).is_ok());
+    }
+    #[test]
+    fn pairing_link_is_strict_and_does_not_grant_http_consent() {
+        let link=decode_pairing("http://192.168.1.2:9122/#/app?pair=aabbccddee").unwrap();
+        assert_eq!(link.endpoint,"http://192.168.1.2:9122");assert_eq!(link.code,"AABBCCDDEE");assert!(link.requires_insecure);
+        assert_eq!(decode_pairing("https://example.com/infos/#/app?pair=AABBCCDDEE").unwrap().endpoint,"https://example.com/infos");
+        for invalid in ["https://localhost/#/app?pair=AABBCCDDEE","javascript:alert(1)","https://u:p@example.com/#/app?pair=AABBCCDDEE","https://example.com/#/app?pair=AABBCCDDEE&pair=1122334455","https://example.com/#/app?token=secret"] {assert!(decode_pairing(invalid).is_err());}
     }
 }
