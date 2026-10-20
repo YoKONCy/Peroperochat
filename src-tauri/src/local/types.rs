@@ -52,7 +52,13 @@ pub struct Message {
     pub reasoning: String,
     #[serde(default)]
     pub usage: Value,
+    #[serde(default)]
+    pub tool_timeline: Vec<ToolActivity>,
 }
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ToolActivity { pub id:String, pub name:String, pub status:String, pub summary:String }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]

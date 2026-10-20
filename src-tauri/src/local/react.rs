@@ -28,9 +28,9 @@ pub async fn run(db:&DbState,settings:&ModelSettings,agent_id:&str,mut messages:
         messages.push(ModelMessage { role:"assistant".into(),content:json!(completion.content),calls:completion.calls.clone(),
             reasoning:completion.reasoning,native:completion.native,..Default::default() });
         for call in completion.calls {
-            emit("tool",&json!({"name":call.name,"status":"running"}).to_string())?;
+            emit("tool",&json!(super::tool_timeline::describe(&call,&serde_json::Value::Null,None)).to_string())?;
             let result=session.execute(db,agent_id,&call)?;
-            emit("tool",&json!({"name":call.name,"status":if result["ok"]==false {"error"} else {"staged"}}).to_string())?;
+            emit("tool",&json!(super::tool_timeline::describe(&call,&result,None)).to_string())?;
             messages.push(ModelMessage { role:"tool".into(),content:json!(result.to_string()),call_id:Some(call.id),name:Some(call.name),..Default::default() });
         }
     }

@@ -42,7 +42,7 @@ impl ConversationService<'_> {
         let emit=|kind:&str,message:Option<Message>,content:Option<String>|on_event(ChatEvent { request_id:request.request_id.clone(),thread_id:request.thread_id.clone(),agent_id:request.agent_id.clone(),
             kind:kind.into(),message,user:if kind=="started" {prepared.user.clone()} else {None},content });
         emit("started",Some(prepared.assistant.clone()),None);
-        let mut output=String::new();let mut preview=String::new();let mut saved=Instant::now();let mut tools=ToolSession::default();
+        let mut output=String::new();let mut preview=String::new();let mut saved=Instant::now();let mut tools=ToolSession::default();let mut live_tools:Vec<ToolActivity>=Vec::new();
         if prepared.regenerate {tools.excluded_sources.push(prepared.assistant.id);}
         let outcome=tokio::select! {
             biased;
@@ -53,6 +53,15 @@ impl ConversationService<'_> {
                     preview.push_str(delta);
                     if !prepared.regenerate && saved.elapsed()>=Duration::from_millis(250) {
                         repository::update_partial(&*db_lock(self.db)?,prepared.assistant.id,&preview)?;saved=Instant::now();
+                    }
+                }
+                if kind=="tool" {
+                    if let Ok(item)=serde_json::from_str::<ToolActivity>(delta) {
+                        if super::tool_timeline::valid(std::slice::from_ref(&item)) {
+                            if let Some(previous)=live_tools.iter_mut().find(|previous|previous.id==item.id) {*previous=item;}
+                            else if live_tools.len()<24 {live_tools.push(item);}
+                            if !prepared.regenerate {repository::update_tool_timeline(&*db_lock(self.db)?,prepared.assistant.id,&live_tools)?;}
+                        }
                     }
                 }
                 emit(kind,None,if delta.is_empty() {None} else {Some(delta.into())});Ok(())
@@ -69,7 +78,7 @@ impl ConversationService<'_> {
             match repository::finish_with_tools(&mut conn,&request,&prepared,&completion,error.as_ref(),&manifest,&tools) {
                 Ok(message)=>message,Err(mut commit_error)=> {
                     commit_error.message=model_config::redact(self.settings,&commit_error.message);error=Some(commit_error);
-                    repository::finish_turn(&mut conn,&request,&prepared,&completion.content,error.as_ref(),&manifest)?
+                    repository::finish_with_tools(&mut conn,&request,&prepared,&completion,error.as_ref(),&manifest,&tools)?
                 }
             }
         };

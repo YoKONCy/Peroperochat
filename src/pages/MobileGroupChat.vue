@@ -24,11 +24,12 @@
             <p>{{ enabledMembers.length ? '日常小事、突然的灵感，都可以说给大家听。' : '打开成员设置，邀请伙伴参与回应。' }}</p>
           </div>
 
-          <article v-for="message in displayedMessages" :key="message.id" v-memo="[message.content, message.reasoning, message.status, message.error, message.name, message.timestamp, selectedId === message.id, busy, agents[message.agentId]?.avatar, agents[message.agentId]?.name]" class="group-message" :class="{ 'is-user': message.role === 'user' }" :data-speaker="message.agentId === 'nana' ? 'nana' : 'pero'">
+          <article v-for="message in displayedMessages" :key="message.id" v-memo="[message.content, message.reasoning, message.toolTimeline, message.status, message.error, message.name, message.timestamp, selectedId === message.id, busy, agents[message.agentId]?.avatar, agents[message.agentId]?.name]" class="group-message" :class="{ 'is-user': message.role === 'user' }" :data-speaker="message.agentId === 'nana' ? 'nana' : 'pero'">
             <CharacterAvatar v-if="message.role !== 'user'" class="group-message-avatar" :src="agents[message.agentId]?.avatar" :label="speakerName(message)" />
             <div class="group-message-column">
               <div class="group-byline"><strong>{{ speakerName(message) }}</strong><time>{{ formatTime(message.timestamp) }}</time><button class="room-icon-button" :aria-label="`操作${speakerName(message)}的消息`" :aria-expanded="selectedId === message.id" @click="selectedId = selectedId === message.id ? null : message.id"><RoomIcon name="more" /></button></div>
               <div class="group-bubble">
+                <ToolTimeline v-if="message.role === 'assistant' && message.toolTimeline?.length" :items="message.toolTimeline" />
                 <details v-if="message.reasoning" class="group-reasoning"><summary>{{ message.status === 'pending' ? '正在思考' : '思考过程' }}</summary><div>{{ message.reasoning }}</div></details>
                 <div v-if="message.content === '__loading__'" class="group-typing" aria-label="正在思考"><i /><i /><i /></div>
                 <div v-else class="markdown-body" v-html="roomMarkdown(message.content)" />
@@ -80,6 +81,7 @@ import CompanionEmblem from '../components/companion/CompanionEmblem.vue'
 import RoomDrawer from '../components/companion/RoomDrawer.vue'
 import RoomIcon from '../components/companion/RoomIcon.vue'
 import RoomSwitch from '../components/companion/RoomSwitch.vue'
+import ToolTimeline from '../components/companion/ToolTimeline.vue'
 import { useRoomViewport } from '../composables/useRoomViewport'
 import { AGENTS as agents, activeAgentId } from '../stores/agents'
 import { useLocalConversation } from '../stores/conversations'

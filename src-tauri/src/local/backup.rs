@@ -8,7 +8,7 @@ use super::{db_lock, identity, repository, runtime::ChatRuntime, types::*};
 
 #[derive(Serialize, Deserialize)]
 struct Revision { message_id: i64, revision: i64, content: String,
-    #[serde(default)] reasoning:String,#[serde(default)] usage:Value }
+    #[serde(default)] reasoning:String,#[serde(default)] usage:Value,#[serde(default)] tool_timeline:Vec<ToolActivity> }
 
 #[derive(Serialize, Deserialize)]
 struct Backup {
@@ -49,12 +49,8 @@ pub fn local_export_data(app: AppHandle, db: tauri::State<DbState>, runtime: tau
         rows.collect::<Result<Vec<_>,_>>()?
     };
     let messages = {
-        let mut stmt = conn.prepare("SELECT id,thread_id,pair_id,role,agent_id,name,content,timestamp,revision,status,error,reasoning,usage FROM chat_messages ORDER BY id")?;
-        let rows = stmt.query_map([], |r| {
-            let content: String = r.get(6)?;
-            Ok(Message { id:r.get(0)?,thread_id:r.get(1)?,pair_id:r.get(2)?,role:r.get(3)?,agent_id:r.get(4)?,name:r.get(5)?,
-                content:serde_json::from_str(&content).unwrap_or(json!(content)),timestamp:r.get(7)?,revision:r.get(8)?,status:r.get(9)?,error:r.get(10)?,reasoning:r.get(11)?,usage:serde_json::from_str(&r.get::<_,String>(12)?).unwrap_or(json!({})) })
-        })?;
+        let mut stmt = conn.prepare("SELECT * FROM chat_messages ORDER BY id")?;
+        let rows = stmt.query_map([], repository::map_message)?;
         rows.collect::<Result<Vec<_>,_>>()?
     };
     let reminders = {
@@ -69,8 +65,8 @@ pub fn local_export_data(app: AppHandle, db: tauri::State<DbState>, runtime: tau
         rows.collect::<Result<Vec<_>,_>>()?
     };
     let revisions = {
-        let mut stmt = conn.prepare("SELECT message_id,revision,content,reasoning,usage FROM chat_message_revisions")?;
-        let rows = stmt.query_map([], |r| Ok(Revision { message_id:r.get(0)?,revision:r.get(1)?,content:r.get(2)?,reasoning:r.get(3)?,usage:serde_json::from_str(&r.get::<_,String>(4)?).unwrap_or(json!({})) }))?;
+        let mut stmt = conn.prepare("SELECT message_id,revision,content,reasoning,usage,tool_timeline FROM chat_message_revisions")?;
+        let rows = stmt.query_map([], |r| Ok(Revision { message_id:r.get(0)?,revision:r.get(1)?,content:r.get(2)?,reasoning:r.get(3)?,usage:serde_json::from_str(&r.get::<_,String>(4)?).unwrap_or(json!({})),tool_timeline:serde_json::from_str(&r.get::<_,String>(5)?).unwrap_or_default() }))?;
         rows.collect::<Result<Vec<_>,_>>()?
     };
     serde_json::to_value(Backup { version:"2.0".into(),config,agents,
@@ -105,7 +101,7 @@ fn parse_backup(data: Value) -> ChatResult<Backup> {
                 backup.messages.push(Message { id:backup.messages.len() as i64+1,thread_id:thread_id.clone(),pair_id:pair_id.clone(),
                     role:role.into(),agent_id:if role == "assistant" { agent_id.clone() } else { String::new() },
                     name:if role == "assistant" { backup.agents.get(agent_id).and_then(|a| a.get("name")).and_then(Value::as_str).unwrap_or(agent_id).into() } else { "User".into() },
-                    content,timestamp:item.get("timestamp").and_then(Value::as_i64).ok_or_else(invalid)?,revision:1,status:"active".into(),error:None,reasoning:String::new(),usage:json!({}) });
+                    content,timestamp:item.get("timestamp").and_then(Value::as_i64).ok_or_else(invalid)?,revision:1,status:"active".into(),error:None,reasoning:String::new(),usage:json!({}),tool_timeline:Vec::new() });
             }
         }
         if let Some(memories) = data.get("memories").and_then(Value::as_object) {
@@ -130,7 +126,7 @@ fn parse_backup(data: Value) -> ChatResult<Backup> {
                 backup.messages.push(Message { id:backup.messages.len() as i64+1,thread_id:repository::FAMILY_THREAD.into(),pair_id:pair_id.clone(),
                     role:role.into(),agent_id:if role == "assistant" { agent_id } else { String::new() },name:name.into(),
                     content:item.get("content").cloned().ok_or_else(invalid)?,timestamp:item.get("timestamp").and_then(Value::as_i64).ok_or_else(invalid)?,
-                    revision:1,status:"active".into(),error:None,reasoning:String::new(),usage:json!({}) });
+                    revision:1,status:"active".into(),error:None,reasoning:String::new(),usage:json!({}),tool_timeline:Vec::new() });
             }
         }
         backup
@@ -150,11 +146,13 @@ fn parse_backup(data: Value) -> ChatResult<Backup> {
             !matches!(message.role.as_str(),"user"|"assistant"|"system") ||
             !matches!(message.status.as_str(),"active"|"pending"|"failed"|"cancelled"|"interrupted"|"deleted") ||
             (message.role == "assistant" && thread.channel == "desktop" && message.agent_id != thread.agent_id) ||
-            !(message.content.is_string() || message.content.is_array()) || message.reasoning.len()>2*1024*1024 || message.usage.to_string().len()>64_000 { return Err(invalid()); }
+            !(message.content.is_string() || message.content.is_array()) || message.reasoning.len()>2*1024*1024 || message.usage.to_string().len()>64_000
+            || !super::tool_timeline::valid(&message.tool_timeline) { return Err(invalid()); }
         if message.status == "pending" { message.status = "interrupted".into(); message.error = Some("备份中的回复未完成，请重新生成".into()); }
-        if message.status=="deleted" {message.content=json!("");message.reasoning.clear();message.usage=json!({});message.error=None;}
+        super::tool_timeline::recover(&mut message.tool_timeline,&message.status);
+        if message.status=="deleted" {message.content=json!("");message.reasoning.clear();message.usage=json!({});message.tool_timeline.clear();message.error=None;}
     }
-    if backup.revisions.iter().any(|r| !ids.contains(&r.message_id) || r.revision < 1) { return Err(invalid()); }
+    if backup.revisions.iter().any(|r| !ids.contains(&r.message_id) || r.revision < 1 || !super::tool_timeline::valid(&r.tool_timeline)) { return Err(invalid()); }
     let mut reminder_ids=HashSet::new();
     for reminder in &mut backup.reminders {
         if reminder.id.is_some_and(|id|id<=0 || id>9_007_199_254_740_991 || !reminder_ids.insert(id)) || reminder.revision<1
@@ -204,9 +202,9 @@ fn write_backup(conn: &Connection, backup: &Backup) -> ChatResult<()> {
     clear_database(conn)?;
     for thread in &backup.threads { repository::ensure_thread(conn,&thread.id,&thread.agent_id,&thread.channel)?; }
     for message in &backup.messages {
-        conn.execute("INSERT INTO chat_messages(id,thread_id,pair_id,role,agent_id,name,content,timestamp,revision,status,error,reasoning,usage)
-            VALUES(?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13)",params![message.id,message.thread_id,message.pair_id,message.role,message.agent_id,
-                message.name,message.content.to_string(),message.timestamp,message.revision,message.status,message.error,message.reasoning,message.usage.to_string()])?;
+        conn.execute("INSERT INTO chat_messages(id,thread_id,pair_id,role,agent_id,name,content,timestamp,revision,status,error,reasoning,usage,tool_timeline)
+            VALUES(?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14)",params![message.id,message.thread_id,message.pair_id,message.role,message.agent_id,
+                message.name,message.content.to_string(),message.timestamp,message.revision,message.status,message.error,message.reasoning,message.usage.to_string(),json!(message.tool_timeline).to_string()])?;
     }
     for memory in &backup.memories {
         conn.execute("INSERT INTO memories(id,content,tags,importance,timestamp,msg_timestamp,type,source,agent_id,source_message_id,diary_date,revision,source_message_ids) VALUES(?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13)",
@@ -221,7 +219,7 @@ fn write_backup(conn: &Connection, backup: &Backup) -> ChatResult<()> {
         conn.execute("INSERT INTO topics(id,topic,revealed,timestamp,agent_id,time) VALUES(?1,?2,?3,?4,?5,?6)",params![topic.id,topic.topic,topic.revealed,topic.timestamp,topic.agent_id,topic.time])?;
     }
     for revision in &backup.revisions {
-        conn.execute("INSERT INTO chat_message_revisions(message_id,revision,content,reasoning,usage) VALUES(?1,?2,?3,?4,?5)",params![revision.message_id,revision.revision,revision.content,revision.reasoning,revision.usage.to_string()])?;
+        conn.execute("INSERT INTO chat_message_revisions(message_id,revision,content,reasoning,usage,tool_timeline) VALUES(?1,?2,?3,?4,?5,?6)",params![revision.message_id,revision.revision,revision.content,revision.reasoning,revision.usage.to_string(),json!(revision.tool_timeline).to_string()])?;
     }
     conn.execute("DELETE FROM local_configs",[])?;
     for (key,value) in &backup.config { identity::set_value_in(conn,key,value)?; }
@@ -264,6 +262,20 @@ pub async fn local_reset_data(app:AppHandle, db: tauri::State<'_,DbState>, runti
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn tool_timeline_survives_backup_restore_and_accepts_old_backups() {
+        let db=super::super::tests::state();let mut conn=db.conn.lock().unwrap();
+        let raw=json!({"version":"1.0","config":{},"agents":{"pero":{"name":"Pero"}},
+            "messages":{"pero":[{"role":"assistant","content":"记住啦","timestamp":1}]},"memories":{}});
+        let mut backup=parse_backup(raw).unwrap();assert!(backup.messages[0].tool_timeline.is_empty());
+        backup.messages[0].tool_timeline.push(ToolActivity {id:"diary-1".into(),name:"write_diary".into(),status:"completed".into(),summary:"日记已保存".into()});
+        let mut serialized=serde_json::to_value(&backup).unwrap();
+        let decoded=parse_backup(serialized.clone()).unwrap();
+        {let tx=conn.transaction().unwrap();write_backup(&tx,&decoded).unwrap();tx.commit().unwrap();}
+        assert_eq!(repository::snapshot(&conn,"desktop:pero").unwrap().messages[0].tool_timeline[0].summary,"日记已保存");
+        serialized["messages"][0]["toolTimeline"][0]["status"]=json!("未知状态");assert!(parse_backup(serialized).is_err());
+    }
+
     #[test]
     fn reminder_backup_keeps_revision_and_accepts_records_before_revision_migration() {
         let db=super::super::tests::state();let mut conn=db.conn.lock().unwrap();

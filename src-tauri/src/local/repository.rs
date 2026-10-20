@@ -27,12 +27,14 @@ pub fn migrate(conn: &mut Connection, group: &[Value], agents: &Value) -> ChatRe
             user_message_id INTEGER,assistant_message_id INTEGER NOT NULL,regenerate INTEGER NOT NULL,
             status TEXT NOT NULL,manifest TEXT NOT NULL DEFAULT '{}',error TEXT);")?;
     for (table,column,kind) in [("chat_turns","fingerprint","TEXT"),("chat_turns","assistant_revision","INTEGER"),("chat_messages","reasoning","TEXT NOT NULL DEFAULT ''"),("chat_messages","usage","TEXT NOT NULL DEFAULT '{}'"),
-        ("chat_message_revisions","reasoning","TEXT NOT NULL DEFAULT ''"),("chat_message_revisions","usage","TEXT NOT NULL DEFAULT '{}'" )] {
+        ("chat_message_revisions","reasoning","TEXT NOT NULL DEFAULT ''"),("chat_message_revisions","usage","TEXT NOT NULL DEFAULT '{}'" ),
+        ("chat_messages","tool_timeline","TEXT NOT NULL DEFAULT '[]'"),("chat_message_revisions","tool_timeline","TEXT NOT NULL DEFAULT '[]'")] {
         let columns={ let mut stmt=conn.prepare(&format!("PRAGMA table_info({table})"))?;
             let rows=stmt.query_map([],|r|r.get::<_,String>(1))?;rows.collect::<Result<Vec<_>,_>>()? };
         if !columns.iter().any(|name|name==column) { conn.execute(&format!("ALTER TABLE {table} ADD COLUMN {column} {kind}"),[])?; }
     }
     conn.execute_batch("CREATE TABLE IF NOT EXISTS chat_tool_calls(request_id TEXT NOT NULL,message_id INTEGER NOT NULL,call_id TEXT NOT NULL,name TEXT NOT NULL,arguments TEXT NOT NULL,result TEXT NOT NULL,PRIMARY KEY(request_id,call_id));")?;
+    super::tool_timeline::migrate(conn)?;
     let has_source = {
         let mut stmt = conn.prepare("PRAGMA table_info(memories)")?;
         let mut columns = stmt.query_map([], |row| row.get::<_,String>(1))?;
@@ -105,11 +107,14 @@ pub fn thread(conn: &Connection, id: &str) -> ChatResult<Thread> {
     })).optional()?.ok_or_else(|| ChatError::new("NOT_FOUND", "会话不存在"))
 }
 
-fn map_message(row: &Row<'_>) -> rusqlite::Result<Message> {
+pub(super) fn map_message(row: &Row<'_>) -> rusqlite::Result<Message> {
     let content: String = row.get(6)?;
+    let status:String=row.get(9)?;
+    let mut tool_timeline:Vec<ToolActivity>=serde_json::from_str(&row.get::<_,String>("tool_timeline")?).unwrap_or_default();
+    super::tool_timeline::recover(&mut tool_timeline,&status);
     Ok(Message { id: row.get(0)?, thread_id: row.get(1)?, pair_id: row.get(2)?, role: row.get(3)?,
         agent_id: row.get(4)?, name: row.get(5)?, content: serde_json::from_str(&content).unwrap_or(json!(content)),
-        timestamp: row.get(7)?, revision: row.get(8)?, status: row.get(9)?, error: row.get(10)?,reasoning:row.get(11)?,usage:serde_json::from_str(&row.get::<_,String>(12)?).unwrap_or(json!({})) })
+        timestamp: row.get(7)?, revision: row.get(8)?, status, error: row.get(10)?,reasoning:row.get(11)?,usage:serde_json::from_str(&row.get::<_,String>(12)?).unwrap_or(json!({})),tool_timeline })
 }
 
 pub fn message(conn: &Connection, id: i64) -> ChatResult<Message> {
@@ -201,6 +206,11 @@ pub fn update_partial(conn: &Connection, id: i64, content: &str) -> ChatResult<(
     Ok(())
 }
 
+pub fn update_tool_timeline(conn:&Connection,id:i64,items:&[ToolActivity])->ChatResult<()> {
+    conn.execute("UPDATE chat_messages SET tool_timeline=?1 WHERE id=?2 AND status='pending'",params![json!(items).to_string(),id])?;
+    Ok(())
+}
+
 pub fn finish_turn(conn:&mut Connection,request:&TurnRequest,prepared:&PreparedTurn,content:&str,error:Option<&ChatError>,manifest:&Value)->ChatResult<Message> {
     finish_with_tools(conn,request,prepared,&Completion { content:content.into(),..Default::default() },error,manifest,&super::chat_tools::ToolSession::default())
 }
@@ -214,8 +224,8 @@ pub fn finish_with_tools(conn:&mut Connection,request:&TurnRequest,prepared:&Pre
     let status=error.map(|e|if e.code=="CANCELLED" {"cancelled"} else {"failed"}).unwrap_or("completed");
     if error.is_none() {
         if prepared.regenerate {
-            tx.execute("INSERT OR IGNORE INTO chat_message_revisions(message_id,revision,content,reasoning,usage) VALUES(?1,?2,?3,?4,?5)",
-                params![old.id,old.revision,old.content.to_string(),old.reasoning,old.usage.to_string()])?;
+            tx.execute("INSERT OR IGNORE INTO chat_message_revisions(message_id,revision,content,reasoning,usage,tool_timeline) VALUES(?1,?2,?3,?4,?5,?6)",
+                params![old.id,old.revision,old.content.to_string(),old.reasoning,old.usage.to_string(),json!(old.tool_timeline).to_string()])?;
             super::diary::remove_sources(&tx,&[old.id])?;
             tx.execute("DELETE FROM chat_tool_calls WHERE message_id=?1",[old.id])?;
         }
@@ -230,6 +240,17 @@ pub fn finish_with_tools(conn:&mut Connection,request:&TurnRequest,prepared:&Pre
     } else if !prepared.regenerate {
         tx.execute("UPDATE chat_messages SET content=?1,status=?2,error=?3,reasoning=?4,usage=?5 WHERE id=?6",
             params![json!(completion.content).to_string(),status,error.map(|e|e.message.as_str()),completion.reasoning,completion.usage.to_string(),old.id])?;
+    }
+    if error.is_none() || !prepared.regenerate {
+        // 展示记录与回复一同落盘；失败的重新生成保留原回复及原时间线。
+        let mut timeline=tools.traces.iter().map(|trace|super::tool_timeline::describe(&trace.call,&trace.result,Some(error.is_none()))).collect::<Vec<_>>();
+        if error.is_some() {
+            for item in &old.tool_timeline {
+                if timeline.len()<24 && !timeline.iter().any(|known|known.id==item.id) {timeline.push(item.clone());}
+            }
+            super::tool_timeline::recover(&mut timeline,"failed");
+        }
+        tx.execute("UPDATE chat_messages SET tool_timeline=?1 WHERE id=?2",params![json!(timeline).to_string(),old.id])?;
     }
     tx.execute("UPDATE chat_turns SET status=?1,error=?2,manifest=?3,assistant_revision=?5 WHERE request_id=?4",params![status,error.map(|e|e.message.as_str()),manifest.to_string(),request.request_id,old.revision+i64::from(prepared.regenerate && error.is_none())])?;
     let result=message(&tx,old.id)?;tx.commit()?;Ok(result)
@@ -266,7 +287,7 @@ pub fn delete_message(conn: &mut Connection, thread_id: &str, id: i64, pair: boo
     } else { vec![(target.id,target.timestamp,target.agent_id)] };
     super::diary::remove_sources(&tx,&targets.iter().map(|t|t.0).collect::<Vec<_>>())?;
     for (message_id,timestamp,agent_id) in targets {
-        tx.execute("UPDATE chat_messages SET status='deleted',revision=revision+1,content='\"\"',reasoning='',usage='{}',error=NULL WHERE id=?1", [message_id])?;
+        tx.execute("UPDATE chat_messages SET status='deleted',revision=revision+1,content='\"\"',reasoning='',usage='{}',tool_timeline='[]',error=NULL WHERE id=?1", [message_id])?;
         tx.execute("DELETE FROM chat_message_revisions WHERE message_id=?1",[message_id])?;
         tx.execute("DELETE FROM chat_tool_calls WHERE message_id=?1",[message_id])?;
         tx.execute("UPDATE chat_turns SET status='deleted',manifest='{}',error=NULL WHERE assistant_message_id=?1 OR user_message_id=?1",[message_id])?;

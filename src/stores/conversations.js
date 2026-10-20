@@ -86,7 +86,7 @@ export function useLocalConversation(channel = 'desktop') {
             started = true
             if (event.user) mergeMessage(entry, event.user)
             entry.activity = '正在想怎么回答你…'
-            preview = { ...event.message, content: '', reasoning: '', status: 'pending', error: null }
+            preview = { ...event.message, content: '', reasoning: '', toolTimeline: [], status: 'pending', error: null }
             mergeMessage(entry, preview)
           } else if (event.kind === 'step' && preview) {
             clearTimeout(frameTimer)
@@ -101,7 +101,15 @@ export function useLocalConversation(channel = 'desktop') {
             try {
               const tool = JSON.parse(event.content)
               const labels = { query_diary: '正在翻一翻日记…', write_diary: '正在记下今天的小事…', update_character: '正在整理此刻的心情…', query_reminders: '正在查看提醒…', manage_reminder: '正在整理提醒…' }
-              entry.activity = labels[tool.name] || '正在整理思绪…'
+              entry.activity = tool.status === 'running' ? labels[tool.name] || '正在整理思绪…' : tool.status === 'staged' ? '等待保存…' : '继续回应…'
+              if (preview && typeof tool.id === 'string' && tool.id) {
+                const timeline = (preview.toolTimeline || []).slice()
+                const index = timeline.findIndex(item => item.id === tool.id)
+                if (index >= 0) timeline[index] = tool
+                else if (timeline.length < 24) timeline.push(tool)
+                preview = { ...preview, toolTimeline: timeline }
+                mergeMessage(entry, preview)
+              }
             } catch { entry.activity = '正在整理思绪…' }
           } else if (['done', 'error', 'cancelled'].includes(event.kind) && event.message) {
             clearTimeout(frameTimer)

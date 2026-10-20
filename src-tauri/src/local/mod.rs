@@ -13,6 +13,7 @@ pub mod environment;
 pub mod settings;
 pub mod diary;
 pub mod chat_tools;
+pub mod tool_timeline;
 pub mod prompts;
 pub mod model_config;
 pub mod wire;
