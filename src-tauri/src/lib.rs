@@ -115,6 +115,7 @@ pub fn run() {
     .plugin(local::reminder_platform::init())
     .plugin(remote::vault::init())
     .plugin(remote::background::init())
+    .plugin(remote::files::init())
     .invoke_handler(tauri::generate_handler![
         mode::mode_snapshot,
         mode::mode_switch,
@@ -123,6 +124,12 @@ pub fn run() {
         remote::profiles::remote_save_profile,
         remote::profiles::remote_delete_profile,
         remote::remote_query,
+        remote::management::remote_manage,
+        remote::management::remote_manage_upload,
+        remote::management::remote_voice_tts,
+        remote::files::remote_export_text,
+        remote::downloads::remote_download_resource,
+        remote::downloads::remote_cancel_download,
         remote::remote_action,
         remote::remote_chat,
         remote::remote_connect,
@@ -143,6 +150,7 @@ pub fn run() {
         remote::presentation::remote_ui_write,
         remote::resources::remote_upload,
         remote::resources::remote_resource,
+        remote::resources::remote_resource_info,
         db::get_memories,
         db::delete_memory,
         local::reminders::local_reminder_query,

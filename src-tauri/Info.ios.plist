@@ -1,8 +1,14 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0"><dict>
+  <key>UIFileSharingEnabled</key>
+  <true/>
+  <key>LSSupportsOpeningDocumentsInPlace</key>
+  <true/>
   <key>NSCameraUsageDescription</key>
   <string>扫描 infOS 配对二维码，连接你自己的远程实例。</string>
   <key>NSLocalNetworkUsageDescription</key>
   <string>连接局域网中由你指定的 infOS 实例。</string>
+  <key>NSMicrophoneUsageDescription</key>
+  <string>在你点击录音时采集语音，交给已连接的 infOS 识别。</string>
 </dict></plist>

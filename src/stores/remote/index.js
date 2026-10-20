@@ -333,6 +333,11 @@ export async function performRemote(action, options) {
   try { return (await remoteClient.action(action, { ...options, token })).data }
   finally { await afterRemoteWrite(token) }
 }
+export async function manageRemote(request, options) {
+  const token = currentToken()
+  try { return (await remoteClient.manage(request, { ...options, token })).data }
+  finally { await afterRemoteWrite(token) }
+}
 export async function submitRemoteInput(input, options) {
   const token = currentToken()
   try { return (await remoteClient.submitInput(input, { ...options, token })).data.projection }

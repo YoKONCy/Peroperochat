@@ -27,6 +27,10 @@ export const remoteConnections = {
   remove: id => control('remote_delete_profile', { id }),
 }
 export const remoteClient = {
+  manage: (request, { requestId = crypto.randomUUID(), token } = {}) => scoped('remote_manage', { request, requestId }, token),
+  manageUpload: (kind, id, file, { fields = {}, requestId = crypto.randomUUID(), token } = {}) => scoped('remote_manage_upload', { kind, id, file, fields, requestId }, token),
+  tts: (input, { requestId = crypto.randomUUID(), token } = {}) => scoped('remote_voice_tts', { ...input, requestId }, token),
+  exportText: (name, content, token) => scoped('remote_export_text', { name, content }, token),
   query: (query, { cachedOnly = false, token } = {}) => scoped('remote_query', { query, cachedOnly }, token),
   action: (action, { requestId = crypto.randomUUID(), token } = {}) => scoped('remote_action', { action, requestId }, token),
   chat: (input, { requestId = crypto.randomUUID(), token } = {}) => scoped('remote_chat', { request: { ...input, requestId } }, token),
@@ -48,6 +52,9 @@ export const remoteClient = {
   uiWrite: (scope, value, token) => scoped('remote_ui_write', { scope, value }, token),
   upload: (threadId, file, { requestId = crypto.randomUUID(), token } = {}) => scoped('remote_upload', { threadId, file, requestId }, token),
   resource: (resource, { range = null, token } = {}) => scoped('remote_resource', { resource, range }, token),
+  resourceInfo: (resource, token) => scoped('remote_resource_info', { resource }, token),
+  downloadResource: (resource, name, id, token) => scoped('remote_download_resource', { resource, name, id }, token),
+  cancelDownload: (id, token) => scoped('remote_cancel_download', { id }, token),
   listen: callback => listen('remote-event', ({ payload }) => {
     try { assertToken(payload?.modeToken, 'remote') } catch { return }
     callback(payload)

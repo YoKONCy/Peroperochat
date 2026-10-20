@@ -39,7 +39,7 @@ pub enum Query {
 pub struct Route {pub method:reqwest::Method,pub path:String,pub params:Vec<(String,String)>,pub body:Option<Value>}
 fn route(path:String)->Route {Route {method:reqwest::Method::GET,path,params:Vec::new(),body:None}}
 pub fn segment(value:&str)->ChatResult<String> {
-    if value.is_empty() || value.len()>256 || value.chars().any(char::is_control) {return Err(ChatError::new("INVALID_INPUT","远程对象身份无效"));}
+    if value.is_empty() || matches!(value,"."|"..") || value.len()>256 || value.chars().any(char::is_control) {return Err(ChatError::new("INVALID_INPUT","远程对象身份无效"));}
     let mut url=reqwest::Url::parse("http://localhost/").unwrap();url.path_segments_mut().unwrap().push(value);
     Ok(url.path()[1..].to_owned())
 }
@@ -107,7 +107,8 @@ pub enum Action {
     QueueOrder {#[serde(rename="threadId")] thread_id:String,order:Vec<QueuePosition>},
     InteractionMode {id:String,mode:String},ExecutionMode {id:String,mode:String},
     ThreadTools {id:String,#[serde(rename="disabledTools")] disabled_tools:Vec<String>},
-    EditMessage {#[serde(rename="threadId")] thread_id:String,id:String,content:String},
+    EditMessage {#[serde(rename="threadId")] thread_id:String,id:String,content:String,#[serde(default,rename="expectedRevision")] expected_revision:Option<u64>},
+    DeleteMessagePair {#[serde(rename="threadId")] thread_id:String,id:String},
     DeleteMessage {#[serde(rename="threadId")] thread_id:String,id:String},
     RewindPreview {id:String,#[serde(rename="messageId")] message_id:Option<u64>,#[serde(rename="wholeThread")] whole_thread:bool},
     Rewind {id:String,#[serde(rename="messageId")] message_id:Option<u64>,#[serde(rename="wholeThread")] whole_thread:bool},
@@ -141,7 +142,8 @@ impl Action {
             Self::InteractionMode {id,mode}=> {if !["minimal","chat","work"].contains(&mode.as_str()) {return Err(invalid());}("PUT",format!("/chat/threads/{}/interaction-mode",segment(id)?),json!({"interactionMode":mode}))},
             Self::ExecutionMode {id,mode}=> {if !["manual","auto","auto_approve","full"].contains(&mode.as_str()) {return Err(invalid());}("PUT",format!("/chat/threads/{}/execution-mode",segment(id)?),json!({"executionMode":mode}))},
             Self::ThreadTools {id,disabled_tools}=> {if disabled_tools.len()>500 {return Err(invalid());}("PUT",format!("/chat/threads/{}/tools",segment(id)?),json!({"disabledTools":disabled_tools}))},
-            Self::EditMessage {thread_id,id,content}=> ("PATCH",format!("/chat/threads/{}/messages/{}",segment(thread_id)?,segment(id)?),json!({"content":content})),
+            Self::EditMessage {thread_id,id,content,expected_revision}=> ("PATCH",format!("/chat/threads/{}/messages/{}",segment(thread_id)?,segment(id)?),{let mut body=json!({"content":content});if let Some(revision)=expected_revision {body["expectedRevision"]=json!(revision);}body}),
+            Self::DeleteMessagePair {thread_id,id}=> ("DELETE",format!("/chat/threads/{}/messages/{}/pair",segment(thread_id)?,segment(id)?),Value::Null),
             Self::DeleteMessage {thread_id,id}=> ("DELETE",format!("/chat/threads/{}/messages/{}",segment(thread_id)?,segment(id)?),json!({})),
             Self::RewindPreview {id,message_id,whole_thread}|Self::Rewind {id,message_id,whole_thread}=> {
                 if !*whole_thread && message_id.is_none_or(|id|id==0) {return Err(invalid());}

@@ -58,7 +58,7 @@ pub async fn checked(response:reqwest::Response)->ChatResult<reqwest::Response> 
 }
 pub fn envelope(bytes:&[u8])->ChatResult<Value> {
     let value:Value=serde_json::from_slice(bytes).map_err(|_|ChatError::new("REMOTE_PROTOCOL","远程响应不是有效 JSON"))?;
-    if !value["code"].as_str().is_some_and(|code|["OK","CREATED","ACCEPTED"].contains(&code)) {return Err(ChatError::new("REMOTE_PROTOCOL","远程响应缺少标准成功结果信封"));}
+    if !value["code"].as_str().is_some_and(|code|["OK","CREATED","ACCEPTED"].contains(&code) || code=="NOT_CONFIGURED" && value["data"]["key"].is_string() && value["data"]["value"].is_null()) {return Err(ChatError::new("REMOTE_PROTOCOL","远程响应缺少标准成功结果信封"));}
     Ok(value["data"].clone())
 }
 pub async fn probe(endpoint:&str,token:&str)->ChatResult<Identity> {

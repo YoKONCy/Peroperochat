@@ -1,5 +1,6 @@
 // 来自定稿原型的受信任矢量源码；不接收服务端传入的 SVG。
 export const remoteIconPaths = {
+    audio: '<path class="icon-wash" d="M10 5 5 9H2v6h3l5 4Z"/><path d="M10 5 5 9H2v6h3l5 4Zm4 3a6 6 0 0 1 0 8m3-11a10 10 0 0 1 0 14"/><path class="icon-detail" d="M13 11v2"/>',
     terminal: '<path class="icon-wash" d="M2.5 4h19v16h-19Z"/><path d="M2.5 4h19v16h-19ZM3 8h18m-15 3 3 3-3 3m6 0h5"/><path class="icon-detail" d="M5 6h.5m2 0H8"/>',
     code: '<path class="icon-wash" d="m12 2 10 10-10 10L2 12Z"/><path d="m8 8-4 4 4 4m8-8 4 4-4 4m-3-11-2 14"/><path class="icon-detail" d="m3 5 2-2m14 18 2-2"/>',
     clock: '<circle class="icon-wash" cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="9"/><path d="M12 6v6l4 2"/><path class="icon-detail" d="M12 3v1m9 8h-1M3 12h1m8 9v-1"/>',
@@ -26,6 +27,9 @@ export const remoteIconPaths = {
     globe: '<circle class="icon-wash" cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="9"/><ellipse cx="12" cy="12" rx="4" ry="9"/><path class="icon-detail" d="M3 12h18M5 6.5c4 2 10 2 14 0M5 17.5c4-2 10-2 14 0"/>',
     folder: '<path class="icon-wash" d="M3 5h6l3 3h9v12H3Z"/><path d="M3 9V5h6l3 3h9v12H3Z"/><path class="icon-detail" d="M3 11h18m-13 5h6"/><path class="icon-jewel" d="m17 14 1 1.5-1 1.5-1-1.5Z"/>',
     download: '<path class="icon-wash" d="M4 17h16v4H4Z"/><path d="M12 2.5v12m-4-4 4 4 4-4M4 17v4h16v-4"/><path class="icon-detail" d="M8 19h8"/>',
+    'zoom-in': '<circle class="icon-wash" cx="10" cy="10" r="7"/><circle cx="10" cy="10" r="7"/><path d="m15 15 6 6M6.5 10h7M10 6.5v7"/>',
+    'zoom-out': '<circle class="icon-wash" cx="10" cy="10" r="7"/><circle cx="10" cy="10" r="7"/><path d="m15 15 6 6M6.5 10h7"/>',
+    wrap: '<path d="M3 5h18M3 10h13a4 4 0 0 1 0 8h-5m3-3-3 3 3 3M3 15h4M3 20h4"/>',
     open: '<path class="icon-wash" d="M4 8h12v12H4Z"/><path d="M14 3h7v7m0-7L10 14M10 4H4v16h16v-6"/>',
     memory: '<path class="icon-wash" d="M6 3h14v18H6a3 3 0 0 1-3-3V6Z"/><path d="M6 3h14v18H6a3 3 0 0 1-3-3V6a3 3 0 0 1 3-3Zm0 0v18"/><path class="icon-detail" d="M10 14h6m-6 3h4"/><path class="icon-jewel" d="m13 6 2.5 3-2.5 3-2.5-3Z"/>',
     shield: '<path class="icon-wash" d="m12 2 8.5 4v6c0 5-8.5 10-8.5 10S3.5 17 3.5 12V6Z"/><path d="m12 2 8.5 4v6c0 5-8.5 10-8.5 10S3.5 17 3.5 12V6Z"/><path class="icon-detail" d="m12 5 5.5 2.5V12"/><path d="m8 12 3 3 5-6"/>',

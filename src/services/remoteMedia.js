@@ -1,8 +1,17 @@
 import { remoteClient } from './remote'
 import { currentToken, assertToken, onModeInvalidated } from '../stores/mode'
+import { reactive } from 'vue'
 
 const urls = new Set()
 const avatars = new Map()
+export const remoteAvatarRevisions = reactive(new Map())
+export function invalidateRemoteAvatar(id) {
+  const token = currentToken(); assertToken(token, 'remote')
+  const key = `${token.target.profileId}:${token.epoch}:${id}`, entry = avatars.get(key)
+  avatars.delete(key)
+  if (entry && entry.refs === 0) entry.media?.release()
+  remoteAvatarRevisions.set(id, (remoteAvatarRevisions.get(id) || 0) + 1)
+}
 const avatarQueue = []
 let avatarLoads = 0
 onModeInvalidated(() => {
@@ -10,6 +19,7 @@ onModeInvalidated(() => {
   urls.clear()
   for (const job of avatarQueue.splice(0)) job.reject(new Error('运行模式已改变'))
   avatars.clear()
+  remoteAvatarRevisions.clear()
 })
 function pumpAvatars() {
   while (avatarLoads < 3 && avatarQueue.length) {
@@ -37,6 +47,7 @@ export async function acquireRemoteAvatar(id) {
     return { ...media, release() {
       if (released) return
       released = true; entry.refs--
+      if (entry.refs === 0 && avatars.get(key) !== entry) { entry.media?.release(); return }
       for (const [cacheKey, cached] of avatars) if (avatars.size > 32 && cached.refs === 0) { cached.media?.release(); avatars.delete(cacheKey) }
     } }
   } catch (error) { entry.refs--; if (avatars.get(key) === entry) avatars.delete(key); throw error }
@@ -55,7 +66,7 @@ export async function loadRemoteResource(resource, options = {}) {
   assertToken(token, 'remote')
   // HTML、SVG 等主动内容只作为文本或下载数据；不注入应用 DOM。
   const mime = result.mimeType.split(';')[0].trim().toLowerCase()
-  const passive = /^(image\/(png|jpeg|webp|gif|avif)|audio\/[a-z0-9.+-]+|video\/[a-z0-9.+-]+|application\/pdf)$/.test(mime)
+  const passive = /^(image\/(png|jpeg|webp|gif|avif|bmp|x-icon)|audio\/[a-z0-9.+-]+|video\/[a-z0-9.+-]+|application\/pdf)$/.test(mime)
   const blob = new Blob([new Uint8Array(result.bytes)], { type: passive ? mime : 'text/plain' })
   const url = URL.createObjectURL(blob)
   urls.add(url)

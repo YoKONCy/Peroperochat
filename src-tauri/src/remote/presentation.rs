@@ -32,6 +32,7 @@ pub struct SessionView {
     at_end:bool, cursor:Option<String>,
     #[serde(default)] edit_id:String,
     #[serde(default)] send_request_id:Option<String>,
+    #[serde(default)] workspace_context:Option<super::context::WorkspaceContext>,
 }
 #[derive(Deserialize, Serialize)]
 #[serde(rename_all="camelCase", deny_unknown_fields)]
@@ -84,6 +85,7 @@ fn validate(scope:&Scope,value:Value)->ChatResult<Value> {
                 || value.anchor.as_ref().is_some_and(|id|id.len()>1024) || value.cursor.as_ref().is_some_and(|id|id.len()>256)
                 || value.edit_id.len()>64 || value.send_request_id.as_ref().is_some_and(|id|uuid::Uuid::parse_str(id).is_err())
                 || value.attachments.iter().any(|file|uuid::Uuid::parse_str(&file.id).is_err() || file.name.len()>240) {return Err(invalid());}
+            if let Some(context)=&value.workspace_context {context.validate()?;}
             Ok(json!(value))
         },
         Scope::Character {..}=> {
@@ -104,7 +106,7 @@ fn settle_sent_draft(tx:&rusqlite::Transaction<'_>,scope:&Scope,value:&mut Value
     let state:Option<String>=tx.query_row("SELECT state FROM requests WHERE id=?1",[id],|row|row.get(0)).optional()?;
     if state.as_deref()!=Some("completed") {return Ok(false);}
     // 读写都核对持久回执，防止延迟保存把已发送草稿重新写回；新编辑已解除请求关联。
-    value["draft"]=json!("");value["attachments"]=json!([]);value["sendRequestId"]=Value::Null;value["editId"]=json!(uuid::Uuid::new_v4().to_string());
+    value["draft"]=json!("");value["attachments"]=json!([]);value["workspaceContext"]=Value::Null;value["sendRequestId"]=Value::Null;value["editId"]=json!(uuid::Uuid::new_v4().to_string());
     Ok(true)
 }
 
@@ -144,6 +146,22 @@ pub fn remote_ui_write(app:AppHandle,token:Token,scope:Scope,value:Value)->ChatR
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn workspace_reference_restores_with_draft_and_clears_only_after_acceptance() {
+        let scope=Scope::Session {agent_id:"pero".into(),thread_id:"thread-a".into()};
+        let legacy=json!({"draft":"查看文件","attachments":[],"anchor":null,"offset":0,"atEnd":true,"cursor":null});
+        let mut value=validate(&scope,legacy).unwrap();assert!(value["workspaceContext"].is_null());
+        value["workspaceContext"]=json!({"filePath":"notes.md","fileHash":"b".repeat(64),"fileDirty":false});
+        let mut value=validate(&scope,value).unwrap();assert_eq!(value["workspaceContext"]["filePath"],"notes.md");
+        let id=uuid::Uuid::new_v4().to_string();value["sendRequestId"]=json!(id);
+        let mut conn=rusqlite::Connection::open_in_memory().unwrap();conn.execute_batch("CREATE TABLE requests(id TEXT,state TEXT)").unwrap();
+        conn.execute("INSERT INTO requests VALUES(?1,'unknown')",[&id]).unwrap();let tx=conn.transaction().unwrap();
+        assert!(!settle_sent_draft(&tx,&scope,&mut value).unwrap());assert!(value["workspaceContext"].is_object());
+        tx.execute("UPDATE requests SET state='completed'",[]).unwrap();assert!(settle_sent_draft(&tx,&scope,&mut value).unwrap());
+        assert!(value["workspaceContext"].is_null());assert_eq!(value["draft"],"");
+        value["workspaceContext"]=json!({"terminalId":"terminal-a"});
+        assert!(!settle_sent_draft(&tx,&scope,&mut value).unwrap());assert_eq!(value["workspaceContext"]["terminalId"],"terminal-a");
+    }
     #[test]
     fn legacy_character_preferences_remain_readable() {
         let scope=Scope::Character {agent_id:"pero".into()};

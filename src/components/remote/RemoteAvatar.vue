@@ -2,12 +2,12 @@
 <script setup>
 import { ref, watch, onBeforeUnmount } from 'vue'
 import CharacterAvatar from '../companion/CharacterAvatar.vue'
-import { acquireRemoteAvatar } from '../../services/remoteMedia'
+import { acquireRemoteAvatar, remoteAvatarRevisions } from '../../services/remoteMedia'
 const props = defineProps({ id: String, label: String })
 const source = ref('')
 let version = 0
 let resource = null
-watch(() => props.id, async id => {
+watch(() => [props.id, remoteAvatarRevisions.get(props.id) || 0], async ([id]) => {
   const request = ++version
   resource?.release(); resource = null; source.value = ''
   if (!id) return

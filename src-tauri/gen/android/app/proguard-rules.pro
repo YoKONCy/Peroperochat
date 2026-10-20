@@ -33,3 +33,8 @@
 -keep class com.peroperochat.mobile.RemoteReceiverArgs { *; }
 -keep interface com.peroperochat.mobile.RemoteReceiverCallback { *; }
 -keepclassmembers class * implements com.peroperochat.mobile.RemoteReceiverCallback { *; }
+# 文件保存依赖 Tauri 参数反射、Activity 回调和 JNI 模式守卫。
+-keep class com.peroperochat.mobile.RemoteFilesPlugin { *; }
+-keep class com.peroperochat.mobile.RemoteExportArgs { *; }
+-keep class com.peroperochat.mobile.RemoteSaveArgs { *; }
+-keep class com.peroperochat.mobile.RemoteCancelArgs { *; }
