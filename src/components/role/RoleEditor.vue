@@ -56,7 +56,16 @@
                 <span class="form-hint">显示模式可随时切换为通用 Pio。角色包导入、导出时保留此素材地址。</span>
               </el-form-item>
               <el-form-item label="图片排版"><el-select v-model="formData.illustration_layout"><el-option label="透明立绘" value="standing" /><el-option label="完整 CG 卡片" value="card" /></el-select></el-form-item>
-              <el-form-item label="房间背景"><el-input v-model="formData.room_background" placeholder="应用内素材路径或 HTTP(S) 图片地址，留空使用默认房间" /><button type="button" class="room-text-button" :disabled="artLoading" @click="pickArt('room_background')">选择背景图片</button></el-form-item>
+              <el-form-item label="房间背景">
+                <div class="room-background-editor">
+                  <el-input v-if="!formData.room_background.startsWith('data:')" v-model="formData.room_background" placeholder="图片地址，留空使用默认房间" />
+                  <span v-else class="form-hint">已选择本地背景图片，将随角色一起保存和导出。</span>
+                  <div class="room-background-actions"><button type="button" class="room-text-button" :disabled="artLoading" @click="pickArt('room_background')">上传背景图片</button><button v-if="formData.room_background" type="button" class="room-text-button" :disabled="artLoading" @click="formData.room_background = ''">使用默认房间</button></div>
+                  <span class="form-hint">支持不超过 5MB 的 PNG、JPEG、WebP。上传的背景固定显示；默认房间会在切屏时按设备本地时间更新，其他自定义角色默认使用 Pero 房间。</span>
+                  <img v-if="formData.room_background && !backgroundPreviewFailed" class="room-background-preview" :src="formData.room_background" alt="所选房间背景预览" decoding="async" @error="backgroundPreviewFailed = true" />
+                  <span v-else-if="backgroundPreviewFailed && formData.room_background" class="form-hint">背景暂时无法预览，请核对图片地址或重新上传。</span>
+                </div>
+              </el-form-item>
               <input ref="artInput" type="file" accept="image/png,image/jpeg,image/webp" hidden @change="readArt" />
               <el-form-item label="标签">
                 <div class="tags-input">
@@ -229,6 +238,7 @@ const isSaving = computed(() => props.saving)
 const avatarInput = ref(null)
 const newTag = ref('')
 const artInput = ref(null), artLoading = ref(false)
+const backgroundPreviewFailed = ref(false)
 let artField = 'standing_image', artReader = null, artVersion = 0
 function pickArt(field) { artField = field; artInput.value?.click() }
 function readArt(event) {
@@ -264,6 +274,8 @@ const formData = reactive({
     mind: ''
   }
 })
+
+watch(() => formData.room_background, () => { backgroundPreviewFailed.value = false })
 
 function resetForm() {
   artVersion++; artReader?.abort(); artLoading.value = false
@@ -371,7 +383,7 @@ function applyTemplate(template) {
 }
 
 function handleSave() {
-  if (isSaving.value) return
+  if (isSaving.value || artLoading.value) return
   if (!formData.id.trim()) {
     ElMessage.error('请输入角色 ID')
     activeTab.value = 'basic'
@@ -397,6 +409,7 @@ function handleSave() {
 .avatar-preview .editor-avatar { width: 100%; height: 100%; }
 .avatar-placeholder { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; height: 100%; color: var(--room-muted); font-size: 11px; }
 .form-hint { font-size: 11px; color: var(--room-muted); line-height: 1.65; margin-top: 6px; }
+.room-background-editor { display: grid; gap: 8px; width: 100%; }.room-background-actions { display: flex; align-items: center; gap: 15px; flex-wrap: wrap; }.room-background-preview { display: block; width: 100%; height: 150px; object-fit: cover; object-position: center 45%; border: 1px solid var(--room-line); border-radius: 10px; }
 .tags-input { display: flex; flex-wrap: wrap; gap: 7px; width: 100%; padding: 8px; border: 1px solid var(--room-line); border-radius: 5px; }
 .tags-input input { min-width: 100px; flex: 1; border: 0; padding: 4px; outline: 0; background: transparent; color: var(--room-ink); font-size: 13px; }
 .tags-input:focus-within { border-color: var(--room-accent); }

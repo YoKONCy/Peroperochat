@@ -1,7 +1,7 @@
 <template>
   <section ref="panelElement" class="room-chat" :class="[`room-chat--${mode}`, { 'room-chat--keyboard': keyboardOpen }]" aria-label="聊天面板">
     <div class="chat-handle-area" @pointerdown="startDrag" @pointerup="finishDrag" @pointercancel="drag = null">
-      <button class="chat-handle" :aria-label="mode === 'rest' ? '展开对话' : '调整对话面板高度'" @click="cycleMode"><span /></button>
+      <button class="chat-handle" :aria-label="mode === 'rest' ? '展开对话' : '调整对话面板高度'" @click="cycleMode"><span /><RoomAccent class="chat-handle-mark" kind="orbit" /></button>
     </div>
     <header v-show="mode !== 'rest'" class="chat-heading">
       <div class="chat-heading-name"><CharacterAvatar class="chat-role-avatar" :src="agent.avatar" :label="agent.name" /><strong>{{ agent.name }}</strong><span v-if="busy" class="heading-busy">正在回应</span></div>
@@ -12,7 +12,7 @@
     </header>
 
     <Transition name="room-soft"><button v-if="mode === 'rest' && (lastReply || busy)" class="last-reply" @click="$emit('update:mode', 'peek')">
-      <RoomIcon name="chat" /><span>{{ busy ? activity || '正在想怎么回答你…' : lastReply }}</span><RoomIcon name="up" />
+      <span class="last-reply-symbol"><RoomIcon name="chat" /></span><span>{{ busy ? activity || '正在想怎么回答你…' : lastReply }}</span><RoomIcon name="up" />
     </button></Transition>
 
     <div v-if="historyMounted" v-show="mode !== 'rest'" ref="list" class="chat-messages" @scroll.passive="onScroll">
@@ -21,7 +21,7 @@
         <CharacterAvatar class="intro-avatar" :src="agent.avatar" :label="agent.name" /><p>想和 {{ agent.name }} 聊点什么？</p>
       </div>
       <article v-for="{ message, index } in visibleMessages" :id="`room-message-${message.id}`" :key="message.id" v-memo="[index, message.content, message.reasoning, message.status, message.error, selectedId === message.id, jumpedId === message.id, freshId === message.id, agent.name, agent.avatar, busy]" class="room-message" :class="[message.role, { 'is-selected': selectedId === message.id, 'is-jumped': jumpedId === message.id, 'is-new': freshId === message.id }]">
-        <div class="message-byline"><CharacterAvatar v-if="message.role !== 'user'" class="message-avatar" :src="agent.avatar" :label="agent.name" /><span>{{ message.role === 'user' ? '你' : agent.name }}</span><time>{{ formatTime(message.timestamp) }}</time></div>
+        <div class="message-byline"><CharacterAvatar v-if="message.role !== 'user'" class="message-avatar" :src="agent.avatar" :label="agent.name" /><span class="message-speaker">{{ message.role === 'user' ? '你' : agent.name }}</span><time>{{ formatTime(message.timestamp) }}</time></div>
         <div class="message-body" @contextmenu.prevent="selectedId = message.id" @pointerdown="startPress($event, message.id)" @pointermove="movePress" @pointerup="clearPress" @pointercancel="clearPress">
           <details v-if="message.reasoning" class="message-reasoning"><summary>{{ message.status === 'pending' ? '正在思考' : '思考过程' }}</summary><div>{{ message.reasoning }}</div></details>
           <div v-if="message.content === '__loading__'" class="typing-indicator" aria-label="正在思考"><i /><i /><i /></div>
@@ -61,6 +61,7 @@
 <script setup>
 import { computed, ref, watch, nextTick, onMounted, onBeforeUnmount } from 'vue'
 import RoomIcon from './RoomIcon.vue'
+import RoomAccent from './RoomAccent.vue'
 import CharacterAvatar from './CharacterAvatar.vue'
 import { roomMarkdown } from '../../utils/roomMarkdown'
 import { createTextRenderCache } from '../../utils/textRenderCache'

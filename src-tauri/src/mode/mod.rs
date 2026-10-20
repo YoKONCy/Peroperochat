@@ -165,6 +165,7 @@ pub async fn mode_switch(app:AppHandle,target:Target)->ChatResult<Snapshot> {
     let result=async {
         let runtime=app.state::<ChatRuntime>();runtime.cancel_all()?;
         crate::remote::stop_all(&app);
+        crate::remote::background::suspend_async(app.clone()).await?;
         // 不持有控制事务等待异步请求退出。门已关闭，任何迟到提交均被拒绝。
         tokio::time::timeout(Duration::from_secs(10),async {
             while !runtime.is_idle()? {tokio::time::sleep(Duration::from_millis(20)).await;}Ok::<_,ChatError>(())
@@ -175,7 +176,7 @@ pub async fn mode_switch(app:AppHandle,target:Target)->ChatResult<Snapshot> {
         mode.activate()
     }.await;
     match result {
-        Ok(state)=> {let _=app.emit("mode-event",&state);Ok(state)},
+        Ok(state)=> {let _=app.emit("mode-event",&state);crate::remote::background::resume_async(app.clone()).await;Ok(state)},
         Err(error)=> {if let Ok(state)=mode.fail() {let _=app.emit("mode-event",&state);}Err(error)}
     }
 }

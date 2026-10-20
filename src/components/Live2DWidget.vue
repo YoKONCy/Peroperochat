@@ -5,7 +5,8 @@
     <div v-show="renderer === 'live2d'" id="l2d-panel" class="room-character-canvas" :class="{ 'has-error': modelError, 'is-loading': loading }" :aria-label="`${agent.name} 的 Live2D 角色`">
       <div v-if="modelError" class="character-fallback"><CharacterAvatar class="character-fallback-avatar" :src="agent.avatar" :label="agent.name" /><span>{{ modelError }}</span><button type="button" @click="initializeModel">重新加载角色</button><button type="button" @click="$emit('open-display')">改用静态立绘</button></div>
     </div>
-    <Transition name="room-speech"><button v-if="speech && !quiet && (renderer === 'illustration' || !modelError)" type="button" class="room-character-speech" :aria-label="`${agent.name}：${speech}。打开聊天`" @click="$emit('open-chat')"><span class="speech-name">{{ agent.name }}</span><span class="speech-text">{{ speech }}</span></button></Transition>
+    <Transition name="room-floating"><FloatingDialogue v-if="speech && speechKind === 'interaction' && renderer === 'live2d' && !quiet && !modelError" :key="speechSequence" :text="speech" :speaker="agent.name" /></Transition>
+    <Transition name="room-speech"><button v-if="speech && speechKind !== 'interaction' && !quiet && (renderer === 'illustration' || !modelError)" type="button" class="room-character-speech" :aria-label="`${agent.name}：${speech}。打开聊天`" @click="$emit('open-chat')"><span class="speech-name"><span>{{ agent.name }}</span><RoomAccent /></span><RoomAccent class="speech-flourish" kind="orbit" /><span class="speech-text">{{ speech }}</span></button></Transition>
     <span v-if="renderer === 'live2d' && loading && !quiet" class="character-loading" role="status">{{ agent.name }} 正在过来…</span>
   </div>
 </template>
@@ -18,15 +19,19 @@ import { activeAgentId, AGENTS, getActiveAgentId } from '../stores/agents'
 import { visibleMessage } from '../utils/messageContent'
 import { INTERACTION_LINES } from '../constants/interaction'
 import CharacterAvatar from './companion/CharacterAvatar.vue'
+import RoomAccent from './companion/RoomAccent.vue'
+import FloatingDialogue from './companion/FloatingDialogue.vue'
 
 const props = defineProps({ quiet: Boolean, interactive: { type: Boolean, default: true }, active: { type: Boolean, default: true }, renderer: { type: String, default: 'live2d' }, presentation: { type: Object, default: () => ({}) } })
 const emit = defineEmits(['projection', 'open-chat', 'open-display'])
 const agent = computed(() => AGENTS[activeAgentId.value] || { name: '伙伴' })
 const speech = ref(''), loading = ref(false), modelError = ref(''), reacting = ref(false), imageFailed = ref(false)
+const speechKind = ref('chat'), speechSequence = ref(0)
 let speechTimer = null, reactionTimer = null, touch = null, observer = null, unlistenEnvironment = null
 let projectionVersion = 0, initializationVersion = 0, disposed = false, mounted = false, currentProjection = null
 
 function syncActivity() {
+  if (!props.active || props.quiet || document.hidden || modelError.value || disposed) clearSpeech()
   window.PPC_LIVE2D_ENABLED = mounted && !disposed && props.renderer === 'live2d'
   window.PPC_LIVE2D_ACTIVE = window.PPC_LIVE2D_ENABLED && props.active && !document.hidden && !modelError.value
   window.dispatchEvent(new Event('ppc:live2d-visibility'))
@@ -63,9 +68,12 @@ function moveWidgetIntoPanel() {
   // 完成归位后不再观察整个页面，流式消息和抽屉更新无需反复查找角色节点。
   observer?.disconnect(); observer = null
 }
-function showSpeech(value) {
-  clearTimeout(speechTimer); speech.value = visibleMessage(value)
-  if (speech.value) speechTimer = setTimeout(() => { speech.value = '' }, 12000)
+function clearSpeech() { clearTimeout(speechTimer); speechTimer = null; speech.value = '' }
+function showSpeech(value, { interaction = false, duration = 12000 } = {}) {
+  if (disposed || !props.active || props.quiet || document.hidden) return
+  clearSpeech(); speechKind.value = interaction ? 'interaction' : 'chat'; speechSequence.value++; speech.value = visibleMessage(value)
+  const lifetime = Number.isFinite(duration) ? Math.max(3500, Math.min(duration, 12000)) : 7000
+  if (speech.value) speechTimer = setTimeout(clearSpeech, lifetime)
 }
 async function applyProjection(state, reloadModel) {
   if (disposed || state.agentId !== getActiveAgentId()) return
@@ -76,7 +84,7 @@ async function applyProjection(state, reloadModel) {
   emit('projection', state)
   if (reloadModel) {
     const welcome = state.texts?.welcome
-    showSpeech(typeof welcome === 'string' ? welcome : welcome?.message || agent.value.welcome_message || '')
+    showSpeech(typeof welcome === 'string' ? welcome : welcome?.message || agent.value.welcome_message || '', { interaction: props.renderer === 'live2d' })
     if (props.renderer === 'live2d' && window.WaifuWidget) await window.WaifuWidget.loadModel(Number(state.modelId) || 0, Number(state.modelTexturesId) || 0, undefined, false)
   }
 }
@@ -125,7 +133,7 @@ function onContextLost(event) { event.preventDefault(); modelError.value = '角�
 function onContextRestored() { if (props.renderer === 'live2d') initializeModel() }
 async function onAgentChanged() { currentProjection = null; projectionVersion++; emit('projection', { agentId: getActiveAgentId(), mood: '', vibe: '', mind: '' }); await updateRenderer() }
 function onChat(event) { if (!props.quiet) showSpeech(event.detail) }
-function onWaifuMessage(event) { if (props.renderer === 'live2d' && props.active) showSpeech(event.detail?.text || '') }
+function onWaifuMessage(event) { if (props.renderer === 'live2d' && props.active) showSpeech(event.detail?.text || '', { interaction: true, duration: event.detail?.timeout }) }
 function onStatusUpdated(event) { if (event.detail?.agentId === getActiveAgentId()) applyProjection({ ...currentProjection, ...event.detail }, false) }
 function onTextsUpdated(event) { if (event.detail) window.WAIFU_TEXTS = event.detail }
 async function saveModelPreferences(modelId, textureId, agentId = getActiveAgentId()) {
@@ -135,6 +143,7 @@ async function saveModelPreferences(modelId, textureId, agentId = getActiveAgent
 }
 watch(() => props.renderer, updateRenderer)
 watch(() => props.active, syncActivity, { flush: 'sync' })
+watch(() => props.quiet, value => { if (value) clearSpeech() }, { flush: 'sync' })
 watch(() => props.presentation.illustration, () => { imageFailed.value = false })
 onMounted(async () => {
   mounted = true

@@ -158,7 +158,7 @@
 .remote-notice { font-size: 11px; line-height: 1.8; color: #a68a71; padding: 10px 12px; background: #f8f3ed; border-radius: 8px; }
 .remote-notice-body { white-space: pre-wrap; overflow-wrap: anywhere; }
 .remote-checkbox { display: flex; align-items: flex-start; gap: 8px; font-size: 12px; line-height: 1.8; margin: 16px 0; }
-.remote-checkbox input { margin: 4px 0 0; accent-color: var(--room-accent); width: auto !important; }
+.remote-checkbox input { margin: 4px 0 0; }
 .remote-connection-form { display: grid; gap: 17px; padding: 16px 0; }
 .remote-connection-form h3 { font-size: 14px; margin: 0; }
 .remote-connection-form label, .remote-appearance label { display: flex; flex-direction: column; gap: 8px; font-size: 12px; }

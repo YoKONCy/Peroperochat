@@ -9,6 +9,11 @@ mod gateway;
 pub mod resources;
 pub mod presentation;
 pub mod notifications;
+pub mod background;
+mod background_store;
+mod background_worker;
+#[cfg(any(target_os="android",test))]
+mod background_jni;
 
 use std::sync::Mutex;
 use serde::{Deserialize,Serialize};
@@ -41,6 +46,7 @@ pub fn stop_all(app:&AppHandle) {
 pub(super) fn notify_error(app:&AppHandle,token:&Token,error:&ChatError) {
     if error.code!="REMOTE_AUTH_REQUIRED" {return;}
     if let Ok(_gate)=app.state::<Coordinator>().gate(Some(token),false) {
+        background::authorization_failed(app,token);
         let runtime=app.state::<Runtime>();
         if let Ok(mut blocked)=runtime.retry_blocked.lock() {*blocked=true;}
         if let Ok(mut handle)=runtime.gateway.lock() {if let Some(handle)=handle.take() {handle.stop();}}

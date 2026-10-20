@@ -1,10 +1,10 @@
 <template>
   <section class="remote-collection">
     <header class="remote-section-heading"><div><span class="remote-eyebrow">{{ eyebrow }}</span><h1>{{ title }}</h1></div><button v-if="kind === 'tasks'" class="room-icon-button" aria-label="新建远程任务" :disabled="remoteState.connection !== 'online' || !agentId" @click="$emit('create-task')"><RoomIcon name="plus" /></button><button class="room-icon-button" aria-label="刷新列表" :disabled="loading" @click="reload"><RoomIcon name="refresh" /></button></header>
-    <label v-if="kind === 'tasks'" class="remote-task-filter">任务状态<select v-model="taskStatus"><option :value="null">全部</option><option value="running">执行中</option><option value="waiting_input">等待回复</option><option value="paused">已暂停</option><option value="completed">已完成</option><option value="failed">执行失败</option></select></label>
+    <div v-if="kind === 'tasks'" class="remote-task-filter"><span>任务状态</span><ChoicePicker v-model="taskStatus" label="任务状态" :options="taskStatuses" /></div>
     <template v-if="kind === 'library'"><div class="remote-segments"><button v-for="item in sources" :key="item.id" :class="{ selected: source === item.id }" @click="source = item.id">{{ item.label }}</button></div><form class="remote-search" @submit.prevent="search"><RoomIcon name="search" /><input v-model="searchText" :placeholder="source === 'files' ? '筛选当前目录文件' : '搜索当前连接中的资料'" maxlength="200" /><button type="submit">搜索</button></form><button v-if="source === 'files' && path !== '.'" class="room-text-button" @click="path = '.'">返回会话文件根目录</button></template>
-    <p v-if="kind === 'inbox'" class="remote-help">设备在线期间接收并缓存最近 256 条待阅通知；明确标为已读后才发送回执。应用关闭后的远程推送暂未接入。审批、问题与待核对请求仍以服务端状态为准。</p>
-    <template v-if="kind === 'inbox'"><p v-if="remoteState.notificationError" class="room-error">{{ remoteState.notificationError }}</p><article v-for="notice in notices" :key="`${notice.principalId}:${notice.notificationId}:${notice.revision}`" class="remote-input-card"><span class="remote-eyebrow">{{ notice.principalId }} · {{ notice.replayed ? '历史通知' : '待阅通知' }}</span><h3>{{ notice.title || 'infOS 通知' }}</h3><p class="remote-notice-body">{{ notice.body }}</p><button class="room-text-button" :disabled="acknowledging || remoteState.connection !== 'online'" @click="acknowledge(notice)">标为已读</button></article></template>
+    <p v-if="kind === 'inbox'" class="remote-help">缓存最近 256 条待阅通知；明确标为已读后才发送回执。Android 可在连接设置开启原生后台接收。审批、问题与待核对请求仍以服务端状态为准。</p>
+    <template v-if="kind === 'inbox'"><p v-if="remoteState.notificationError" class="room-error">{{ remoteState.notificationError }}</p><article v-for="notice in notices" :id="`remote-notice-${JSON.stringify([notice.principalId, notice.notificationId])}`" :key="`${notice.principalId}:${notice.notificationId}:${notice.revision}`" class="remote-input-card"><span class="remote-eyebrow">{{ notice.principalId }} · {{ notice.replayed ? '历史通知' : '待阅通知' }}</span><h3>{{ notice.title || 'infOS 通知' }}</h3><p class="remote-notice-body">{{ notice.body }}</p><button class="room-text-button" :disabled="acknowledging || remoteState.connection !== 'online'" @click="acknowledge(notice)">标为已读</button></article></template>
     <p v-if="error" class="room-error" role="alert">{{ error }}</p>
     <p v-if="cached" class="remote-cache-note">正在显示缓存，内容可能已经更新。</p>
     <p v-if="loading && !rows.length" class="room-empty">正在读取…</p>
@@ -16,6 +16,7 @@
 <script setup>
 import { computed, ref, watch, onBeforeUnmount } from 'vue'
 import RoomIcon from './RemoteIcon.vue'
+import ChoicePicker from '../companion/ChoicePicker.vue'
 import RemoteFileCover from './RemoteFileCover.vue'
 import { readRemote, remoteViews, remotePendingRequests, refreshRemotePendingRequests, remoteNotifications, remoteState, refreshRemoteNotifications, acknowledgeRemoteNotification } from '../../stores/remote'
 import { currentToken, assertToken } from '../../stores/mode'
@@ -27,6 +28,7 @@ const page = ref(1), source = ref('files'), path = ref('.'), searchText = ref(''
 const acknowledging = ref(false)
 const notices = computed(() => [...remoteNotifications.values()])
 const sources = [{ id: 'files', label: '文件' }, { id: 'memories', label: '记忆' }, { id: 'documents', label: '文档' }]
+const taskStatuses = [{ value: null, label: '全部' }, { value: 'running', label: '执行中' }, { value: 'waiting_input', label: '等待回复' }, { value: 'paused', label: '已暂停' }, { value: 'completed', label: '已完成' }, { value: 'failed', label: '执行失败' }]
 let version = 0, disposed = false
 const title = computed(() => ({ tasks: '任务', inbox: '通知', library: '资料' }[props.kind]))
 const eyebrow = computed(() => ({ tasks: '把进展留在身边', inbox: '等你看一眼', library: '一起积累的内容' }[props.kind]))

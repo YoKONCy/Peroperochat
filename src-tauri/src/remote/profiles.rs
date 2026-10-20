@@ -119,12 +119,21 @@ pub async fn remote_save_profile(app:AppHandle,input:ProfileInput,mode_token:Tok
             return Err(error);
         }
         if active {
+            if let Err(error)=super::background::suspend_async(app.clone()).await {
+                if let Ok(state)=mode.fail() {let _=app.emit("mode-event",state);}
+                return Err(error);
+            }
             match mode.activate() {
                 Ok(state)=> {let _=app.emit("mode-event",state);},
                 Err(error)=> {if let Ok(state)=mode.fail() {let _=app.emit("mode-event",state);}return Err(error);},
             }
         }
         if let Some(old)=&previous {let _=super::vault::delete(&app,old.credential_key());}
+        if active {
+            // 授权已经保存成功，后台适配失败不能伪装成配对失败而诱导重复兑换。
+            if let Err(error)=super::background::reauthorized(&app) {eprintln!("后台接收授权状态等待恢复：{}",error.message);}
+            super::background::resume_async(app.clone()).await;
+        }
         Ok(profile)
     }.await;
     // 未保存的新设备会话尽力撤销；不撤销用户原来的管理或兼容凭据。

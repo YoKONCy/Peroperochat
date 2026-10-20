@@ -1,7 +1,8 @@
 <template>
   <RoomDrawer title="连接与运行模式" subtitle="把 infOS 的陪伴与进展带在身边" :busy="busy || scanning" @close="$emit('close')">
     <div class="remote-mode-intro"><RoomIcon name="connection" /><div><strong>{{ activeId ? '当前运行于 infOS 客户端' : '从独立空间，前往 infOS' }}</strong><p>远程聊天与任务由服务端执行。独立空间暂停，两套角色、记忆与草稿分别保存。</p></div></div>
-    <div class="remote-notification-status"><span><RoomIcon name="bell" /><strong>在线通知</strong><small>{{ activeId && remoteState.connection === 'online' ? '已连接' : '连接后接收' }}</small></span><span><strong>退出后的系统推送</strong><small>暂未开放</small></span><p>应用进程退出后暂不接收远程通知；再次连接时，补收服务端保留的待阅通知。</p></div>
+    <div class="remote-notification-status"><span><RoomIcon name="bell" /><strong>在线通知</strong><small>{{ activeId && remoteState.connection === 'online' ? '已连接' : '连接后接收' }}</small></span><p>在线接收 Gateway 通知；断线后补收服务端保留的待阅记录。</p></div>
+    <RemoteBackground v-if="activeId" :key="activeId" />
     <p v-if="pendingCount" class="remote-notice">当前连接有 {{ pendingCount }} 项操作待核对，切换后仍保留在原连接中。</p>
     <p v-if="error" class="room-error" role="alert">{{ error }}</p>
     <p v-if="savedName" class="remote-notice">「{{ savedName }}」已保存到本机，可以从连接卡再次进入。</p>
@@ -26,7 +27,7 @@
       <p v-if="editingId" class="remote-help">确认同一 infOS 实例后更新设备会话，保留草稿与阅读记录。</p>
       <label>服务地址<input v-model="endpoint" type="url" placeholder="https://infos.example.com 或 http://电脑IP:9122" autocomplete="url" required :disabled="busy || !!editingId" /></label>
       <small class="remote-help">使用手机可访问的服务地址。局域网连接填写电脑 IP，不能使用电脑上的 localhost。</small>
-      <label>连接方式<select v-model="method" :disabled="busy" @change="secret = ''"><option value="pair">设备配对码</option><option value="login">管理凭据登录</option><option value="bearer">直接 Bearer 凭据（兼容）</option></select></label>
+      <div class="remote-connection-choice"><span>连接方式</span><ChoicePicker v-model="method" label="连接方式" :options="connectionMethods" :disabled="busy" @change="secret = ''" /></div>
       <label>{{ method === 'pair' ? '一次性配对码' : '访问凭据' }}<input ref="secretInput" v-model="secret" :type="method === 'pair' ? 'text' : 'password'" :autocomplete="method === 'pair' ? 'one-time-code' : 'off'" autocapitalize="off" spellcheck="false" required :placeholder="method === 'pair' ? '在 infOS「局域网与设备」生成配对码' : '服务端提供的凭据'" :disabled="busy" maxlength="512" /></label>
       <template v-if="method !== 'bearer'"><label>设备名称<input v-model="deviceName" required maxlength="80" :disabled="busy" /></label><label class="remote-checkbox"><input v-model="remember" type="checkbox" :disabled="busy" />保持登录 30 天</label></template>
       <small v-if="method !== 'bearer' && !remember" class="remote-help">授权仅在当前应用进程内保留，完全退出后需重新配对。</small>
@@ -42,6 +43,8 @@
 <script setup>
 import { computed, ref, onMounted, onBeforeUnmount, nextTick } from 'vue'
 import RoomDrawer from '../companion/RoomDrawer.vue'
+import ChoicePicker from '../companion/ChoicePicker.vue'
+import RemoteBackground from './RemoteBackground.vue'
 import RoomIcon from './RemoteIcon.vue'
 import { remoteConnections, remoteClient } from '../../services/remote'
 import { modeState, switchMode, refreshMode, currentToken } from '../../stores/mode'
@@ -50,6 +53,7 @@ const props = defineProps({ prepareSwitch: Function })
 const emit = defineEmits(['close'])
 const profiles = ref([]), endpoint = ref(''), secret = ref(''), allowInsecure = ref(false), busy = ref(false), error = ref(''), removing = ref(null)
 const method = ref('pair'), deviceName = ref('PeroperoChat'), remember = ref(true), editingId = ref(null)
+const connectionMethods = [{ value: 'pair', label: '设备配对码' }, { value: 'login', label: '管理凭据登录' }, { value: 'bearer', label: '直接 Bearer 凭据（兼容）' }]
 const logoutConfirm = ref(false)
 const scanning = ref(false), showLinkInput = ref(false), pairingLink = ref(''), pairingNotice = ref('')
 let scanner = null, scanVersion = 0

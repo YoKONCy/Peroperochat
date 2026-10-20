@@ -3,6 +3,7 @@
     <Transition name="room-drawer" appear @after-leave="$emit('close')">
       <div v-if="visible" class="room-drawer-overlay companion-surface" :class="[`room-drawer-overlay--${variant}`, { 'remote-themed': remoteTheme, 'standalone-design': !remoteTheme && localTheme }]" :data-tone="tone" :data-remote-theme="remoteTheme?.mode" :data-decoration="remoteTheme?.decoration" :data-bubble="remoteTheme?.bubble" :data-reduce-motion="remoteTheme ? remoteTheme.reduceMotion : localTheme?.reduceMotion" :style="[viewportStyle, remoteTheme ? remoteTheme.style : localTheme?.style]" @click.self="requestClose">
         <section ref="panel" class="room-drawer-panel" role="dialog" aria-modal="true" :aria-label="title" tabindex="-1" @keydown="handleKeydown">
+          <RoomAccent v-if="!remoteTheme && localTheme" class="drawer-accent" kind="orbit" />
           <header class="room-drawer-header">
             <RemoteIcon v-if="remoteTheme && remoteTheme.decoration !== 'none'" class="drawer-emblem" :name="remoteTheme.decoration" artwork />
             <CompanionEmblem v-else-if="!remoteTheme" class="drawer-emblem" />
@@ -22,6 +23,7 @@ import { ref, inject, onMounted, onBeforeUnmount, nextTick } from 'vue'
 import { REMOTE_THEME } from '../../services/remoteTheme'
 import { LOCAL_APPEARANCE } from '../../stores/appearance'
 import RoomIcon from './RoomIcon.vue'
+import RoomAccent from './RoomAccent.vue'
 import CompanionEmblem from './CompanionEmblem.vue'
 import RemoteIcon from '../remote/RemoteIcon.vue'
 import { useRoomViewport } from '../../composables/useRoomViewport'

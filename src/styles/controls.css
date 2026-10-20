@@ -46,5 +46,34 @@
 .settings-field input:focus, .settings-field select:focus, .settings-field textarea:focus, .control-input:focus { border-color: var(--room-accent); background: var(--room-surface); box-shadow: 0 2px 0 var(--room-accent-soft); }
 .settings-field small, .control-hint { font-size: 10px; font-weight: 400; line-height: 1.6; color: var(--room-muted); }
 .settings-field input:disabled, .settings-field select:disabled { color: var(--room-muted); }
+/* 保留原生勾选语义和键盘行为，自行绘制外观，避免安卓系统控件混入页面。 */
+.companion-surface input[type='checkbox']:not([role='switch']):not(.el-checkbox__original), .companion-surface input[type='radio']:not(.el-radio__original) {
+  appearance: none; -webkit-appearance: none; display: inline-block; flex: 0 0 20px; width: 20px; min-width: 20px; max-width: 20px; height: 20px; min-height: 20px; padding: 0; margin: 0; vertical-align: middle; border: 1.5px solid var(--room-accent-bright); border-radius: 6px 6px 6px 2px; background: var(--room-surface); box-shadow: inset 0 0 0 2px var(--room-surface); cursor: pointer; transition: background-color .18s, border-color .18s, box-shadow .18s;
+}
+.companion-surface input[type='checkbox']:not([role='switch']):not(.el-checkbox__original):checked {
+  background-color: var(--room-accent); border-color: var(--room-accent); background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20'%3E%3Cpath d='m5 10 3.2 3.5L15 6.5' fill='none' stroke='white' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E"); background-position: center; background-size: 18px; background-repeat: no-repeat; box-shadow: none;
+}
+.companion-surface input[type='checkbox']:not([role='switch']):not(.el-checkbox__original):indeterminate {
+  background-color: var(--room-accent); border-color: var(--room-accent); background-image: linear-gradient(white, white); background-position: center; background-size: 9px 2px; background-repeat: no-repeat; box-shadow: none;
+}
+.companion-surface input[type='radio']:not(.el-radio__original) { border-radius: 50%; }
+.companion-surface input[type='radio']:not(.el-radio__original):checked { border-color: var(--room-accent); background: radial-gradient(circle, var(--room-accent) 0 4px, var(--room-surface) 4.5px); }
+.companion-surface input[type='checkbox']:not([role='switch']):not(.el-checkbox__original):focus-visible, .companion-surface input[type='radio']:not(.el-radio__original):focus-visible { outline: 2px solid var(--room-accent); outline-offset: 3px; }
+.companion-surface input[type='checkbox']:not([role='switch']):not(.el-checkbox__original):disabled, .companion-surface input[type='radio']:not(.el-radio__original):disabled { opacity: .45; cursor: default; }
+.companion-surface .remote-checkbox, .companion-surface .remote-option { min-height: 44px; cursor: pointer; }
+.companion-surface .remote-connection-choice { display: grid; gap: 8px; margin-top: 16px; font-size: 12px; }
+.companion-surface .remote-task-filter { display: flex; align-items: center; gap: 12px; margin: 0 0 16px; font-size: 12px; }
+.companion-surface .remote-task-filter > span { flex: none; color: var(--room-muted); }
+.companion-surface .remote-task-filter .choice-picker { width: min(100%, 220px); min-width: 0; }
+.companion-surface input[type='range'] { appearance: none; -webkit-appearance: none; min-height: 32px; height: 32px; padding: 0; border: 0; border-radius: 6px; background: linear-gradient(to right, var(--room-accent) 0 var(--range-progress, 0%), var(--room-line) var(--range-progress, 0%) 100%) center / 100% 6px no-repeat; cursor: pointer; touch-action: pan-y; }
+.companion-surface input[type='range']::-webkit-slider-runnable-track { height: 6px; border: 0; border-radius: 6px; background: transparent; }
+.companion-surface input[type='range']::-webkit-slider-thumb { appearance: none; -webkit-appearance: none; width: 20px; height: 20px; margin-top: -7px; border: 3px solid white; border-radius: 50%; background: var(--room-accent); box-shadow: 0 0 0 1px var(--room-accent-bright), 0 2px 4px #28354d1a; }
+.companion-surface input[type='range']::-moz-range-track { height: 6px; border: 0; border-radius: 6px; background: transparent; }
+.companion-surface input[type='range']::-moz-range-thumb { width: 14px; height: 14px; border: 3px solid white; border-radius: 50%; background: var(--room-accent); box-shadow: 0 0 0 1px var(--room-accent-bright); }
+.companion-surface input[type='range']:focus-visible { outline: 2px solid var(--room-accent); outline-offset: 3px; }
+.companion-surface input[type='range']:disabled { opacity: .45; cursor: default; }
+@media (forced-colors: active) {
+  .companion-surface input[type='checkbox']:not([role='switch']):not(.el-checkbox__original), .companion-surface input[type='radio']:not(.el-radio__original) { appearance: auto; -webkit-appearance: auto; background: revert !important; box-shadow: none !important; }
+}
 @supports (-webkit-touch-callout: none) { .settings-field input, .settings-field textarea, .control-input { font-size: 16px; } }
 @media (prefers-reduced-motion: reduce) { .el-message, .el-message-box, .el-overlay, .el-dialog { animation: none !important; transition: none !important; } }

@@ -1,7 +1,7 @@
 <template>
   <div class="companion-home companion-surface" :data-tone="tone" :class="[`companion-home--${panelMode}`, `display-${displayPreferences.displayMode}`, { 'is-keyboard': keyboardOpen, 'is-wardrobe': drawer === 'wardrobe' }]" :style="roomStyle" @keydown="onHomeKeydown">
     <div class="room-main" :inert="drawer ? true : undefined">
-      <div class="room-scenery" aria-hidden="true"><Transition name="room-change"><img :key="background" :src="background" alt="" decoding="async" class="room-background" @error="backgroundFailed = true" /></Transition><div class="room-vignette" /></div>
+      <div class="room-scenery" aria-hidden="true"><Transition name="room-change"><img v-if="background" :key="background" :src="background" alt="" decoding="async" class="room-background" @error="backgroundFailed = true" /></Transition><div class="room-vignette" /></div>
       <header class="room-header">
         <button class="room-selector" aria-label="切换角色与房间" @click="drawer = 'roles'">
           <CharacterAvatar :key="activeAgentId" class="header-avatar" :src="agent.avatar" :label="agent.name" />
@@ -105,9 +105,13 @@ const tone = computed(() => activeAgentId.value === 'nana' ? 'nana' : 'pero')
 const drafts = reactive(new Map())
 const drawer = ref(null)
 const projection = ref({})
+// 房间快照只在切屏时刷新，聊天状态、换装和环境事件不能顺带切换时段。
+const roomScene = ref(null)
 const backgroundFailed = ref(false)
 const presentation = computed(() => projection.value.presentation || { illustration: agent.value.standing_image || '', layout: agent.value.illustration_layout || 'standing' })
-const background = computed(() => backgroundFailed.value ? '/companion/sunlit-room.png' : projection.value.presentation?.background || agent.value.room_background || '/companion/sunlit-room.png')
+const requestedBackground = computed(() => roomScene.value?.background || '')
+const background = computed(() => backgroundFailed.value ? roomScene.value?.defaultBackground || '/companion/sunlit-room.png' : requestedBackground.value)
+watch(requestedBackground, () => { backgroundFailed.value = false })
 const chatPanel = ref(null)
 const restDockSpace = ref(null)
 const fileInput = ref(null)
@@ -122,6 +126,36 @@ let loadVersion = 0
 let projectionVersion = 0
 let imageReader = null
 let loadScheduled = false
+let roomSceneVersion = 0, sceneRequest = null
+
+async function refreshRoomScene() {
+  const id = activeAgentId.value
+  if (disposed || document.hidden || !id) return
+  // 前端只采集设备时区偏移，时段边界和素材选择均由 Rust 决定。
+  const utcOffsetMinutes = -new Date().getTimezoneOffset()
+  const key = `${id}:${utcOffsetMinutes}`
+  if (sceneRequest?.key === key) return sceneRequest.promise
+  const version = ++roomSceneVersion
+  const promise = (async () => {
+    try {
+      const scene = await localInvoke('local_room_background', { agentId: id, utcOffsetMinutes })
+      if (disposed || version !== roomSceneVersion || id !== activeAgentId.value || document.hidden) return
+      if (scene.background !== roomScene.value?.background && scene.background?.startsWith('/companion/')) {
+        const image = new Image(); image.src = scene.background
+        try { await image.decode() } catch { /* 缺失资源交由图片错误回退处理。 */ }
+      }
+      if (!disposed && version === roomSceneVersion && id === activeAgentId.value && !document.hidden) roomScene.value = scene
+    } catch (error) {
+      if (!disposed && version === roomSceneVersion && id === activeAgentId.value) {
+        console.warn('读取房间时段失败：', error)
+        if (!roomScene.value) roomScene.value = { background: agent.value.room_background || '/companion/sunlit-room.png', defaultBackground: '/companion/sunlit-room.png' }
+      }
+    }
+  })()
+  sceneRequest = { key, promise }
+  try { await promise } finally { if (sceneRequest?.promise === promise) sceneRequest = null }
+}
+function onRoomReentry() { if (!document.hidden) refreshRoomScene() }
 const draft = computed(() => drafts.get(activeAgentId.value))
 const panelMode = computed({ get: () => draft.value.mode, set: value => { draft.value.mode = value; if (value === 'rest') chatPanel.value?.blur() } })
 const restDockHeight = computed(() => restDockSpace.value ? `${restDockSpace.value}px` : `calc(${messages.value.some(message => message.role === 'assistant' && message.status === 'active') || isLoading.value ? 126 : 86}px + env(safe-area-inset-bottom))`)
@@ -252,11 +286,12 @@ async function openSource(ids) {
   drawer.value = null; jumpId.value = null; panelMode.value = 'full'
   await nextTick(); jumpId.value = message.id
 }
-function onAgentUpdated() { scheduleRoomLoad() }
+function onAgentUpdated() { scheduleRoomLoad(); refreshRoomScene() }
 watch(activeAgentId, id => {
   if (!drafts.has(id)) drafts.set(id, { text: '', image: null, mode: 'rest' })
-  drawer.value = null; projection.value = {}; backgroundFailed.value = false; jumpId.value = null; actionError.value = ''; loadError.value = ''; restDockSpace.value = null; projectionVersion++
+  drawer.value = null; projection.value = {}; roomScene.value = null; roomSceneVersion++; backgroundFailed.value = false; jumpId.value = null; actionError.value = ''; loadError.value = ''; restDockSpace.value = null; projectionVersion++
   scheduleRoomLoad()
+  refreshRoomScene()
 }, { immediate: true, flush: 'sync' })
 watch(drawer, value => { if (value) chatPanel.value?.blur() })
 onMounted(async () => {
@@ -266,9 +301,18 @@ onMounted(async () => {
     router.replace({ path: '/', query })
   }
   window.addEventListener('ppc:agent-switched', onAgentUpdated)
+  document.addEventListener('visibilitychange', onRoomReentry)
+  window.addEventListener('focus', onRoomReentry)
+  window.addEventListener('pageshow', onRoomReentry)
 
 })
-onBeforeUnmount(() => { disposed = true; loadVersion++; projectionVersion++; imageReader?.abort(); window.removeEventListener('ppc:agent-switched', onAgentUpdated) })
+onBeforeUnmount(() => {
+  disposed = true; loadVersion++; projectionVersion++; roomSceneVersion++; imageReader?.abort()
+  window.removeEventListener('ppc:agent-switched', onAgentUpdated)
+  document.removeEventListener('visibilitychange', onRoomReentry)
+  window.removeEventListener('focus', onRoomReentry)
+  window.removeEventListener('pageshow', onRoomReentry)
+})
 </script>
 
 <style scoped>

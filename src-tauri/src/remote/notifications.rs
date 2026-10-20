@@ -4,8 +4,9 @@ use serde_json::{json,Value};
 use tauri::{AppHandle,Manager};
 use crate::{mode::{Coordinator,Token},local::types::*};
 
-fn table(conn:&rusqlite::Connection)->ChatResult<()> {
-    conn.execute_batch("CREATE TABLE IF NOT EXISTS notifications(principal TEXT NOT NULL,id TEXT NOT NULL,revision INTEGER NOT NULL,value TEXT NOT NULL,touched INTEGER NOT NULL,PRIMARY KEY(principal,id))")?;Ok(())
+pub(super) fn table(conn:&rusqlite::Connection)->ChatResult<()> {
+    conn.execute_batch("CREATE TABLE IF NOT EXISTS notifications(principal TEXT NOT NULL,id TEXT NOT NULL,revision INTEGER NOT NULL,value TEXT NOT NULL,touched INTEGER NOT NULL,PRIMARY KEY(principal,id));
+        CREATE TABLE IF NOT EXISTS notification_receipts(principal TEXT NOT NULL,id TEXT NOT NULL,delivered INTEGER NOT NULL DEFAULT 0,read_revision INTEGER NOT NULL DEFAULT 0,PRIMARY KEY(principal,id));")?;Ok(())
 }
 fn key(value:&str)->ChatResult<()> {
     if value.is_empty() || value.len()>300 || value.chars().any(char::is_control) {return Err(ChatError::new("REMOTE_PROTOCOL","远程通知身份无效"));}Ok(())
@@ -13,16 +14,22 @@ fn key(value:&str)->ChatResult<()> {
 // 调用方持有当前运行门，不能在这里递归获取同一 SQLite 控制事务。
 pub(super) fn capture(app:&AppHandle,token:&Token,payload:&Value)->ChatResult<()> {
     if payload["action"]!="durable_notification" {return Ok(());}
+    capture_in(&mut super::cache::connection(app,token)?,payload)
+}
+pub(super) fn capture_in(conn:&mut rusqlite::Connection,payload:&Value)->ChatResult<()> {
+    if payload["action"]!="durable_notification" {return Ok(());}
     let principal=payload["principalId"].as_str().ok_or_else(super::inactive)?;
     let id=payload["notificationId"].as_str().ok_or_else(super::inactive)?;
     key(principal)?;key(id)?;
     let revision=payload["revision"].as_u64().filter(|value|*value>0 && *value<=9_007_199_254_740_991).ok_or_else(super::inactive)?;
     let text=|name:&str,limit:usize|payload[name].as_str().unwrap_or("").chars().take(limit).collect::<String>();
     let value=json!({"principalId":principal,"notificationId":id,"revision":revision,"title":text("title",256),"body":text("body",4096),"createdAt":text("createdAt",100),"level":text("level",20),"replayed":payload["replayed"]==true});
-    let mut conn=super::cache::connection(app,token)?;table(&conn)?;
+    table(conn)?;
     let tx=conn.transaction_with_behavior(rusqlite::TransactionBehavior::Immediate)?;
     tx.execute("INSERT INTO notifications VALUES(?1,?2,?3,?4,?5) ON CONFLICT(principal,id) DO UPDATE SET revision=excluded.revision,value=excluded.value,touched=excluded.touched WHERE excluded.revision>notifications.revision",
         rusqlite::params![principal,id,revision as i64,value.to_string(),chrono::Utc::now().timestamp_millis()])?;
+    // 已读墓碑保留在本机，旧补发不能重新插入收件箱，也不冒充服务端已读回执。
+    tx.execute("DELETE FROM notifications WHERE principal=?1 AND id=?2 AND revision<=(SELECT read_revision FROM notification_receipts WHERE principal=?1 AND id=?2)",rusqlite::params![principal,id])?;
     // 缓存只保留最近 256 条；未确认记录仍由服务端保存，不伪造已读。
     tx.execute("DELETE FROM notifications WHERE rowid NOT IN (SELECT rowid FROM notifications ORDER BY touched DESC,rowid DESC LIMIT 256)",[])?;
     tx.commit()?;Ok(())
@@ -59,7 +66,10 @@ pub async fn remote_ack_notification(app:AppHandle,token:Token,principal_id:Stri
     if changed && handle.request("gateway.select_principal",json!({"principalId":handle.principal})).await.is_err() {handle.stop();}
     let data=result?;
     let mode=app.state::<Coordinator>();let _gate=mode.gate(Some(&token),false)?;
-    let conn=super::cache::connection(&app,&token)?;
-    conn.execute("DELETE FROM notifications WHERE principal=?1 AND id=?2 AND revision=?3",rusqlite::params![principal_id,receipt.notification_id,receipt.revision as i64])?;
+    let mut conn=super::cache::connection(&app,&token)?;table(&conn)?;
+    let tx=conn.transaction_with_behavior(rusqlite::TransactionBehavior::Immediate)?;
+    tx.execute("INSERT INTO notification_receipts(principal,id,read_revision) VALUES(?1,?2,?3) ON CONFLICT(principal,id) DO UPDATE SET read_revision=MAX(read_revision,excluded.read_revision)",rusqlite::params![principal_id,receipt.notification_id,receipt.revision as i64])?;
+    tx.execute("DELETE FROM notifications WHERE principal=?1 AND id=?2 AND revision<=?3",rusqlite::params![principal_id,receipt.notification_id,receipt.revision as i64])?;
+    tx.commit()?;
     Ok(json!({"modeToken":token,"data":data}))
 }

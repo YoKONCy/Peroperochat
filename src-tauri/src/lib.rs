@@ -88,6 +88,7 @@ pub fn run() {
             let _switch=startup_switch;
             use tauri::Emitter;
             let result=async {
+                remote::background::suspend_async(handle.clone()).await?;
                 local::reminder_platform::suspend_async(handle.clone()).await?;
                 let selection=mode.snapshot()?.selected_target;
                 match selection {
@@ -99,6 +100,7 @@ pub fn run() {
             }.await;
             let state=match result {Ok(state)=>Some(state),Err(error)=> {eprintln!("运行模式恢复失败：{}",error.message);mode.fail().ok()}};
             if let Some(state)=state {let _=handle.emit("mode-event",state);}
+            remote::background::resume_async(handle).await;
         });
         // 启动后台提醒轮询器
         local::reminders::start(app.handle().clone());
@@ -112,6 +114,7 @@ pub fn run() {
     .plugin(tauri_plugin_haptics::init())
     .plugin(local::reminder_platform::init())
     .plugin(remote::vault::init())
+    .plugin(remote::background::init())
     .invoke_handler(tauri::generate_handler![
         mode::mode_snapshot,
         mode::mode_switch,
@@ -127,6 +130,10 @@ pub fn run() {
         remote::remote_logout_device,
         remote::notifications::remote_notifications,
         remote::notifications::remote_ack_notification,
+        remote::background::remote_background_runtime,
+        remote::background::remote_configure_background,
+        remote::background::remote_background_settings,
+        remote::background::remote_consume_notification_open,
         remote::remote_subscribe,
         remote::remote_surface_input,
         remote::remote_pending_requests,
@@ -171,6 +178,7 @@ pub fn run() {
         local::identity::local_character_projection,
         local::appearance::local_appearance,
         local::appearance::local_save_appearance,
+        local::appearance::local_room_background,
         local::blackjack::local_blackjack_snapshot,
         local::blackjack::local_blackjack_play,
         local::identity::local_save_model_preferences,

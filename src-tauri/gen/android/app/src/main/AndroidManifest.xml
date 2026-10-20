@@ -1,6 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
     <uses-permission android:name="android.permission.INTERNET" />
+    <!-- 用户主动开启的远程通知常驻连接，不使用有时长上限的 dataSync 服务。 -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
     <!-- 扫描 infOS 设备配对二维码，由用户操作时请求相机权限。 -->
     <uses-permission android:name="android.permission.CAMERA" />
     <uses-feature android:name="android.hardware.camera" android:required="false" />
@@ -38,6 +41,20 @@
                 <category android:name="android.intent.category.LEANBACK_LAUNCHER" />
             </intent-filter>
         </activity>
+
+        <!-- 仅原生通知进程保持远程连接，不启动 Tauri 界面。 -->
+        <service android:name=".RemoteNotificationService" android:exported="false"
+            android:process=":remote_notifications" android:stopWithTask="false" android:foregroundServiceType="specialUse">
+            <property android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="用户主动开启的自托管 infOS 实时消息接收，无 Google 服务设备通过原生持久连接接收通知" />
+        </service>
+        <receiver android:name=".RemoteReceiverBootReceiver" android:exported="false">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+                <action android:name="android.intent.action.USER_UNLOCKED" />
+            </intent-filter>
+        </receiver>
 
         <!-- 闹铃广播接收器 -->
         <receiver

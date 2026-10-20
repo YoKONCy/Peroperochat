@@ -82,7 +82,7 @@ import { currentToken, assertToken } from '../stores/mode'
 import { remoteClient, remoteConnections } from '../services/remote'
 import { readPresentation, writePresentation } from '../services/remotePresentation'
 import { uploadRemoteFile } from '../services/remoteMedia'
-import { remoteState, remoteViews, remoteExecutions, remotePendingRequests, remoteNotifications, readRemote, sendRemoteChat, performRemote, initializeRemote, reconnectRemote, resumeRemote, reconcileRemotePendingRequests, reviewRemoteRequest } from '../stores/remote'
+import { remoteState, remoteViews, remoteExecutions, remotePendingRequests, remoteNotifications, readRemote, sendRemoteChat, performRemote, initializeRemote, reconnectRemote, resumeRemote, reconcileRemotePendingRequests, reviewRemoteRequest, refreshRemoteNotifications } from '../stores/remote'
 import { remoteItems } from '../utils/remoteMarkdown'
 import '../styles/remote.css'
 import '../styles/remote-theme.css'
@@ -383,7 +383,23 @@ async function resetSession() {
   } catch (failure) { if (!disposed && request === version) error.value = failure.message }
 }
 async function openLink(event) { const link = event.target.closest('a[href]'); if (!link) return; event.preventDefault(); try { const url = new URL(link.href); if (['http:', 'https:'].includes(url.protocol) && !url.username && !url.password) await openExternal(url.href) } catch (failure) { error.value = failure.message } }
-function resume() { if (!document.hidden && !disposed) resumeRemote().catch(() => {}) }
+let openingNotice = false
+async function consumeNotificationOpen() {
+  if (disposed || document.hidden || remoteState.restoringView || openingNotice) return
+  openingNotice = true
+  const request = version
+  try {
+    const result = await remoteClient.consumeNotificationOpen(token); guard(request)
+    if (!result.data) return
+    await persistCurrent(); guard(request)
+    drawer.value = null; detail.value = null; resource.value = null; tab.value = 'inbox'
+    await refreshRemoteNotifications(); guard(request)
+    await nextTick(); guard(request)
+    document.getElementById(`remote-notice-${JSON.stringify([result.data.principalId, result.data.notificationId])}`)?.scrollIntoView({ block: 'center' })
+  } catch (failure) { if (!disposed && request === version) error.value = failure.message }
+  finally { openingNotice = false }
+}
+function resume() { if (!document.hidden && !disposed) { resumeRemote().catch(() => {}); consumeNotificationOpen() } }
 function saveOnHide() { persistCurrent().catch(() => {}) }
 function visibility() { if (document.hidden) saveOnHide(); else resume() }
 async function warmInbox() { try { guard(); await Promise.allSettled(['approvals', 'questions', 'tools', 'active_executions'].map(kind => readRemote({ kind }))) } catch { /* 连接提示保留在主界面，列表本身保留各自的读取错误。 */ } }
@@ -449,7 +465,7 @@ onMounted(async () => {
     if (home) await selectConversation(home); else { tab.value = 'home'; pickerAgent.value = remoteState.activeAgentId || remoteState.agents[0]?.id || null; await loadCharacterAppearance() }
     if (online.value) warmInbox()
   } catch (failure) { if (!disposed && request === version) error.value = failure.message }
-  finally { if (!disposed) remoteState.restoringView = false }
+  finally { if (!disposed) { remoteState.restoringView = false; consumeNotificationOpen() } }
 })
 onBeforeUnmount(() => {
   clearTimeout(draftTimer); clearTimeout(scrollTimer); clearTimeout(verificationTimer); clearTimeout(projectionTimer)

@@ -1,6 +1,6 @@
 <template>
   <button type="button" class="reminder-strip" aria-label="查看和管理提醒" @click="$emit('open')">
-    <span class="reminder-strip-icon"><RoomIcon name="bell" /></span>
+    <span class="reminder-strip-icon"><RoomIcon name="bell" /><span class="reminder-strip-label" aria-hidden="true">提醒</span></span>
     <span v-if="error" class="reminder-strip-copy"><strong>提醒暂时无法读取</strong><small>点此重试与管理</small></span>
     <span v-else class="reminder-strip-copy"><strong>{{ entries[0]?.task }}</strong><small>{{ entries[0]?.deliveryError || entries[0]?.backgroundError ? '通知待处理 · 点此查看' : entries[0]?.time?.slice(5, 16) }}<span v-if="total > 1"> · 共 {{ total }} 项</span></small></span>
     <RoomIcon name="arrow" />

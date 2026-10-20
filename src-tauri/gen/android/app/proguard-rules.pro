@@ -27,3 +27,9 @@
 # 远程凭据插件通过 Tauri 反射调用，压缩后仍须保留参数与命令。
 -keep class com.peroperochat.mobile.RemoteVaultPlugin { *; }
 -keep class com.peroperochat.mobile.RemoteSecretArgs { *; }
+# 无界面通知通过 JNI 回调，接收桥与回调方法不能被重命名。
+-keep class com.peroperochat.mobile.RemoteReceiverBridge { *; }
+-keep class com.peroperochat.mobile.RemoteReceiverPlugin { *; }
+-keep class com.peroperochat.mobile.RemoteReceiverArgs { *; }
+-keep interface com.peroperochat.mobile.RemoteReceiverCallback { *; }
+-keepclassmembers class * implements com.peroperochat.mobile.RemoteReceiverCallback { *; }

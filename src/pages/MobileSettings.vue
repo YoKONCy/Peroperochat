@@ -48,7 +48,7 @@
                 <label class="settings-field">上下文窗口<input v-model.number="parameters.contextWindow" type="number" min="1152" max="2000000" required /><small>应与模型能力一致，并留出回复空间。</small></label>
                 <label class="settings-field">历史对话轮次<input v-model.number="parameters.memoryRounds" type="number" min="1" max="200" required /><small>一轮包含一条输入和一条回复。</small></label>
               </div>
-              <label class="settings-toggle"><span><strong>流式回复</strong><small>边生成边显示消息</small></span><input v-model="parameters.stream" type="checkbox" role="switch" /></label>
+              <label class="settings-toggle"><span><strong>流式回复</strong><small>边生成边显示消息</small></span><RoomSwitch v-model="parameters.stream" label="流式回复" /></label>
               <footer class="settings-save"><span>未编辑的高级参数会保留</span><button class="room-primary-button" :disabled="!dirtySections.model">{{ busy === 'save-model' ? '正在保存…' : '保存参数' }}</button></footer>
             </fieldset>
           </form>
@@ -80,6 +80,7 @@ import RoomIcon from '../components/companion/RoomIcon.vue'
 import CharacterAvatar from '../components/companion/CharacterAvatar.vue'
 import CompanionEmblem from '../components/companion/CompanionEmblem.vue'
 import ChoicePicker from '../components/companion/ChoicePicker.vue'
+import RoomSwitch from '../components/companion/RoomSwitch.vue'
 import BrandIcon from '../components/companion/BrandIcon.vue'
 import RoomAppearanceSettings from '../components/companion/RoomAppearanceSettings.vue'
 import { displayPreferences } from '../stores/appearance'
@@ -306,14 +307,9 @@ fieldset { border: 0; padding: 0; margin: 0; min-width: 0; }
 .settings-save > span { font-size: 10px; color: var(--room-muted); line-height: 1.6; }
 .settings-save button { flex: none; }
 .settings-toggle { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 4px 0; }
-.settings-toggle > span { display: flex; flex-direction: column; gap: 6px; }
+.settings-toggle > span:not(.room-switch) { display: flex; flex-direction: column; gap: 6px; }
 .settings-toggle strong { font-size: 12px; font-weight: 500; }
 .settings-toggle small { color: var(--room-muted); font-size: 10px; }
-.settings-toggle input { appearance: none; width: 36px; height: 20px; padding: 2px; border: 0; border-radius: 5px; background: #d1dce8; cursor: pointer; flex: none; }
-.settings-toggle input::before { content: ''; display: block; width: 16px; height: 16px; border-radius: 3px; background: white; transition: transform .18s; }
-.settings-toggle input:checked { background: var(--room-accent); }
-.settings-toggle input:checked::before { transform: translateX(16px); }
-.settings-toggle input:focus-visible { outline: 2px solid var(--room-accent); outline-offset: 4px; }
 .settings-destinations > button { display: flex; align-items: center; gap: 13px; width: 100%; padding: 16px 0; border: 0; border-bottom: 1px solid var(--room-line); background: transparent; text-align: left; }
 .destination-icon { display: grid; place-items: center; width: 34px; height: 40px; color: var(--room-accent); flex: none; }
 .settings-destinations > button > span:nth-child(2) { display: flex; flex-direction: column; gap: 7px; flex: 1; }

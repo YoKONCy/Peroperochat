@@ -1,7 +1,7 @@
 /* 轻透日常：独立模式共享设计语言，远程客户端继续使用自己的主题。 */
 .standalone-design.companion-surface, .standalone-design.companion-surface .companion-surface {
   --room-ink: var(--local-ink, #2b3c56);
-  --room-muted: #8395ad;
+  --room-muted: color-mix(in srgb, var(--room-ink) 58%, #a6b1c0);
   --room-accent: var(--local-accent, #467fc5);
   --room-accent-bright: color-mix(in srgb, var(--room-accent) 40%, white);
   --room-accent-soft: var(--local-wash, #eaf4ff);
@@ -10,6 +10,7 @@
   --room-subtle: #f5f9ffed;
   --room-glass: rgb(255 255 255 / var(--local-glass, .8));
   --room-line: #a5bfd83d;
+  --room-ui-edge: color-mix(in srgb, var(--room-accent) 25%, white);
   --room-bubble: #ffffffea;
   --room-user-bubble: color-mix(in srgb, var(--room-accent-soft) 78%, white);
   --room-action: var(--room-accent);
@@ -17,7 +18,7 @@
   --room-radius: 16px;
   --room-spring: cubic-bezier(.2,.8,.25,1);
 }
-.standalone-design.companion-surface .room-primary-button { border: 1px solid transparent; border-radius: 12px; background: var(--room-accent); box-shadow: none; min-height: 44px; }
+.standalone-design.companion-surface .room-primary-button { border: 1px solid var(--room-accent); border-radius: 13px 13px 13px 5px; background: var(--room-accent); box-shadow: inset 0 0 0 2px #ffffff29; min-height: 44px; }
 .standalone-design.companion-surface .room-secondary-button, .standalone-design.companion-surface .room-danger-button { border-radius: 12px; background: #ffffffad; }
 .standalone-design.companion-surface .room-error { border-radius: 12px; border: 1px solid #edcfdc; }
 .standalone-design.companion-surface .room-icon-button { border-radius: 12px; }
@@ -52,50 +53,84 @@
 .standalone-design.companion-surface .companion-home--peek .room-character-stage { transform: translate3d(-18%, calc(85px + env(safe-area-inset-top) - var(--room-height, 100dvh) + var(--room-rest-dock, 86px) + var(--actor-height) * .58), 0) scale(.58); }
 .standalone-design.companion-surface .companion-home--full .room-character-stage, .standalone-design.companion-surface .is-keyboard .room-character-stage { opacity: 0; pointer-events: none; }
 .standalone-design.companion-surface .is-wardrobe .room-character-stage { transform: translate3d(-50%, calc(95px + env(safe-area-inset-top) - var(--room-height, 100dvh) + var(--room-rest-dock, 86px) + var(--actor-height) * .68), 0) scale(.68); }
-.standalone-design.companion-surface .room-character-speech { top: -70px; left: calc(50% - 50vw + 18px); transform: none; width: max-content; min-width: 100px; max-width: min(calc(100vw - 104px), 320px); padding: 16px 15px 13px; border: 1px solid var(--room-accent-bright); border-radius: 16px 18px 16px 5px; background: #fffffff0; box-shadow: 0 3px 9px #466c9a09; }
-.standalone-design.companion-surface .room-character-speech::before { top: auto; bottom: -5px; left: 31px; width: 9px; height: 9px; border: 0; border-right: 1px solid var(--room-accent-bright); border-bottom: 1px solid var(--room-accent-bright); border-radius: 0; }
-.standalone-design.companion-surface .room-character-speech:active { transform: scale(.98); }
-.standalone-design.companion-surface .speech-name { top: -10px; left: 14px; padding: 2px 11px; border: 0; border-radius: 6px 6px 6px 2px; font-size: 10px; font-weight: 500; }
+.standalone-design.companion-surface .room-character-speech { top: -70px; left: calc(50% - 50vw + 18px); transform: none; width: max-content; min-width: 145px; max-width: min(calc(100vw - 104px), 320px); padding: 22px 20px 16px; border: 1.5px solid var(--room-accent-bright); border-radius: 20px 20px 20px 8px; background: #fffffff5; box-shadow: inset 0 0 0 4px white, inset 0 0 0 5px var(--room-accent-soft), 0 3px 0 color-mix(in srgb, var(--room-accent) 16%, transparent), 0 7px 18px #355a8e10; }
+.standalone-design.companion-surface .room-character-speech::before { top: auto; bottom: -7px; left: 30px; width: 12px; height: 12px; border: 0; border-right: 1.5px solid var(--room-accent-bright); border-bottom: 1.5px solid var(--room-accent-bright); border-radius: 0 0 3px; background: #fffffff5; }
+.standalone-design.companion-surface .room-character-speech:active:not(:disabled) { transform: scale(.98); }
+.standalone-design.companion-surface .speech-name { display: flex; align-items: center; gap: 6px; top: -11px; left: 16px; min-height: 23px; max-width: min(calc(100% - 50px), 180px); padding: 2px 9px 2px 11px; border: 2px solid white; border-radius: 9px 9px 9px 3px; font-size: 11px; font-weight: 600; box-shadow: 0 2px 0 var(--room-ui-edge); }
+.standalone-design.companion-surface .speech-name > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.standalone-design.companion-surface .speech-name .room-accent-mark { width: 22px; height: 14px; color: inherit; opacity: .85; }
+.standalone-design.companion-surface .speech-flourish { position: absolute; top: 4px; right: 9px; width: 31px; height: 19px; opacity: .55; }
 .standalone-design.companion-surface .speech-text { font-size: 13px; line-height: 1.75; }
 .standalone-design.companion-surface .room-quick-actions { top: 36%; right: 13px; gap: 13px; }
 .standalone-design.companion-surface .room-quick-actions::before { display: none; }
-.standalone-design.companion-surface .room-quick-actions button { padding: 0; border: 1px solid #ffffffbd; background: var(--room-glass); backdrop-filter: blur(18px) saturate(1.08); border-radius: 14px 16px 14px 8px; min-width: 45px; min-height: 56px; gap: 4px; padding-bottom: 6px; }
-.standalone-design.companion-surface .room-quick-actions button > span { border: 0; background: transparent; width: 40px; height: 33px; padding-top: 5px; }
-.standalone-design.companion-surface .room-quick-actions small { font-size: 9px; text-shadow: none; }.standalone-design.companion-surface .room-quick-actions svg { width: 22px; height: 22px; }
-.standalone-design.companion-surface .reminder-strip { bottom: calc(var(--dock-height) + 13px); left: 16px; width: auto; max-width: calc(100% - 32px); min-height: 33px; gap: 7px; padding: 7px 10px; border: 1px solid #ffffffb8; border-radius: 12px; background: var(--room-glass); backdrop-filter: blur(18px); box-shadow: 0 3px 12px #355a8e08; }
-.standalone-design.companion-surface .reminder-strip-icon { width: 20px; height: 20px; background: transparent; }.standalone-design.companion-surface .reminder-strip-copy { gap: 2px; }.standalone-design.companion-surface .reminder-strip strong { font-size: 10px; }
+.standalone-design.companion-surface .room-quick-actions button { position: relative; padding: 3px 3px 7px; border: 1px solid #ffffffd9; background: var(--room-glass); border-radius: 17px 17px 18px 7px; min-width: 48px; min-height: 60px; gap: 3px; box-shadow: inset 0 0 0 3px #ffffff5c, 0 2px 0 var(--room-ui-edge); }
+.standalone-design.companion-surface .room-quick-actions button::after { content: ''; position: absolute; top: 6px; right: 5px; width: 4px; height: 4px; border: 1px solid var(--room-accent-bright); border-radius: 1px; transform: rotate(45deg); pointer-events: none; }
+.standalone-design.companion-surface .room-quick-actions button > span { border: 0; border-radius: 50%; background: radial-gradient(ellipse at center, var(--room-accent-soft), transparent 75%); width: 36px; height: 32px; color: var(--room-accent); }
+.standalone-design.companion-surface .room-quick-actions small { font-size: 10px; font-weight: 500; text-shadow: none; }.standalone-design.companion-surface .room-quick-actions svg { width: 21px; height: 21px; }
+.standalone-design.companion-surface .reminder-strip { bottom: calc(var(--dock-height) + 13px); left: 16px; width: min(80vw, 320px); max-width: calc(100% - 32px); min-height: 50px; gap: 10px; padding: 7px 11px; border: 1px solid var(--room-ui-edge); border-radius: 9px 18px 18px 9px; background: var(--room-glass); box-shadow: inset 0 0 0 3px #ffffff70, 0 3px 12px #355a8e0a; }
+.standalone-design.companion-surface .reminder-strip::before { content: ''; position: absolute; top: 4px; right: 5px; width: 13px; height: 13px; border-radius: 0 11px 0 5px; background: var(--room-accent-soft); pointer-events: none; }
+.standalone-design.companion-surface .reminder-strip-icon { width: 31px; height: 34px; gap: 1px; padding-right: 9px; border-right: 1px dashed var(--room-ui-edge); border-radius: 0; background: transparent; }
+.standalone-design.companion-surface .reminder-strip-label { font-size: 8px; line-height: 1.2; letter-spacing: .08em; }
+.standalone-design.companion-surface .reminder-strip-copy { gap: 3px; }.standalone-design.companion-surface .reminder-strip strong { font-size: 11px; }
+.standalone-design.companion-surface .reminder-strip > svg { box-sizing: content-box; width: 12px; height: 12px; padding: 4px; border-radius: 50%; color: var(--room-accent); background: var(--room-accent-soft); }
 /* 对话继续保留流式、思考、图片和消息管理，统一气泡与输入栏外观。 */
-.standalone-design.companion-surface .room-chat { border: 1px solid #ffffffa8; border-bottom: 0; border-radius: 25px 25px 0 0; background: linear-gradient(150deg, #ffffffed, rgb(245 249 255 / max(.94, var(--local-glass, .8)))); backdrop-filter: none; }
-.standalone-design.companion-surface .room-chat--rest { border: 0; background: transparent; backdrop-filter: none; }
-.standalone-design.companion-surface .room-composer { align-items: center; gap: 5px; min-height: 58px; margin: 6px 12px 0; padding: 7px; border: 1px solid #ffffffbd; border-radius: 18px; background: var(--room-glass); backdrop-filter: none; }
-.standalone-design.companion-surface .room-chat--rest .room-composer { margin: 0; border: 1px solid #ffffffbd; border-radius: 18px; background: #ffffffdc; box-shadow: inset 0 1px 0 #ffffffbc, 0 3px 12px #355a8e08; }
+.standalone-design.companion-surface .room-chat { border: 1px solid #ffffffd9; border-bottom: 0; border-radius: 27px 27px 0 0; background: linear-gradient(150deg, #ffffffed, color-mix(in srgb, var(--room-accent-soft) 28%, #fffffff5)); box-shadow: 0 -4px 30px #355a8e0a; backdrop-filter: none; }
+.standalone-design.companion-surface .room-chat--rest { border: 0; background: transparent; box-shadow: none; backdrop-filter: none; }
+.standalone-design.companion-surface .chat-handle { position: relative; }
+.standalone-design.companion-surface .chat-handle > span { width: 34px; height: 3px; background: var(--room-ui-edge); }
+.standalone-design.companion-surface .chat-handle-mark { position: absolute; left: calc(50% + 25px); top: 1px; width: 28px; height: 19px; opacity: .65; }
+.standalone-design.companion-surface .room-composer { align-items: center; gap: 5px; min-height: 58px; margin: 6px 12px 0; padding: 7px; border: 1px solid var(--room-ui-edge); border-radius: 19px 19px 19px 9px; background: var(--room-glass); box-shadow: inset 0 0 0 3px #ffffff80; backdrop-filter: none; }
+.standalone-design.companion-surface .room-chat--rest .room-composer { margin: 0; border: 1px solid var(--room-ui-edge); border-radius: 19px 19px 19px 9px; background: #ffffffeb; box-shadow: inset 0 0 0 3px white, 0 3px 0 color-mix(in srgb, var(--room-accent) 12%, transparent), 0 4px 16px #355a8e0d; }
+.standalone-design.companion-surface .room-composer:focus-within { border-color: var(--room-accent); box-shadow: inset 0 0 0 3px white, 0 0 0 3px var(--room-accent-soft); }
 .standalone-design.companion-surface .room-composer textarea { padding: 8px 3px; font-size: 14px; line-height: 22px; }
 .standalone-design.companion-surface .attachment-button { color: var(--room-accent); width: 34px; height: 38px; }
-.standalone-design.companion-surface .composer-send { width: 40px; height: 40px; border-radius: 50%; background: var(--room-accent); }
-.standalone-design.companion-surface .last-reply { border-radius: 14px; border-color: #ffffffbd; background: var(--room-glass); box-shadow: none; }
+.standalone-design.companion-surface .composer-send { width: 40px; height: 40px; border: 1px solid var(--room-accent); border-radius: 14px 14px 14px 5px; background: var(--room-accent); box-shadow: inset 0 0 0 2px #ffffff38; }
+.standalone-design.companion-surface .composer-send:disabled, .standalone-design.companion-surface .composer-send.is-stop { border-color: var(--room-ui-edge); background: var(--room-accent-soft); box-shadow: none; }
+.standalone-design.companion-surface .last-reply { min-height: 43px; gap: 8px; padding: 6px 11px 6px 6px; border-radius: 16px 16px 16px 6px; border-color: #ffffffd9; background: var(--room-glass); box-shadow: inset 0 0 0 2px #ffffff66; }
+.standalone-design.companion-surface .last-reply > .last-reply-symbol { flex: none; display: grid; place-items: center; width: 29px; height: 29px; border-radius: 11px 11px 11px 4px; color: var(--room-accent); background: var(--room-accent-soft); }
+.standalone-design.companion-surface .last-reply-symbol svg { width: 17px; height: 17px; }
 /* 小面积保留实景玻璃；大面板使用透光底色，避免叠加全屏模糊采样。 */
 .standalone-design.companion-surface .room-selector, .standalone-design.companion-surface .room-header-actions > button, .standalone-design.companion-surface .room-display-toggle, .standalone-design.companion-surface .room-quick-actions button, .standalone-design.companion-surface .reminder-strip, .standalone-design.companion-surface .last-reply { backdrop-filter: blur(8px); }
 .standalone-design.companion-surface .chat-role-avatar, .standalone-design.companion-surface .intro-avatar { border-radius: 50%; aspect-ratio: 1; }
 .standalone-design.companion-surface .chat-role-avatar { width: 28px; height: 28px; }
-.standalone-design.companion-surface .chat-messages { padding: 16px 15px; }.standalone-design.companion-surface .chat-heading { padding-left: 17px; }
+.standalone-design.companion-surface .chat-messages { padding: 16px 15px; }.standalone-design.companion-surface .chat-heading { padding-left: 17px; border-bottom: 1px solid var(--room-line); padding-bottom: 12px; }
 .standalone-design.companion-surface .room-message:not(.user) { padding: 0 0 0 44px; margin-right: 17px; }
-.standalone-design.companion-surface .message-avatar { position: absolute; left: 0; top: 0; width: 32px; height: 32px; border-radius: 50%; border: 2px solid white; }
-.standalone-design.companion-surface .message-byline { font-size: 10px; gap: 8px; }.standalone-design.companion-surface .message-byline time { margin-left: auto; }
-.standalone-design.companion-surface .message-body { border: 1px solid #ffffffb3; border-radius: 5px 16px 16px 16px; padding: 12px 14px; background: var(--room-bubble); }
-.standalone-design.companion-surface .user .message-body { border-radius: 16px 5px 16px 16px; background: var(--room-user-bubble); }
-.standalone-design.companion-surface .message-actions { border-radius: 14px; backdrop-filter: blur(18px); }
-/* 抽屉、衣柜与设置沿用同一套轻薄玻璃和更柔和的圆角。 */
+.standalone-design.companion-surface .message-avatar { position: absolute; left: 0; top: 0; width: 32px; height: 32px; border-radius: 50%; border: 2px solid white; box-shadow: 0 0 0 1px var(--room-ui-edge); }
+.standalone-design.companion-surface .message-byline { font-size: 10px; gap: 8px; }.standalone-design.companion-surface .message-byline time { margin-left: auto; opacity: .9; }
+.standalone-design.companion-surface .message-speaker { min-width: 0; max-width: 65%; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; padding: 3px 8px; border-radius: 7px 7px 7px 2px; background: var(--room-accent-soft); color: var(--room-accent); font-weight: 600; }
+.standalone-design.companion-surface .user .message-speaker { background: transparent; color: var(--room-muted); padding-right: 0; }
+.standalone-design.companion-surface .user .message-byline time { margin-left: 0; }
+.standalone-design.companion-surface .message-body { position: relative; border: 1px solid var(--room-ui-edge); border-radius: 15px 18px 18px 6px; padding: 12px 14px; background: var(--room-bubble); box-shadow: inset 0 0 0 2px white, 0 2px 0 color-mix(in srgb, var(--room-accent) 6%, transparent); }
+.standalone-design.companion-surface .message-body::before { content: ''; position: absolute; left: -5px; top: 14px; width: 8px; height: 8px; transform: rotate(45deg); border: 1px solid var(--room-ui-edge); border-top: 0; border-right: 0; border-radius: 0 0 0 2px; background: var(--room-bubble); pointer-events: none; }
+.standalone-design.companion-surface .user .message-body { border-color: var(--room-ui-edge); border-radius: 18px 15px 6px 18px; background: var(--room-user-bubble); box-shadow: inset 0 0 0 2px #ffffff66; }
+.standalone-design.companion-surface .user .message-body::before { left: auto; right: -5px; transform: rotate(225deg); background: var(--room-user-bubble); }
+.standalone-design.companion-surface .message-reasoning summary { width: fit-content; max-width: 100%; padding: 5px 9px; border: 1px solid var(--room-line); border-radius: 8px; color: var(--room-accent); background: var(--room-accent-soft); }
+.standalone-design.companion-surface .message-actions { border-radius: 13px 13px 13px 5px; border-color: var(--room-ui-edge); background: #fffffff5; backdrop-filter: none; }
+/* 抽屉与小组件共享名字签式轮廓，装饰只使用少量静态矢量。 */
 .standalone-design.companion-surface.room-drawer-overlay { background: #2b446633; backdrop-filter: none; }
 .standalone-design.companion-surface.room-drawer-overlay--wardrobe { background: linear-gradient(180deg, transparent 35%, #2b446620); backdrop-filter: none; }
-.standalone-design.companion-surface .room-drawer-panel { border: 1px solid #ffffffc9; border-bottom: 0; border-radius: 26px 26px 0 0; background: #f8fbfff0; box-shadow: 0 12px 50px #355a8e15; backdrop-filter: none; }
-.standalone-design.companion-surface .room-drawer-header { padding: 22px 22px 18px; }.standalone-design.companion-surface .room-drawer-content { padding: 0 22px 22px; }
-.standalone-design.companion-surface .room-drawer-header h2 { font-size: 18px; font-weight: 600; }.standalone-design.companion-surface .drawer-emblem { width: 24px; opacity: .75; }
-.standalone-design.companion-surface .room-drawer-header > .room-icon-button { border-radius: 12px; background: #edf3fb80; }
+.standalone-design.companion-surface .room-drawer-panel { position: relative; border: 1px solid #ffffffe6; border-bottom: 0; border-radius: 28px 28px 0 0; background: linear-gradient(135deg, #fffffff5, color-mix(in srgb, var(--room-accent-soft) 24%, #fffffff5)); box-shadow: inset 0 0 0 4px #ffffff80, 0 12px 50px #355a8e15; backdrop-filter: none; }
+.standalone-design.companion-surface .drawer-accent { position: absolute; top: 6px; right: 70px; width: 45px; height: 27px; opacity: .45; }
+.standalone-design.companion-surface .room-drawer-header { position: relative; padding: 24px 22px 20px; }.standalone-design.companion-surface .room-drawer-content { padding: 0 22px 22px; }
+.standalone-design.companion-surface .room-drawer-header h2 { font-size: 18px; font-weight: 600; overflow-wrap: anywhere; }
+.standalone-design.companion-surface .room-drawer-header h2::after { content: ''; display: block; width: 26px; height: 3px; margin-top: 8px; border-radius: 3px; background: var(--room-accent-bright); }
+.standalone-design.companion-surface .drawer-emblem { box-sizing: content-box; width: 24px; height: 24px; padding: 10px; border: 1px solid var(--room-ui-edge); border-radius: 16px 16px 16px 5px; background: var(--room-accent-soft); }
+.standalone-design.companion-surface .room-drawer-header > .room-icon-button { border: 1px solid var(--room-line); border-radius: 50%; background: #ffffffa6; }
 .standalone-design.companion-surface .room-drawer-footer { padding: 13px 22px; border-top-color: var(--room-line); }
-.standalone-design.companion-surface .outfit-grid { gap: 11px; }.standalone-design.companion-surface .outfit-grid > button { border-radius: 15px; background: var(--room-glass); }
-.standalone-design.companion-surface .outfit-grid > button.selected { box-shadow: 0 0 0 1px var(--room-accent); }.standalone-design.companion-surface .outfit-name { padding: 11px; font-size: 11px; justify-content: center; }
-.standalone-design.companion-surface .room-menu-list > button { border-radius: 15px; background: #ffffff9c; padding: 15px 13px; margin-bottom: 9px; border: 1px solid var(--room-line); }
-.standalone-design.companion-surface .room-menu-list > button > svg:first-child { background: var(--room-accent-soft); padding: 9px; width: 37px; height: 37px; border-radius: 12px; }
+.standalone-design.companion-surface .outfit-grid { gap: 11px; }.standalone-design.companion-surface .outfit-grid > button { border: 1px solid var(--room-ui-edge); border-radius: 17px 17px 17px 6px; background: var(--room-glass); }
+.standalone-design.companion-surface .outfit-grid > button.selected { border-color: var(--room-accent); background: var(--room-accent-soft); box-shadow: 0 0 0 1px var(--room-accent), inset 0 0 0 3px white; }
+.standalone-design.companion-surface .outfit-name { padding: 11px; font-size: 11px; justify-content: center; border-top: 1px solid var(--room-line); background: #ffffff80; }
+.standalone-design.companion-surface .outfit-grid .outfit-check { width: 23px; height: 23px; border-radius: 9px 9px 9px 3px; }
+.standalone-design.companion-surface .room-menu-list > button { border-radius: 17px 17px 17px 6px; background: #ffffffb8; padding: 14px 12px; margin-bottom: 10px; border: 1px solid var(--room-ui-edge); box-shadow: inset 0 0 0 3px #ffffff80; }
+.standalone-design.companion-surface .room-menu-list > button > svg:first-child { background: var(--room-accent-soft); padding: 9px; width: 37px; height: 37px; border-radius: 13px 13px 13px 4px; }
+.standalone-design.companion-surface .room-menu-list > button > svg:last-child { color: var(--room-accent); }
+.standalone-design.companion-surface .journal-entry, .standalone-design.companion-surface .reminder-entry { position: relative; border: 1px solid var(--room-ui-edge); border-radius: 16px 16px 16px 6px; background: #ffffffc7; box-shadow: inset 0 0 0 3px #ffffff80; padding: 17px 15px 14px; }
+.standalone-design.companion-surface .journal-entry::before, .standalone-design.companion-surface .reminder-entry::before { content: ''; position: absolute; top: -1px; left: 18px; width: 25px; height: 3px; border-radius: 0 0 3px 3px; background: var(--room-accent-bright); pointer-events: none; }
+.standalone-design.companion-surface .journal-search input, .standalone-design.companion-surface .journal-editor input, .standalone-design.companion-surface .journal-editor textarea { border-radius: 11px; background: #ffffffc7; }
+.standalone-design.companion-surface .journal-tags > span { border: 1px solid var(--room-ui-edge); border-radius: 8px 8px 8px 3px; padding: 3px 7px; }
+.standalone-design.companion-surface .reminder-entry-time > span { padding: 3px 7px; border-radius: 7px; background: var(--room-accent-soft); color: var(--room-accent); }
+.standalone-design.companion-surface .reminder-entry.is-overdue { border-color: color-mix(in srgb, var(--room-danger) 36%, white); }
+.standalone-design.companion-surface .reminder-entry.is-overdue::before { background: var(--room-danger); }
 .standalone-design.companion-surface .room-profile-note, .standalone-design.companion-surface .room-role-list button, .standalone-design.companion-surface .room-persona p { border-radius: 16px; }
 .standalone-design.companion-surface .role-avatar, .standalone-design.companion-surface .profile-avatar { border-radius: 50%; aspect-ratio: 1; height: auto; }
 .standalone-design.companion-surface .companion-page { background: linear-gradient(#eef5ffdf, #f5f9ffe8), url('/companion/sunlit-room.png') center / cover; }
@@ -126,6 +161,7 @@
   .standalone-design.companion-surface .room-chat { right: 28px; bottom: 24px; width: 420px; border-radius: 24px; border-bottom: 1px solid #ffffffa8; }
   .standalone-design.companion-surface .room-chat--rest { border: 0; }.standalone-design.companion-surface .room-quick-actions { right: 28px; top: 105px; flex-direction: row; }
   .standalone-design.companion-surface .room-character-speech { left: 50%; top: -65px; transform: translateX(-50%); max-width: min(calc(100vw - 550px), 320px); }
+  .standalone-design.companion-surface .room-character-speech:active:not(:disabled) { transform: translateX(-50%) scale(.98); }
   .standalone-design.companion-surface .reminder-strip { left: 28px; bottom: 24px; max-width: calc(100% - 530px); }
   .standalone-design.companion-surface .companion-home--full .room-character-stage { opacity: 0; pointer-events: none; }
 }
@@ -134,6 +170,9 @@
   .standalone-design.companion-surface .room-selector { padding-right: 7px; max-width: calc(100% - 119px); }.standalone-design.companion-surface .header-avatar { width: 31px; height: 31px; }
   .standalone-design.companion-surface .room-selector-name strong { font-size: 14px; }.standalone-design.companion-surface .room-selector-name > svg { display: none; }
 }
+@supports (-webkit-touch-callout: none) {
+  .standalone-design.companion-surface .room-composer textarea { font-size: 16px; }
+}
 @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
-  .standalone-design.companion-surface .room-selector, .standalone-design.companion-surface .room-chat, .standalone-design.companion-surface .room-drawer-panel { background: #f8fbfff5; }
+  .standalone-design.companion-surface .room-selector, .standalone-design.companion-surface .room-chat:not(.room-chat--rest), .standalone-design.companion-surface .room-drawer-panel, .standalone-design.companion-surface .room-quick-actions button, .standalone-design.companion-surface .reminder-strip, .standalone-design.companion-surface .last-reply { background: #f8fbfff5; }
 }

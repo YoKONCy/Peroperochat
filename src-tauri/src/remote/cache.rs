@@ -5,21 +5,28 @@ use sha2::{Digest,Sha256};
 use crate::{mode::{Coordinator,Token,Target},local::types::*};
 
 pub(super) fn connection(app:&AppHandle,token:&Token)->ChatResult<Connection> {
+    let root=app.path().app_data_dir().map_err(|_|ChatError::new("STORAGE_ERROR","远程缓存目录不可用"))?.join("data");
+    connection_at(&root,token)
+}
+pub(super) fn connection_at(root:&std::path::Path,token:&Token)->ChatResult<Connection> {
     let Target::Remote {profile_id}= &token.target else {return Err(ChatError::new("MODE_INACTIVE","当前不是远程模式"));};
     if uuid::Uuid::parse_str(profile_id).is_err() {return Err(ChatError::new("INVALID_PROFILE","远程分区身份无效"));}
-    let dir=app.path().app_data_dir().map_err(|_|ChatError::new("STORAGE_ERROR","远程缓存目录不可用"))?.join("data/remote").join(profile_id);
+    let dir=root.join("remote").join(profile_id);
     std::fs::create_dir_all(&dir).map_err(|_|ChatError::new("STORAGE_ERROR","无法创建远程缓存目录"))?;
-    let conn=Connection::open(dir.join("client.sqlite"))?;conn.busy_timeout(std::time::Duration::from_secs(5))?;
-    conn.execute_batch("CREATE TABLE IF NOT EXISTS projections(key TEXT PRIMARY KEY,value TEXT NOT NULL,touched INTEGER NOT NULL);
+    let mut conn=Connection::open(dir.join("client.sqlite"))?;conn.busy_timeout(std::time::Duration::from_secs(5))?;
+    // 界面与原生接收进程共享分区，迁移检查与变更必须在同一写事务中串行执行。
+    let tx=conn.transaction_with_behavior(TransactionBehavior::Immediate)?;
+    tx.execute_batch("CREATE TABLE IF NOT EXISTS projections(key TEXT PRIMARY KEY,value TEXT NOT NULL,touched INTEGER NOT NULL);
         CREATE TABLE IF NOT EXISTS requests(id TEXT PRIMARY KEY,fingerprint TEXT NOT NULL,state TEXT NOT NULL,created INTEGER NOT NULL,result TEXT);
         CREATE TABLE IF NOT EXISTS projection_reads(key TEXT PRIMARY KEY,ticket INTEGER NOT NULL);
         CREATE TABLE IF NOT EXISTS cache_clock(id INTEGER PRIMARY KEY,value INTEGER NOT NULL);
         INSERT OR IGNORE INTO cache_clock VALUES(1,0);
         CREATE TABLE IF NOT EXISTS preferences(key TEXT PRIMARY KEY,value TEXT NOT NULL);")?;
     for column in ["context","owner"] {
-        let exists:bool=conn.query_row("SELECT EXISTS(SELECT 1 FROM pragma_table_info('requests') WHERE name=?1)",[column],|r|r.get(0))?;
-        if !exists {conn.execute_batch(&format!("ALTER TABLE requests ADD COLUMN {column} TEXT"))?;}
+        let exists:bool=tx.query_row("SELECT EXISTS(SELECT 1 FROM pragma_table_info('requests') WHERE name=?1)",[column],|r|r.get(0))?;
+        if !exists {tx.execute_batch(&format!("ALTER TABLE requests ADD COLUMN {column} TEXT"))?;}
     }
+    tx.commit()?;
     Ok(conn)
 }
 pub fn begin_read(app:&AppHandle,token:&Token,key:&str)->ChatResult<i64> {

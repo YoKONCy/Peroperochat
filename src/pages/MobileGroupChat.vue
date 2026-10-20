@@ -61,7 +61,7 @@
           <span class="member-order">{{ String(index + 1).padStart(2, '0') }}</span><CharacterAvatar :src="agents[member.id]?.avatar" :label="member.name" />
           <div class="member-identity"><strong>{{ member.name }}</strong><small>{{ member.enabled ? '参与回应' : '暂时旁听' }}</small></div>
           <div class="member-move"><button class="room-icon-button" :disabled="savingMembers || index === 0" :aria-label="`上移${member.name}`" @click="moveMember(index, -1)"><RoomIcon name="up" /></button><button class="room-icon-button" :disabled="savingMembers || index === memberDraft.length - 1" :aria-label="`下移${member.name}`" @click="moveMember(index, 1)"><RoomIcon name="down" /></button></div>
-          <label class="member-toggle"><input v-model="member.enabled" type="checkbox" role="switch" :disabled="savingMembers" :aria-label="`${member.name}参与回应`" /><span aria-hidden="true" /></label>
+          <RoomSwitch v-model="member.enabled" :disabled="savingMembers" :label="`${member.name}参与回应`" />
         </article>
       </div>
       <p v-if="membersError" class="room-error" role="alert">{{ membersError }}</p>
@@ -79,6 +79,7 @@ import CharacterAvatar from '../components/companion/CharacterAvatar.vue'
 import CompanionEmblem from '../components/companion/CompanionEmblem.vue'
 import RoomDrawer from '../components/companion/RoomDrawer.vue'
 import RoomIcon from '../components/companion/RoomIcon.vue'
+import RoomSwitch from '../components/companion/RoomSwitch.vue'
 import { useRoomViewport } from '../composables/useRoomViewport'
 import { AGENTS as agents, activeAgentId } from '../stores/agents'
 import { useLocalConversation } from '../stores/conversations'
@@ -295,14 +296,6 @@ onBeforeUnmount(() => { disposed = true; loadVersion++ })
 .member-move { display: flex; flex: none; gap: 2px; }
 .member-move .room-icon-button { width: 32px; height: 36px; color: var(--room-muted); }
 .member-move svg { width: 15px; height: 15px; }
-.member-toggle { position: relative; display: inline-flex; align-items: center; width: 36px; height: 36px; flex: none; cursor: pointer; }
-.member-toggle input { position: absolute; inset: 0; width: 100%; height: 100%; margin: 0; opacity: 0; cursor: pointer; }
-.member-toggle > span { width: 36px; height: 20px; border-radius: 6px; background: var(--room-line); padding: 2px; pointer-events: none; transition: background .18s; }
-.member-toggle > span::after { content: ''; display: block; width: 16px; height: 16px; border-radius: 4px; background: white; transition: transform .2s var(--room-spring); }
-.member-toggle input:checked + span { background: var(--room-accent); }
-.member-toggle input:checked + span::after { transform: translateX(16px); }
-.member-toggle input:focus-visible + span { outline: 2px solid var(--room-accent); outline-offset: 4px; }
-.member-toggle input:disabled + span { opacity: .5; }
 .members-footer { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
 .members-footer > span { color: var(--room-muted); font-size: 11px; }
 @keyframes group-breathe { 0%, 100% { opacity: .3; } 50% { opacity: 1; } }
