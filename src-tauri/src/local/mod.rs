@@ -1,6 +1,7 @@
 pub mod context;
 pub mod conversation;
 pub mod identity;
+pub mod appearance;
 pub mod provider;
 pub mod repository;
 pub mod runtime;

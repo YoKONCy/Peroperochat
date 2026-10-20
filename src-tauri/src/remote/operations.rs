@@ -7,6 +7,7 @@ use crate::local::types::*;
 #[serde(tag="kind",rename_all="snake_case",deny_unknown_fields)]
 pub enum Query {
     Agents,
+    Tools,
     Agent {id:String},
     AgentState {id:String},
     AgentTexts {id:String},
@@ -52,6 +53,7 @@ impl Query {
     pub fn route(&self)->ChatResult<Route> {
         let mut r=match self {
             Self::Agents=>route("/agents".into()),
+            Self::Tools=> {let mut r=route("/agents/tools".into());param(&mut r,"includeAdvanced","true")?;r},
             Self::Agent {id}=>route(format!("/agents/{}",segment(id)?)),
             Self::AgentState {id}=>route(format!("/agents/{}/pet-state",segment(id)?)),
             Self::AgentTexts {id}=>route(format!("/agents/{}/texts",segment(id)?)),
@@ -110,10 +112,10 @@ impl Action {
     pub fn route(&self)->ChatResult<Route> {
         let (method,path,body)=match self {
             Self::CreateThread {agent_id,title}=> ("POST","/chat/threads".into(),json!({"agentId":agent_id,"title":title,"channel":"desktop","platform":"peroperochat"})),
-            Self::RenameThread {id,title}=> ("PATCH",format!("/chat/threads/{}",segment(id)?),json!({"title":title})),
+            Self::RenameThread {id,title}=> {if title.encode_utf16().count()>100 {return Err(invalid());}("PATCH",format!("/chat/threads/{}",segment(id)?),json!({"title":title}))},
             Self::DeleteThread {id}=> ("DELETE",format!("/chat/threads/{}",segment(id)?),json!({})),
             Self::StopChat {thread_id}=> ("POST","/chat/stop".into(),json!({"threadId":thread_id})),
-            Self::InteractionMode {id,mode}=> {if !["chat","work"].contains(&mode.as_str()) {return Err(invalid());}("PUT",format!("/chat/threads/{}/interaction-mode",segment(id)?),json!({"interactionMode":mode}))},
+            Self::InteractionMode {id,mode}=> {if !["minimal","chat","work"].contains(&mode.as_str()) {return Err(invalid());}("PUT",format!("/chat/threads/{}/interaction-mode",segment(id)?),json!({"interactionMode":mode}))},
             Self::ExecutionMode {id,mode}=> {if !["manual","auto","auto_approve","full"].contains(&mode.as_str()) {return Err(invalid());}("PUT",format!("/chat/threads/{}/execution-mode",segment(id)?),json!({"executionMode":mode}))},
             Self::ThreadTools {id,disabled_tools}=> {if disabled_tools.len()>500 {return Err(invalid());}("PUT",format!("/chat/threads/{}/tools",segment(id)?),json!({"disabledTools":disabled_tools}))},
             Self::EditMessage {thread_id,id,content}=> ("PATCH",format!("/chat/threads/{}/messages/{}",segment(thread_id)?,segment(id)?),json!({"content":content})),

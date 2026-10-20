@@ -1,17 +1,18 @@
 <template>
-  <div class="companion-home companion-surface" :data-tone="tone" :class="[`companion-home--${panelMode}`, { 'is-keyboard': keyboardOpen }]" :style="roomStyle" @keydown="onHomeKeydown">
+  <div class="companion-home companion-surface" :data-tone="tone" :class="[`companion-home--${panelMode}`, `display-${displayPreferences.displayMode}`, { 'is-keyboard': keyboardOpen, 'is-wardrobe': drawer === 'wardrobe' }]" :style="roomStyle" @keydown="onHomeKeydown">
     <div class="room-main" :inert="drawer ? true : undefined">
-      <div class="room-scenery" aria-hidden="true"><Transition name="room-change"><img :key="tone" :src="`/rooms/${tone}.svg`" alt="" class="room-background" /></Transition><div class="room-vignette" /></div>
+      <div class="room-scenery" aria-hidden="true"><Transition name="room-change"><img :key="background" :src="background" alt="" class="room-background" @error="backgroundFailed = true" /></Transition><div class="room-vignette" /></div>
       <header class="room-header">
         <button class="room-selector" aria-label="切换角色与房间" @click="drawer = 'roles'">
           <CharacterAvatar :key="activeAgentId" class="header-avatar" :src="agent.avatar" :label="agent.name" />
           <span :key="`label-${activeAgentId}`" class="room-selector-label"><span class="room-selector-name"><strong>{{ agent.name }}</strong><CompanionEmblem /></span><span class="room-selector-status"><i />{{ projection.vibe || '陪伴中' }}</span></span><RoomIcon name="down" />
         </button>
         <nav class="room-header-actions" aria-label="房间导航">
+          <div class="room-display-toggle" role="group" aria-label="角色显示方式"><button type="button" title="静态立绘" aria-label="显示静态立绘" :aria-pressed="displayPreferences.displayMode === 'illustration'" :disabled="appearanceBusy" @click="switchDisplay('illustration')"><RoomIcon name="image" /></button><button type="button" title="Live2D" aria-label="显示通用 Pio Live2D" :aria-pressed="displayPreferences.displayMode === 'live2d'" :disabled="appearanceBusy" @click="switchDisplay('live2d')"><RoomIcon name="model" /></button></div>
           <button class="room-icon-button" aria-label="打开房间菜单" title="菜单" @click="drawer = 'menu'"><RoomIcon name="menu" /></button>
         </nav>
       </header>
-      <div class="room-character-stage"><Live2DWidget :quiet="panelMode !== 'rest' || keyboardOpen" :interactive="panelMode !== 'full' && !keyboardOpen && !drawer" @projection="onProjection" @open-chat="panelMode = 'peek'" /></div>
+      <div class="room-character-stage"><Live2DWidget :renderer="displayPreferences.displayMode" :presentation="presentation" :active="panelMode !== 'full' && !keyboardOpen && (!drawer || drawer === 'wardrobe')" :quiet="panelMode !== 'rest' || keyboardOpen || !!drawer" :interactive="panelMode !== 'full' && !keyboardOpen && !drawer" @projection="onProjection" @open-chat="panelMode = 'peek'" @open-display="drawer = 'appearance'" /></div>
       <Transition name="room-actions"><nav v-show="panelMode === 'rest' && !keyboardOpen" class="room-quick-actions" aria-label="角色互动">
         <button aria-label="展开聊天记录" @click="panelMode = 'peek'"><span><RoomIcon name="chat" /></span><small>聊天</small></button>
         <button aria-label="打开衣柜" @click="drawer = 'wardrobe'"><span><RoomIcon name="hanger" /></span><small>换装</small></button>
@@ -42,9 +43,11 @@
         <button @click="drawer = 'reminders'"><RoomIcon name="bell" /><span><strong>提醒</strong><small>{{ reminderTotal ? `${reminderTotal} 件待办的小事` : '安排时间，查看或取消提醒' }}</small></span><RoomIcon name="arrow" /></button>
         <button @click="drawer = 'profile'"><RoomIcon name="profile" /><span><strong>关于 {{ agent.name }}</strong><small>此刻的心情与角色资料</small></span><RoomIcon name="arrow" /></button>
         <button @click="drawer = 'wardrobe'"><RoomIcon name="hanger" /><span><strong>衣柜</strong><small>更换角色服装</small></span><RoomIcon name="arrow" /></button>
+        <button @click="drawer = 'appearance'"><RoomIcon name="palette" /><span><strong>显示与主题</strong><small>Live2D、静态立绘与玻璃配色</small></span><RoomIcon name="arrow" /></button>
+        <button @click="drawer = 'remote'"><RoomIcon name="remote" /><span><strong>infOS 客户端</strong><small>连接远程实例 · 切换运行模式</small></span><RoomIcon name="arrow" /></button>
         <button @click="navigate('/settings')"><RoomIcon name="settings" /><span><strong>设置</strong><small>模型连接与聊天偏好</small></span><RoomIcon name="arrow" /></button>
       </div>
-      <details class="room-other-spaces"><summary>其他空间</summary><div class="room-secondary-links"><button @click="navigate('/group')"><RoomIcon name="group" />家庭群聊</button><button @click="navigate('/game/blackjack')"><RoomIcon name="game" />21 点小游戏</button><button class="room-remote-unavailable" disabled><RoomIcon name="remote" /><span>远程连接<small>暂未开放</small></span></button></div></details>
+      <details class="room-other-spaces"><summary>其他空间</summary><div class="room-secondary-links"><button @click="navigate('/group')"><RoomIcon name="group" />家庭群聊</button><button @click="navigate('/game/blackjack')"><RoomIcon name="game" />21 点小游戏</button></div></details>
     </RoomDrawer>
 
     <RoomDrawer v-if="drawer === 'profile'" :title="`关于 ${agent.name}`" subtitle="角色资料" :tone="tone" @close="drawer = null">
@@ -56,8 +59,10 @@
     </RoomDrawer>
 
     <RoomJournal v-if="drawer === 'journal'" :key="agent.id" :agent="agent" :tone="tone" @close="drawer = null" @source="openSource" @updated="refreshProjection" />
-    <RoomWardrobe v-if="drawer === 'wardrobe'" :key="agent.id" :agent="agent" :tone="tone" :texture="projection.modelTexturesId" @close="drawer = null" />
+    <RoomWardrobe v-if="drawer === 'wardrobe'" :key="agent.id" :agent="agent" :tone="tone" :texture="projection.modelTexturesId" :display-mode="displayPreferences.displayMode" @close="drawer = null" @display="switchDisplay" @updated="refreshProjection" />
+    <RoomDrawer v-if="drawer === 'appearance'" title="显示与主题" subtitle="让房间更合你的心意" :tone="tone" @close="drawer = null"><RoomAppearanceSettings /></RoomDrawer>
     <RoomReminders v-if="drawer === 'reminders'" :key="agent.id" :agent="agent" :tone="tone" @close="drawer = null" @updated="reloadReminders" />
+    <RemoteConnections v-if="drawer === 'remote'" :prepare-switch="prepareRemoteSwitch" @close="drawer = null" />
     <RoomDrawer v-if="drawer === 'image'" title="对话里的图片" :tone="tone" @close="drawer = null"><img :src="imagePreview" class="room-image-preview" alt="对话附件大图" /></RoomDrawer>
 
   </div>
@@ -72,17 +77,20 @@ import RoomChat from '../components/companion/RoomChat.vue'
 import RoomDrawer from '../components/companion/RoomDrawer.vue'
 import RoomJournal from '../components/companion/RoomJournal.vue'
 import RoomWardrobe from '../components/companion/RoomWardrobe.vue'
+import RoomAppearanceSettings from '../components/companion/RoomAppearanceSettings.vue'
 import RoomIcon from '../components/companion/RoomIcon.vue'
 import CharacterAvatar from '../components/companion/CharacterAvatar.vue'
 import CompanionEmblem from '../components/companion/CompanionEmblem.vue'
 import RoomReminders from '../components/companion/RoomReminders.vue'
 import ReminderStrip from '../components/companion/ReminderStrip.vue'
+import RemoteConnections from '../components/remote/RemoteConnections.vue'
 import { useReminders } from '../composables/useReminders'
 import { AGENTS, activeAgentId, agentList, setActiveAgentId } from '../stores/agents'
 import { useLocalConversation } from '../stores/conversations'
 import { useRoomViewport } from '../composables/useRoomViewport'
 import { localInvoke, publishCharacterState } from '../services/localChat'
 import { visibleMessage } from '../utils/messageContent'
+import { displayPreferences, appearanceBusy, saveAppearance } from '../stores/appearance'
 import '../styles/companion.css'
 
 const router = useRouter()
@@ -95,6 +103,9 @@ const tone = computed(() => activeAgentId.value === 'nana' ? 'nana' : 'pero')
 const drafts = reactive(new Map())
 const drawer = ref(null)
 const projection = ref({})
+const backgroundFailed = ref(false)
+const presentation = computed(() => projection.value.presentation || { illustration: agent.value.standing_image || '', layout: agent.value.illustration_layout || 'standing' })
+const background = computed(() => backgroundFailed.value ? '/companion/sunlit-room.png' : projection.value.presentation?.background || agent.value.room_background || '/companion/sunlit-room.png')
 const chatPanel = ref(null)
 const restDockSpace = ref(null)
 const fileInput = ref(null)
@@ -111,7 +122,7 @@ let imageReader = null
 let loadScheduled = false
 const draft = computed(() => drafts.get(activeAgentId.value))
 const panelMode = computed({ get: () => draft.value.mode, set: value => { draft.value.mode = value; if (value === 'rest') chatPanel.value?.blur() } })
-const roomStyle = computed(() => ({ ...viewportStyle.value, '--reminder-space': reminderTotal.value || reminderError.value ? '62px' : '0px', '--dock-height': keyboardOpen.value || panelMode.value === 'full' ? 'calc(100% - 96px - env(safe-area-inset-top))' : panelMode.value === 'peek' ? 'min(calc(100% - 96px - env(safe-area-inset-top)), max(280px, 43%))' : restDockSpace.value ? `${restDockSpace.value}px` : `calc(${messages.value.some(message => message.role === 'assistant' && message.status === 'active') || isLoading.value ? 126 : 86}px + env(safe-area-inset-bottom))` }))
+const roomStyle = computed(() => ({ ...viewportStyle.value, '--reminder-space': reminderTotal.value || reminderError.value ? '62px' : '0px', '--dock-height': keyboardOpen.value || panelMode.value === 'full' ? 'calc(100% - 96px - env(safe-area-inset-top))' : panelMode.value === 'peek' ? 'min(calc(100% - 96px - env(safe-area-inset-top)), max(300px, 73%))' : restDockSpace.value ? `${restDockSpace.value}px` : `calc(${messages.value.some(message => message.role === 'assistant' && message.status === 'active') || isLoading.value ? 126 : 86}px + env(safe-area-inset-bottom))` }))
 
 async function loadRoomData() {
   const id = activeAgentId.value
@@ -129,6 +140,10 @@ function scheduleRoomLoad() {
   nextTick(() => { loadScheduled = false; if (!disposed) loadRoomData() })
 }
 function onProjection(state) { if (state.agentId === activeAgentId.value) projection.value = state }
+async function switchDisplay(displayMode) {
+  if (appearanceBusy.value || displayMode === displayPreferences.value.displayMode) return
+  try { await saveAppearance({ displayMode }) } catch (error) { if (!disposed) ElMessage.error(error.message) }
+}
 async function refreshProjection() {
   const id = activeAgentId.value
   const version = ++projectionVersion
@@ -147,6 +162,10 @@ async function chooseRole(id) {
 function onComposerFocus() { actionError.value = ''; jumpId.value = null; if (panelMode.value === 'rest') panelMode.value = 'peek' }
 function openFullChat() { drawer.value = null; jumpId.value = null; panelMode.value = 'full' }
 function navigate(path) { drawer.value = null; chatPanel.value?.blur(); router.push(path) }
+function prepareRemoteSwitch() {
+  if (isLoading.value) throw new Error('当前角色正在回复，请结束这次回复后再切换运行模式')
+  if ([...drafts.values()].some(item => item.text.trim() || item.image)) throw new Error('房间中还有未发送的草稿，请先发送或清空草稿，再切换到 infOS 客户端')
+}
 function openImage(url) { if (url) { imagePreview.value = url; drawer.value = 'image' } }
 function onHomeKeydown(event) {
   if (event.key !== 'Escape' || event.isComposing || drawer.value) return
@@ -228,13 +247,13 @@ async function openSource(ids) {
 function onAgentUpdated() { scheduleRoomLoad() }
 watch(activeAgentId, id => {
   if (!drafts.has(id)) drafts.set(id, { text: '', image: null, mode: 'rest' })
-  drawer.value = null; projection.value = {}; jumpId.value = null; actionError.value = ''; loadError.value = ''; restDockSpace.value = null; projectionVersion++
+  drawer.value = null; projection.value = {}; backgroundFailed.value = false; jumpId.value = null; actionError.value = ''; loadError.value = ''; restDockSpace.value = null; projectionVersion++
   scheduleRoomLoad()
 }, { immediate: true, flush: 'sync' })
 watch(drawer, value => { if (value) chatPanel.value?.blur() })
 onMounted(async () => {
-  if (route.query.panel === 'journal') {
-    drawer.value = 'journal'
+  if (['journal', 'reminders', 'appearance', 'remote'].includes(route.query.panel)) {
+    drawer.value = route.query.panel
     const query = { ...route.query }; delete query.panel
     router.replace({ path: '/', query })
   }

@@ -32,7 +32,8 @@ pub fn before_send(error:ChatError)->ChatError {
 pub fn status(status:reqwest::StatusCode)->ChatResult<()> {
     if status.is_success() {return Ok(());}
     let error=match status.as_u16() {
-        401|403=>ChatError::new("REMOTE_AUTH_REQUIRED","远程认证已失效或权限不足"),
+        401=>ChatError::new("REMOTE_AUTH_REQUIRED","远程设备授权已失效，请重新配对或登录"),
+        403=>ChatError::new("REMOTE_FORBIDDEN","当前设备没有执行此操作的权限"),
         404=>ChatError::new("REMOTE_NOT_FOUND","远程对象不存在或目标版本不支持此接口"),
         409=>ChatError::new("REMOTE_CONFLICT","远程状态已改变，请刷新后重新操作"),
         400|422=>ChatError::new("REMOTE_INVALID_INPUT","服务端拒绝了操作参数，请刷新后核对"),
@@ -40,6 +41,21 @@ pub fn status(status:reqwest::StatusCode)->ChatResult<()> {
         _=>ChatError::new("REMOTE_HTTP",format!("远程服务响应异常（HTTP {}）",status.as_u16())),
     };
     Err(if matches!(status.as_u16(),400|401|403|404|405|409|413|415|422|429) {error.with_outcome("rejected")} else {error})
+}
+pub async fn checked(response:reqwest::Response)->ChatResult<reqwest::Response> {
+    let code=response.status();
+    if code.is_success() {return Ok(response);}
+    if code==reqwest::StatusCode::CONFLICT {
+        // 仅识别服务端明确在副作用之前拒绝的席位错误，不透传错误正文或秘密。
+        if let Ok(bytes)=body(response).await {
+            if let Ok(value)=serde_json::from_slice::<Value>(&bytes) {
+                if value["data"]["reason"].as_str().is_some_and(|reason|["INPUT_SEAT_REQUIRED","INPUT_SEAT_EXPIRED","INPUT_SEAT_IDENTITY_MISMATCH"].contains(&reason)) {
+                    return Err(ChatError::new("REMOTE_INPUT_SEAT_RETRY","输入席位已失效，需要重新获取").with_outcome("rejected"));
+                }
+            }
+        }
+    }
+    status(code)?;Err(network())
 }
 pub fn envelope(bytes:&[u8])->ChatResult<Value> {
     let value:Value=serde_json::from_slice(bytes).map_err(|_|ChatError::new("REMOTE_PROTOCOL","远程响应不是有效 JSON"))?;

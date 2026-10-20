@@ -1,19 +1,35 @@
 <template>
-  <div class="app companion-surface" :data-tone="tone">
-    <router-view v-if="isStandalone" />
-    <RemoteWorkspace v-else-if="isRemote" :key="`${modeState.snapshot.installationId}:${modeState.snapshot.activationEpoch}:${modeState.snapshot.activeTarget.profileId}`" />
-    <p v-else role="status">{{ modeState.error || '正在恢复运行模式…' }}</p>
+  <div class="app companion-surface" :class="{ 'standalone-design': isStandalone }" :data-tone="tone" :data-reduce-motion="isStandalone && !displayPreferences.motion" :style="isStandalone ? localStyle : undefined">
+    <div v-if="contentReady" class="app-mode-content" :inert="transitionVisible ? true : undefined" :aria-hidden="transitionVisible ? true : undefined">
+      <router-view v-if="isStandalone" />
+      <RemoteWorkspace v-else-if="isRemote" :key="`${modeState.snapshot.installationId}:${modeState.snapshot.activationEpoch}:${modeState.snapshot.activeTarget.profileId}`" />
+    </div>
+    <Transition name="mode-curtain"><ModeTransition v-if="transitionVisible" :waiting="transitionWaiting" /></Transition>
   </div>
 </template>
 
 <script setup>
-import { computed, watch } from 'vue'
+import { computed, provide, watch } from 'vue'
+import { useRoute } from 'vue-router'
 import { activeAgentId } from './stores/agents'
 import { isStandalone, isRemote, modeState } from './stores/mode'
+import { remoteState } from './stores/remote'
+import { useModeTransition } from './composables/useModeTransition'
 import RemoteWorkspace from './pages/RemoteWorkspace.vue'
+import ModeTransition from './components/ModeTransition.vue'
 import './styles/companion.css'
 import './styles/controls.css'
+import './styles/standalone.css'
+import { appearanceStyle, displayPreferences, LOCAL_APPEARANCE } from './stores/appearance'
 const tone = computed(() => isStandalone.value && activeAgentId.value === 'nana' ? 'nana' : 'pero')
+const route = useRoute()
+const localDataRecovery = computed(() => isStandalone.value && route.path === '/settings' && route.query.section === 'data')
+const contentReady = computed(() => isRemote.value || isStandalone.value && !modeState.restoring && (!modeState.restoreError || localDataRecovery.value))
+const transitionLoading = computed(() => modeState.loading || modeState.restoring || !!modeState.snapshot && ['activating', 'quiescing'].includes(modeState.snapshot.phase) || isRemote.value && (remoteState.initializing || remoteState.restoringView))
+const transitionNeeded = computed(() => !contentReady.value || modeState.loading || modeState.restoring)
+const { visible: transitionVisible, waiting: transitionWaiting } = useModeTransition(transitionNeeded, transitionLoading)
+const localStyle = computed(() => appearanceStyle(activeAgentId.value))
+provide(LOCAL_APPEARANCE, computed(() => isStandalone.value ? { style: localStyle.value, reduceMotion: !displayPreferences.value.motion } : null))
 watch(tone, value => { document.documentElement.dataset.tone = value }, { immediate: true })
 </script>
 
@@ -21,6 +37,9 @@ watch(tone, value => { document.documentElement.dataset.tone = value }, { immedi
 :root { color-scheme: light }
 * { box-sizing: border-box }
 body { margin: 0; background-color: var(--room-page); }
+.mode-curtain-leave-active { transition: opacity .22s ease; pointer-events: none; }
+.mode-curtain-leave-to { opacity: 0; }
+@media (prefers-reduced-motion: reduce) { .mode-curtain-leave-active { transition: none; } }
 .app { 
   min-height: 100vh; 
   min-height: 100dvh; 

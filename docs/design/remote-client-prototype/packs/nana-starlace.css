@@ -1,0 +1,21 @@
+/* 角色样式包示例：选择器限定在角色容器中，不改变业务状态和导航布局。 */
+.device[data-role="nana"][data-skin="character"] .message-bubble {
+  border-radius: 14px 3px 14px 3px;
+  background: linear-gradient(125deg, var(--wash), var(--surface));
+  box-shadow: inset 3px 0 0 color-mix(in srgb, var(--accent-secondary) 32%, transparent), 0 4px 14px -10px var(--accent);
+}
+.device[data-role="nana"][data-skin="character"] .message-signature::after {
+  border-radius: 0 10px 0 10px;
+  border-color: var(--accent-secondary);
+}
+.device[data-role="nana"][data-skin="character"] .resume-card {
+  border-radius: 14px 3px 14px 3px;
+  border-left: 2px solid var(--accent-secondary);
+}
+.device[data-role="nana"][data-skin="character"] .file-card {
+  border-radius: 9px 2px 9px 2px;
+}
+.device[data-role="nana"][data-skin="character"] .hero-greeting {
+  border-left: 1px solid var(--accent-secondary);
+  padding-left: 12px;
+}

@@ -1,23 +1,17 @@
 <template>
-  <div class="room-character" :class="{ 'is-quiet': quiet, 'is-reacting': reacting }" @pointerdown="startTouch" @pointerup="finishTouch" @pointercancel="touch = null">
-    <div id="l2d-panel" class="room-character-canvas" :class="{ 'has-error': modelError }" :aria-label="`${agent.name} 的 Live2D 角色`">
-      <div v-if="modelError" class="character-fallback">
-        <CharacterAvatar class="character-fallback-avatar" :src="agent.avatar" :label="agent.name" />
-        <span>{{ modelError }}</span>
-        <button @click="initializeModel">重新加载角色</button>
-      </div>
+  <div class="room-character" :class="{ 'is-quiet': quiet, 'is-reacting': reacting, 'is-static': renderer === 'illustration', 'is-cg': presentation.layout === 'card' }" @pointerdown="startTouch" @pointerup="finishTouch" @pointercancel="touch = null">
+    <button v-if="renderer === 'illustration' && presentation.illustration && !imageFailed" :key="presentation.illustration" type="button" class="room-static-character" :class="{ 'room-static-character--card': presentation.layout === 'card' }" :aria-label="`${agent.name} 的立绘，打开聊天`" @click="$emit('open-chat')"><img :src="presentation.illustration" :alt="`${agent.name} 的角色立绘`" draggable="false" @error="imageFailed = true" /></button>
+    <div v-else-if="renderer === 'illustration'" class="character-fallback"><CharacterAvatar class="character-fallback-avatar" :src="agent.avatar" :label="agent.name" /><span>{{ imageFailed ? '角色图片暂时无法显示' : '还没有设置角色立绘' }}</span><button type="button" @click="$emit('open-display')">选择显示方式</button></div>
+    <div v-show="renderer === 'live2d'" id="l2d-panel" class="room-character-canvas" :class="{ 'has-error': modelError, 'is-loading': loading }" :aria-label="`${agent.name} 的 Live2D 角色`">
+      <div v-if="modelError" class="character-fallback"><CharacterAvatar class="character-fallback-avatar" :src="agent.avatar" :label="agent.name" /><span>{{ modelError }}</span><button type="button" @click="initializeModel">重新加载角色</button><button type="button" @click="$emit('open-display')">改用静态立绘</button></div>
     </div>
-    <Transition name="room-speech">
-      <button v-if="speech && !quiet && !modelError" type="button" class="room-character-speech" :aria-label="`${agent.name}：${speech}。打开聊天`" @click="$emit('open-chat')">
-        <span class="speech-name">{{ agent.name }}</span><span class="speech-text">{{ speech }}</span>
-      </button>
-    </Transition>
-    <span v-if="loading && !quiet" class="character-loading" role="status">{{ agent.name }} 正在过来…</span>
+    <Transition name="room-speech"><button v-if="speech && !quiet && (renderer === 'illustration' || !modelError)" type="button" class="room-character-speech" :aria-label="`${agent.name}：${speech}。打开聊天`" @click="$emit('open-chat')"><span class="speech-name">{{ agent.name }}</span><span class="speech-text">{{ speech }}</span></button></Transition>
+    <span v-if="renderer === 'live2d' && loading && !quiet" class="character-loading" role="status">{{ agent.name }} 正在过来…</span>
   </div>
 </template>
 
 <script setup>
-import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
+import { ref, computed, watch, onMounted, onBeforeUnmount } from 'vue'
 import { listen } from '@tauri-apps/api/event'
 import { localInvoke } from '../services/localChat'
 import { activeAgentId, AGENTS, getActiveAgentId } from '../stores/agents'
@@ -25,36 +19,28 @@ import { visibleMessage } from '../utils/messageContent'
 import { INTERACTION_LINES } from '../constants/interaction'
 import CharacterAvatar from './companion/CharacterAvatar.vue'
 
-const props = defineProps({ quiet: Boolean, interactive: { type: Boolean, default: true } })
-const emit = defineEmits(['projection', 'open-chat'])
+const props = defineProps({ quiet: Boolean, interactive: { type: Boolean, default: true }, active: { type: Boolean, default: true }, renderer: { type: String, default: 'live2d' }, presentation: { type: Object, default: () => ({}) } })
+const emit = defineEmits(['projection', 'open-chat', 'open-display'])
 const agent = computed(() => AGENTS[activeAgentId.value] || { name: '伙伴' })
-const speech = ref('')
-const loading = ref(true)
-const modelError = ref('')
-const reacting = ref(false)
-let speechTimer = null
-let reactionTimer = null
-let touch = null
-let observer = null
-let unlistenEnvironment = null
-let projectionVersion = 0
-let disposed = false
-let currentProjection = null
+const speech = ref(''), loading = ref(false), modelError = ref(''), reacting = ref(false), imageFailed = ref(false)
+let speechTimer = null, reactionTimer = null, touch = null, observer = null, unlistenEnvironment = null
+let projectionVersion = 0, initializationVersion = 0, disposed = false, mounted = false, currentProjection = null
 
+function syncActivity() {
+  window.PPC_LIVE2D_ENABLED = mounted && !disposed && props.renderer === 'live2d'
+  window.PPC_LIVE2D_ACTIVE = window.PPC_LIVE2D_ENABLED && props.active && !document.hidden && !modelError.value
+  window.dispatchEvent(new Event('ppc:live2d-visibility'))
+}
 function startTouch(event) {
-  if (!props.interactive || event.button !== 0 || event.target.id !== 'live2d') return
+  if (!props.interactive || props.renderer !== 'live2d' || event.button !== 0 || event.target.id !== 'live2d') return
   touch = { x: event.clientX, y: event.clientY, id: event.pointerId, at: Date.now() }
 }
 function finishTouch(event) {
-  const start = touch
-  touch = null
+  const start = touch; touch = null
   if (!start || !props.interactive || event.pointerId !== start.id || Date.now() - start.at > 600 || Math.hypot(event.clientX - start.x, event.clientY - start.y) > 12) return
-  // 仅提供本次点按的视觉反馈，角色台词与原生动作仍走现有投影和模型交互。
-  reacting.value = true
-  clearTimeout(reactionTimer)
+  reacting.value = true; clearTimeout(reactionTimer)
   reactionTimer = setTimeout(() => { reacting.value = false }, 650)
 }
-
 function loadAutoload() {
   if (window.__PPC_LIVE2D_READY) return window.__PPC_LIVE2D_READY
   if (window.__PPC_LIVE2D_SCRIPT) return window.__PPC_LIVE2D_SCRIPT
@@ -64,146 +50,121 @@ function loadAutoload() {
     script.onload = () => Promise.resolve(window.__PPC_LIVE2D_READY).then(resolve, reject)
     script.onerror = () => { script.remove(); reject(new Error('角色资源加载失败')) }
     document.head.appendChild(script)
-  }).catch(error => {
-    delete window.__PPC_LIVE2D_SCRIPT
-    delete window.__PPC_LIVE2D_READY
-    throw error
-  })
+  }).catch(error => { delete window.__PPC_LIVE2D_SCRIPT; delete window.__PPC_LIVE2D_READY; throw error })
   return window.__PPC_LIVE2D_SCRIPT
 }
-
 function moveWidgetIntoPanel() {
-  if (disposed) return
-  const panel = document.getElementById('l2d-panel')
-  const waifu = document.getElementById('waifu')
+  if (disposed || props.renderer !== 'live2d') return
+  const panel = document.getElementById('l2d-panel'), waifu = document.getElementById('waifu')
   if (!panel || !waifu) return
-  document.getElementById('waifu-toggle')?.remove()
-  document.getElementById('waifu-tool')?.remove()
+  document.getElementById('waifu-toggle')?.remove(); document.getElementById('waifu-tool')?.remove()
   if (!panel.contains(waifu)) panel.appendChild(waifu)
   waifu.style.display = ''
+  // 完成归位后不再观察整个页面，流式消息和抽屉更新无需反复查找角色节点。
+  observer?.disconnect(); observer = null
 }
-
 function showSpeech(value) {
-  clearTimeout(speechTimer)
-  speech.value = visibleMessage(value)
+  clearTimeout(speechTimer); speech.value = visibleMessage(value)
   if (speech.value) speechTimer = setTimeout(() => { speech.value = '' }, 12000)
 }
-function applyProjection(state, reloadModel) {
+async function applyProjection(state, reloadModel) {
   if (disposed || state.agentId !== getActiveAgentId()) return
   if ((currentProjection?.environment?.fetchedAt || 0) > (state.environment?.fetchedAt || 0)) state = { ...state, environment: currentProjection.environment }
   currentProjection = state
   window.WAIFU_TEXTS = state.texts
   window.PPC_LIVE2D_CONFIG = { modelId: state.modelId, modelTexturesId: state.modelTexturesId, activeAgent: state.agentId, waifuTexts: state.texts }
   emit('projection', state)
-  if (reloadModel && window.WaifuWidget) {
+  if (reloadModel) {
     const welcome = state.texts?.welcome
     showSpeech(typeof welcome === 'string' ? welcome : welcome?.message || agent.value.welcome_message || '')
-    return window.WaifuWidget.loadModel(Number(state.modelId) || 0, Number(state.modelTexturesId) || 0, undefined, false)
+    if (props.renderer === 'live2d' && window.WaifuWidget) await window.WaifuWidget.loadModel(Number(state.modelId) || 0, Number(state.modelTexturesId) || 0, undefined, false)
   }
 }
 async function loadProjection(reloadModel = false) {
-  const agentId = getActiveAgentId()
-  const version = ++projectionVersion
+  const agentId = getActiveAgentId(), version = ++projectionVersion
   try {
     const state = await localInvoke('local_character_projection', { agentId })
     if (!disposed && version === projectionVersion && agentId === getActiveAgentId()) { await applyProjection(state, reloadModel); return true }
-  } catch (error) {
-    if (!disposed && version === projectionVersion) {
-      console.warn('加载角色展示数据失败：', error)
-      if (reloadModel) modelError.value = '角色暂时没加载出来'
-    }
-  }
+  } catch (error) { if (!disposed && version === projectionVersion) console.warn('加载角色展示数据失败：', error) }
   return false
 }
 async function initializeModel() {
-  if (disposed) return
-  modelError.value = ''
-  loading.value = true
+  if (disposed || props.renderer !== 'live2d') return
+  const version = ++initializationVersion
+  modelError.value = ''; loading.value = true; syncActivity()
   await loadProjection()
+  if (disposed || version !== initializationVersion || props.renderer !== 'live2d') return
   try {
     await loadAutoload()
-    if (disposed) return
+    if (disposed || version !== initializationVersion || props.renderer !== 'live2d') return
+    if (!observer) { observer = new MutationObserver(moveWidgetIntoPanel); observer.observe(document.body, { childList: true, subtree: true }) }
     moveWidgetIntoPanel()
     const canvas = document.getElementById('live2d')
     if (!canvas) throw new Error('角色画布暂时不可用')
-    canvas.addEventListener('webglcontextlost', onContextLost)
-    canvas.addEventListener('webglcontextrestored', onContextRestored)
-    await loadProjection(true)
-    if (!disposed) loading.value = false
+    canvas.addEventListener('webglcontextlost', onContextLost); canvas.addEventListener('webglcontextrestored', onContextRestored)
+    if (!await loadProjection(true)) throw new Error('角色展示数据暂时不可用')
+    if (!disposed && version === initializationVersion) { loading.value = false; syncActivity() }
   } catch (error) {
-    if (disposed) return
-    loading.value = false
-    modelError.value = '角色暂时没加载出来'
+    if (disposed || version !== initializationVersion) return
+    loading.value = false; modelError.value = '角色暂时没加载出来'; syncActivity()
     console.warn('加载 Live2D 角色失败：', error)
   }
 }
-function onContextLost(event) { event.preventDefault(); modelError.value = '角色画面暂时中断了' }
-function onContextRestored() { initializeModel() }
-async function onAgentChanged() {
-  speech.value = ''
-  touch = null
-  reacting.value = false
-  clearTimeout(reactionTimer)
-  currentProjection = null
-  modelError.value = ''
-  loading.value = true
-  emit('projection', { agentId: getActiveAgentId(), mood: '', vibe: '', mind: '' })
-  await loadProjection(true)
-  if (!disposed) loading.value = false
-}
-function onChat(event) { if (!props.quiet) showSpeech(event.detail) }
-function onWaifuMessage(event) { showSpeech(event.detail?.text || '') }
-function onStatusUpdated(event) {
-  if (event.detail?.agentId !== getActiveAgentId()) return
-  applyProjection({ ...currentProjection, ...event.detail }, false)
-}
-function onTextsUpdated(event) { if (event.detail) window.WAIFU_TEXTS = event.detail }
-
-onMounted(async () => {
-  window.WAIFU_INTERACTION_LINES = INTERACTION_LINES
-  window.WAIFU_GET_AGENT_ID = getActiveAgentId
-  window.PPC_SAVE_MODEL_SETTINGS = async (modelId, modelTexturesId, agentId = getActiveAgentId()) => {
-    await localInvoke('local_save_model_preferences', { agentId, modelId, textureId: modelTexturesId })
-    if (!disposed && agentId === getActiveAgentId()) await loadProjection()
+async function updateRenderer() {
+  if (!mounted || disposed) return
+  initializationVersion++; imageFailed.value = false; modelError.value = ''; speech.value = ''; touch = null; reacting.value = false
+  clearTimeout(speechTimer); clearTimeout(reactionTimer)
+  syncActivity()
+  if (props.renderer === 'live2d') await initializeModel()
+  else {
+    observer?.disconnect(); observer = null; loading.value = false
+    await loadProjection(true)
   }
-  window.addEventListener('ppc:agent-switched', onAgentChanged)
-  window.addEventListener('ppc:chat', onChat)
-  window.addEventListener('waifu-message', onWaifuMessage)
-  window.addEventListener('ppc:pero-status-updated', onStatusUpdated)
-  window.addEventListener('ppc:waifu-texts-updated', onTextsUpdated)
-  observer = new MutationObserver(moveWidgetIntoPanel)
-  observer.observe(document.body, { childList: true, subtree: true })
+}
+function onContextLost(event) { event.preventDefault(); modelError.value = '角色画面暂时中断了'; syncActivity() }
+function onContextRestored() { if (props.renderer === 'live2d') initializeModel() }
+async function onAgentChanged() { currentProjection = null; projectionVersion++; emit('projection', { agentId: getActiveAgentId(), mood: '', vibe: '', mind: '' }); await updateRenderer() }
+function onChat(event) { if (!props.quiet) showSpeech(event.detail) }
+function onWaifuMessage(event) { if (props.renderer === 'live2d' && props.active) showSpeech(event.detail?.text || '') }
+function onStatusUpdated(event) { if (event.detail?.agentId === getActiveAgentId()) applyProjection({ ...currentProjection, ...event.detail }, false) }
+function onTextsUpdated(event) { if (event.detail) window.WAIFU_TEXTS = event.detail }
+async function saveModelPreferences(modelId, textureId, agentId = getActiveAgentId()) {
+  if (disposed || props.renderer !== 'live2d') throw new Error('角色显示方式已经切换')
+  await localInvoke('local_save_model_preferences', { agentId, modelId, textureId })
+  if (!disposed && agentId === getActiveAgentId()) await loadProjection()
+}
+watch(() => props.renderer, updateRenderer)
+watch(() => props.active, syncActivity)
+watch(() => props.presentation.illustration, () => { imageFailed.value = false })
+onMounted(async () => {
+  mounted = true
+  window.WAIFU_INTERACTION_LINES = INTERACTION_LINES; window.WAIFU_GET_AGENT_ID = getActiveAgentId; window.PPC_SAVE_MODEL_SETTINGS = saveModelPreferences
+  syncActivity()
+  window.addEventListener('ppc:agent-switched', onAgentChanged); window.addEventListener('ppc:chat', onChat); window.addEventListener('waifu-message', onWaifuMessage)
+  window.addEventListener('ppc:pero-status-updated', onStatusUpdated); window.addEventListener('ppc:waifu-texts-updated', onTextsUpdated)
+  document.addEventListener('visibilitychange', syncActivity)
   try {
     const unlisten = await listen('local-environment-event', ({ payload }) => {
       if (!disposed && currentProjection && (payload?.fetchedAt || 0) >= (currentProjection.environment?.fetchedAt || 0)) { currentProjection = { ...currentProjection, environment: payload }; emit('projection', currentProjection) }
     })
-    if (disposed) unlisten()
-    else unlistenEnvironment = unlisten
+    if (disposed) unlisten(); else unlistenEnvironment = unlisten
   } catch (error) { console.warn('环境展示监听不可用：', error) }
-  if (!disposed) await initializeModel()
+  if (!disposed) await updateRenderer()
 })
-
 onBeforeUnmount(() => {
-  disposed = true
-  projectionVersion++
-  clearTimeout(speechTimer)
-  clearTimeout(reactionTimer)
-  observer?.disconnect()
-  unlistenEnvironment?.()
-  window.removeEventListener('ppc:agent-switched', onAgentChanged)
-  window.removeEventListener('ppc:chat', onChat)
-  window.removeEventListener('waifu-message', onWaifuMessage)
-  window.removeEventListener('ppc:pero-status-updated', onStatusUpdated)
-  window.removeEventListener('ppc:waifu-texts-updated', onTextsUpdated)
+  disposed = true; initializationVersion++; projectionVersion++; syncActivity()
+  clearTimeout(speechTimer); clearTimeout(reactionTimer); observer?.disconnect(); unlistenEnvironment?.()
+  window.removeEventListener('ppc:agent-switched', onAgentChanged); window.removeEventListener('ppc:chat', onChat); window.removeEventListener('waifu-message', onWaifuMessage)
+  window.removeEventListener('ppc:pero-status-updated', onStatusUpdated); window.removeEventListener('ppc:waifu-texts-updated', onTextsUpdated); document.removeEventListener('visibilitychange', syncActivity)
   const canvas = document.getElementById('live2d')
-  canvas?.removeEventListener('webglcontextlost', onContextLost)
-  canvas?.removeEventListener('webglcontextrestored', onContextRestored)
-  // 保留唯一的原生角色实例，返回首页时重新挂载，避免重复初始化全局交互和定时器。
+  canvas?.removeEventListener('webglcontextlost', onContextLost); canvas?.removeEventListener('webglcontextrestored', onContextRestored)
+  if (window.PPC_SAVE_MODEL_SETTINGS === saveModelPreferences) delete window.PPC_SAVE_MODEL_SETTINGS
+  if (window.WAIFU_GET_AGENT_ID === getActiveAgentId) { delete window.WAIFU_GET_AGENT_ID; window.WAIFU_TEXTS = {}; window.PPC_LIVE2D_CONFIG = {} }
+  // 保留一个原生实例供下次重新挂载，但暂停渲染，静态显示与其他页面不承担其绘制开销。
   const waifu = document.getElementById('waifu')
   if (waifu) { waifu.style.display = 'none'; document.body.appendChild(waifu) }
 })
 </script>
-
 <style>
 .room-character { position: relative; width: 100%; height: 100%; }
 .room-character-canvas { position: absolute; inset: 0; isolation: isolate; transform-origin: 50% 65%; }

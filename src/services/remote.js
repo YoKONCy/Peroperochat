@@ -22,14 +22,18 @@ async function control(command, args) {
 }
 export const remoteConnections = {
   list: () => control('remote_profiles'),
-  save: input => control('remote_save_profile', { input }),
+  save: input => control('remote_save_profile', { input, modeToken: currentToken() }),
   remove: id => control('remote_delete_profile', { id }),
 }
 export const remoteClient = {
   query: (query, { cachedOnly = false, token } = {}) => scoped('remote_query', { query, cachedOnly }, token),
   action: (action, { requestId = crypto.randomUUID(), token } = {}) => scoped('remote_action', { action, requestId }, token),
   chat: (input, { requestId = crypto.randomUUID(), token } = {}) => scoped('remote_chat', { request: { ...input, requestId } }, token),
-  connect: (principalId, token) => scoped('remote_connect', { principalId }, token),
+  connect: (principalId, token, force = false) => scoped('remote_connect', { principalId, force }, token),
+  sessionStatus: token => scoped('remote_session_status', {}, token),
+  logoutDevice: token => scoped('remote_logout_device', {}, token),
+  notifications: token => scoped('remote_notifications', {}, token),
+  ackNotification: (principalId, receipt, token) => scoped('remote_ack_notification', { principalId, receipt }, token),
   subscribe: (subscription, token) => scoped('remote_subscribe', { subscription }, token),
   submitInput: (input, { requestId = crypto.randomUUID(), token } = {}) => scoped('remote_surface_input', { input, requestId }, token),
   pendingRequests: token => scoped('remote_pending_requests', {}, token),

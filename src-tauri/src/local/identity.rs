@@ -123,6 +123,7 @@ pub fn normalize_agents(mut value: Value) -> ChatResult<Value> {
             return Err(ChatError::new("INVALID_CONFIG", "角色名称不能为空或过长"));
         }
         fields.insert("id".into(), json!(id));
+        super::appearance::normalize_assets(fields, id)?;
         // 旧角色记录可能未保存头像，只补缺失字段，保留用户指定的头像及显式空值。
         if !fields.contains_key("avatar") {
             if let Some(path)=match id.as_str() {"pero"=>Some("/avatars/pero.jpg"),"nana"=>Some("/avatars/nana.jpg"),_=>None} {
@@ -258,6 +259,7 @@ pub fn local_character_projection(app:AppHandle, agent_id:String, mode_token:cra
     for memory in memories { for tag in memory.tags { if tags.len()<8 && !tag.trim().is_empty() && !tags.contains(&tag) { tags.push(tag); } } }
     result["memoryTags"]=json!(tags);
     result["environment"]=super::environment::projection(&config);
+    result["presentation"]=super::appearance::presentation(&config,&agent_id)?;
     Ok(result)
 
     })

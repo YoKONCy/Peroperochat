@@ -27,7 +27,7 @@ async fn upload_inner(app:AppHandle,token:Token,request_id:String,thread_id:Stri
             let response=session.client.post(format!("{}/api/attachments",session.profile.endpoint)).bearer_auth(&session.secret)
                 .timeout(std::time::Duration::from_secs(90)).multipart(reqwest::multipart::Form::new().text("threadId",thread_id).part("file",part))
                 .send().await.map_err(transport::send_error)?;
-            transport::status(response.status())?;transport::envelope(&transport::body(response).await?)
+            let response=super::checked_response(&session,response).await?;transport::envelope(&transport::body(response).await?)
         }=>result,
     };
     let data=cache::settle(&app,&token,&request_id,result)?;
@@ -64,7 +64,8 @@ pub async fn remote_resource(app:AppHandle,token:Token,resource:Resource,range:O
             if !params.is_empty() {url.query_pairs_mut().extend_pairs(params);}
             let mut request=session.client.get(url).bearer_auth(&session.secret).timeout(std::time::Duration::from_secs(60));
             if let Some(range)=&range {request=request.header("Range",format!("bytes={}-{}",range.start,range.end));}
-            let response=request.send().await.map_err(|_|transport::network())?;transport::status(response.status())?;
+            let response=request.send().await.map_err(|_|transport::network())?;
+            let response=super::checked_response(&session,response).await?;
             if range.is_some() && response.status()!=reqwest::StatusCode::PARTIAL_CONTENT {return Err(ChatError::new("REMOTE_RANGE_UNSUPPORTED","服务端未按资源范围响应，已停止读取"));}
             let mime=response.headers().get("content-type").and_then(|v|v.to_str().ok()).unwrap_or("application/octet-stream").to_owned();
             let content_range=response.headers().get("content-range").and_then(|v|v.to_str().ok()).map(str::to_owned);

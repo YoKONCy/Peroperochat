@@ -1,6 +1,6 @@
 // infOS Surface v1 的展示合成器。只合并服务端帧，不解释或执行工具参数与可执行节点。
 const operationTypes = new Set(['surface.open', 'surface.append-text', 'surface.append-tool-arguments', 'surface.upsert-node', 'surface.patch-node', 'surface.commit', 'surface.fail', 'surface.dispose'])
-const supportedKinds = new Set(['markdown', 'native-reasoning', 'thinking', 'code', 'math', 'mermaid', 'tool-call', 'tool-result', 'status', 'error', 'attachment', 'approval', 'progress', 'input', 'panel', 'table', 'notification', 'document'])
+const supportedKinds = new Set(['markdown', 'native-reasoning', 'thinking', 'model-retry', 'code', 'math', 'mermaid', 'tool-call', 'tool-result', 'status', 'error', 'attachment', 'approval', 'progress', 'input', 'panel', 'table', 'notification', 'document'])
 
 function protocolError() { return Object.assign(new Error('远程 Surface 数据不兼容，请刷新权威投影'), { code: 'REMOTE_PROTOCOL' }) }
 function nodeView(node) {
@@ -80,9 +80,10 @@ export function applyRemoteFrame(state, frame) {
         props: { ...(existing?.props || { phase: 'preview' }), source } })
     } else if (operation.type === 'surface.append-tool-arguments') {
       if (!existing || existing.kind !== 'tool-call') { state.needsRefresh = true; return }
-      const args = ((existing.props.args || '') + (operation.argumentsDelta || '')).slice(0, 64000)
+      const combined = (existing.props.args || '') + (operation.argumentsDelta || '')
+      const args = combined.slice(0, 64000)
       upsert(surface, { ...existing, revision: frame.revision, props: { ...existing.props, name: (existing.props.name || '') + (operation.nameDelta || ''),
-        args, argsPreview: args, receivedChars: operation.receivedChars, previewTruncated: operation.previewTruncated } })
+        args, argsPreview: args, receivedChars: operation.receivedChars, previewTruncated: existing.props.previewTruncated || operation.previewTruncated || combined.length > 64000 } })
     } else if (operation.type === 'surface.upsert-node') {
       const previous = surface.nodes.find(node => node.nodeId === operation.node?.nodeId)
       upsert(surface, { ...operation.node, props: { ...previous?.props, ...operation.node?.props } })

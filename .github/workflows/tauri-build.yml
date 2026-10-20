@@ -8,6 +8,10 @@ on:
 permissions:
   contents: write
 
+concurrency:
+  group: peroperochat-android-release
+  cancel-in-progress: false
+
 jobs:
   build-android:
     runs-on: ubuntu-latest
@@ -36,6 +40,48 @@ jobs:
         with:
           distribution: 'zulu'
           java-version: '17'
+
+      - name: Restore persistent Android signing key
+        id: signing
+        env:
+          SIGNING_KEY: ${{ secrets.SIGNING_KEY }}
+          KEY_STORE_PASSWORD: ${{ secrets.KEY_STORE_PASSWORD }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+          ALIAS: ${{ secrets.ALIAS }}
+          EXPECTED_SIGNING_CERT_SHA256: ${{ vars.ANDROID_SIGNING_CERT_SHA256 }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          for NAME in SIGNING_KEY KEY_STORE_PASSWORD KEY_PASSWORD ALIAS; do
+            if [ -z "${!NAME}" ]; then
+              echo "::error::缺少固定签名配置 $NAME，拒绝使用临时密钥发布。"
+              exit 1
+            fi
+          done
+          umask 077
+          KEYSTORE_PATH="$RUNNER_TEMP/peroperochat-release.keystore"
+          printf '%s' "$SIGNING_KEY" | tr -d '\r\n ' | base64 --decode > "$KEYSTORE_PATH"
+          keytool -exportcert -keystore "$KEYSTORE_PATH" -storepass:env KEY_STORE_PASSWORD \
+            -alias "$ALIAS" -file "$RUNNER_TEMP/peroperochat-signing.der"
+          CERT_SHA256=$(sha256sum "$RUNNER_TEMP/peroperochat-signing.der" | cut -d ' ' -f 1)
+          EXPECTED=$(printf '%s' "$EXPECTED_SIGNING_CERT_SHA256" | tr -d ':[:space:]' | tr '[:upper:]' '[:lower:]')
+          # 没有显式固定指纹时，与上一版已公布的签名证书保持一致。
+          if [ -z "$EXPECTED" ]; then
+            PREVIOUS_CERT=$(gh release view --repo "$GITHUB_REPOSITORY" --json assets --jq '.assets[] | select(.name == "PeroperoChat-signing-certificate.sha256") | .name')
+            if [ -n "$PREVIOUS_CERT" ]; then
+              mkdir -p "$RUNNER_TEMP/previous-signing"
+              gh release download --repo "$GITHUB_REPOSITORY" --pattern "$PREVIOUS_CERT" --dir "$RUNNER_TEMP/previous-signing"
+              EXPECTED=$(tr -d ':[:space:]' < "$RUNNER_TEMP/previous-signing/$PREVIOUS_CERT" | tr '[:upper:]' '[:lower:]')
+            fi
+          fi
+          if [ -n "$EXPECTED" ] && { [[ ! "$EXPECTED" =~ ^[0-9a-f]{64}$ ]] || [ "$EXPECTED" != "$CERT_SHA256" ]; }; then
+            echo "::error::签名证书与固定指纹或上一版不一致，拒绝发布无法覆盖更新的 APK。"
+            exit 1
+          fi
+          echo "证书 SHA-256：$CERT_SHA256"
+          echo "keystore_path=$KEYSTORE_PATH" >> "$GITHUB_OUTPUT"
+          echo "certificate_sha256=$CERT_SHA256" >> "$GITHUB_OUTPUT"
+          printf '%s\n' "$CERT_SHA256" > PeroperoChat-signing-certificate.sha256
 
       - name: Setup Android SDK
         uses: android-actions/setup-android@v3
@@ -67,7 +113,7 @@ jobs:
           cache: 'pnpm'
 
       - name: Install dependencies
-        run: pnpm install
+        run: pnpm install --frozen-lockfile
 
       - name: Initialize Android project (preserve custom native code)
         run: |
@@ -83,9 +129,18 @@ jobs:
       - name: Read version from tauri.conf.json
         id: version
         run: |
-          VERSION=$(jq -r '.version' src-tauri/tauri.conf.json)
+          set -euo pipefail
+          VERSION=$(jq -er '.version' src-tauri/tauri.conf.json)
+          if [[ ! "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || [ "$(node -p "require('./package.json').version")" != "$VERSION" ]; then
+            echo "::error::应用版本元数据不一致。"
+            exit 1
+          fi
+          if [ "$GITHUB_REF_TYPE" = tag ] && [ "$GITHUB_REF_NAME" != "v$VERSION" ]; then
+            echo "::error::发布标签与应用版本不一致。"
+            exit 1
+          fi
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
-          echo "Using version: $VERSION"
+          echo "发布版本：$VERSION"
 
       - name: Build Android APK (aarch64 only, split per ABI)
         run: pnpm tauri android build --apk --split-per-abi --target aarch64
@@ -93,33 +148,48 @@ jobs:
           NDK_HOME: ${{ steps.setup-ndk.outputs.ndk-path }}
           OPENSSL_DIR: /usr/lib/ssl
 
-      - name: Ensure debug keystore exists
+      - name: Sign and verify release APK with persistent key
+        env:
+          KEYSTORE_PATH: ${{ steps.signing.outputs.keystore_path }}
+          CERT_SHA256: ${{ steps.signing.outputs.certificate_sha256 }}
+          KEY_STORE_PASSWORD: ${{ secrets.KEY_STORE_PASSWORD }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+          ALIAS: ${{ secrets.ALIAS }}
+          APP_VERSION: ${{ steps.version.outputs.version }}
         run: |
-          mkdir -p ~/.android
-          if [ ! -f ~/.android/debug.keystore ]; then
-            keytool -genkey -v -keystore ~/.android/debug.keystore -storepass android -alias androiddebugkey -keypass android -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Android Debug,O=Android,C=US"
-          fi
-
-      - name: Sign APK with debug key
-        run: |
-          APK_PATH=$(find src-tauri/gen/android/app/build/outputs/apk -name "*.apk" | head -1)
-          if [ -n "$APK_PATH" ]; then
-            echo "Found APK: $APK_PATH"
-            BUILD_TOOLS=$(ls -d $ANDROID_SDK_ROOT/build-tools/* | sort -r | head -1)
-            echo "Using build-tools: $BUILD_TOOLS"
-            $BUILD_TOOLS/zipalign -v 4 "$APK_PATH" app-aligned.apk
-            $BUILD_TOOLS/apksigner sign --ks ~/.android/debug.keystore --ks-pass pass:android --key-pass pass:android --out PeroperoChat-v${{ steps.version.outputs.version }}-arm64.apk app-aligned.apk
-          else
-            echo "APK not found!"
-            find src-tauri/gen/android -name "*.apk" || true
+          set -euo pipefail
+          mapfile -t APKS < <(find src-tauri/gen/android/app/build/outputs/apk -type f -path '*/release/*' -name '*.apk' | sort)
+          if [ "${#APKS[@]}" -ne 1 ]; then
+            echo "::error::预期唯一的 ARM64 Release APK，实际发现 ${#APKS[@]} 个。"
             exit 1
           fi
+          BUILD_TOOLS="$ANDROID_SDK_ROOT/build-tools/36.0.0"
+          ALIGNED="$RUNNER_TEMP/peroperochat-aligned.apk"
+          OUTPUT="PeroperoChat-v$APP_VERSION-arm64.apk"
+          "$BUILD_TOOLS/zipalign" -P 16 -f -v 4 "${APKS[0]}" "$ALIGNED"
+          "$BUILD_TOOLS/apksigner" sign --ks "$KEYSTORE_PATH" --ks-key-alias "$ALIAS" \
+            --ks-pass env:KEY_STORE_PASSWORD --key-pass env:KEY_PASSWORD --out "$OUTPUT" "$ALIGNED"
+          "$BUILD_TOOLS/zipalign" -c -P 16 -v 4 "$OUTPUT"
+          "$BUILD_TOOLS/apksigner" verify --verbose --print-certs "$OUTPUT" > "$RUNNER_TEMP/apk-signing-report.txt"
+          ACTUAL=$(sed -n 's/^Signer #1 certificate SHA-256 digest: //p' "$RUNNER_TEMP/apk-signing-report.txt" | tr -d ':[:space:]' | tr '[:upper:]' '[:lower:]')
+          if [ "$ACTUAL" != "$CERT_SHA256" ] || grep -q '^Signer #2 certificate' "$RUNNER_TEMP/apk-signing-report.txt"; then
+            echo "::error::APK 实际签名与固定证书不一致，拒绝上传。"
+            exit 1
+          fi
+          echo "发布包签名校验通过：$ACTUAL"
+
+      - name: Remove temporary signing key
+        if: always()
+        run: rm -f "$RUNNER_TEMP/peroperochat-release.keystore" "$RUNNER_TEMP/peroperochat-signing.der"
 
       - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
         with:
           name: PeroperoChat-android-arm64
-          path: PeroperoChat-v${{ steps.version.outputs.version }}-arm64.apk
+          path: |
+            PeroperoChat-v${{ steps.version.outputs.version }}-arm64.apk
+            PeroperoChat-signing-certificate.sha256
+          if-no-files-found: error
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
@@ -132,19 +202,26 @@ jobs:
             ## PeroperoChat v${{ steps.version.outputs.version }}
 
             ### 本次更新
-            - 调整手机端 Live2D 尺寸与底部定位，统一家庭群聊界面
-            - 引入双模式原生运行门控、独立存储分区与安卓提醒隔离
-            - 保留 infOS 客户端逻辑及首轮界面实现，远程连接入口暂未开放
-            - 加固远程请求核对、凭据保护、草稿持久化与会话恢复
+            - 开放 infOS 客户端入口，接入设备配对、会话、任务、资料与工具过程展示
+            - 独立房间统一新 UI，支持 Pio Live2D 与静态立绘随时切换
+            - 模式切换采用至少两秒的星笺 SVG 动画与随机 TIPS
+            - 修复 CI 每次随机签名的问题，改用固定发布证书并校验实际 APK 签名
 
             ### 验证情况
-            - 本次版本更新未重新运行本地测试或构建，历史验证范围见仓库文档
+            - 本地前端 50 项、Rust 后端 69 项测试通过；未进行本地应用构建
             - 真实 infOS 联调、原生界面端到端与安卓真机验收尚未完成
             - 系统强制停止、通知权限和厂商后台限制仍会影响提醒
 
             ### 下载
             - `PeroperoChat-v${{ steps.version.outputs.version }}-arm64.apk` — Android ARM64 安装包
+            - `PeroperoChat-signing-certificate.sha256` — 固定签名证书指纹
+
+            ### 从旧包迁移
+            - 旧 CI 使用每次重新生成的 debug 密钥；未保留原私钥的旧包无法直接覆盖更新
+            - 请先在旧应用导出备份，再卸载旧包、安装新版并恢复备份；远程连接需要重新配对
+            - 此后本仓库使用同一发布密钥的版本可正常覆盖更新，请勿随意替换签名 Secrets
           draft: false
           prerelease: false
           files: |
             PeroperoChat-v${{ steps.version.outputs.version }}-arm64.apk
+            PeroperoChat-signing-certificate.sha256

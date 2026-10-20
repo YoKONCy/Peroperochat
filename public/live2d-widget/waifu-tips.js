@@ -37,9 +37,11 @@ function loadWidget(config) {
   window.addEventListener("mousemove", () => userAction = true)
   window.addEventListener("keydown", () => userAction = true)
   setInterval(() => {
+    if (window.PPC_LIVE2D_ACTIVE === false || document.hidden) { userAction = false; clearInterval(userActionTimer); userActionTimer = null; return }
     if (userAction) { userAction = false; clearInterval(userActionTimer); userActionTimer = null }
     else if (!userActionTimer) { 
       userActionTimer = setInterval(() => { 
+        if (window.PPC_LIVE2D_ACTIVE === false || document.hidden) return
         const T = window.WAIFU_TEXTS || {}
         const idleArray = []
         for (let i = 1; i <= 50; i++) {
@@ -124,6 +126,7 @@ function loadWidget(config) {
   })()
 
   function showMessage(text, timeout, priority) {
+    if (window.PPC_LIVE2D_ACTIVE === false || document.hidden) return
     if (!text || (sessionStorage.getItem("waifu-text") && sessionStorage.getItem("waifu-text") > priority)) return
     if (messageTimer) { clearTimeout(messageTimer); messageTimer = null }
     text = randomSelection(text)
@@ -332,18 +335,19 @@ function loadWidget(config) {
   }
 
   async function loadModel(modelId, modelTexturesId, message, persist = true) {
+    if (window.PPC_LIVE2D_ENABLED === false) return
     const version = ++modelLoadVersion
     const agentId = window.WAIFU_GET_AGENT_ID?.() || 'pero'
     if (persist && window.PPC_SAVE_MODEL_SETTINGS) await window.PPC_SAVE_MODEL_SETTINGS(modelId, modelTexturesId, agentId)
-    if (version !== modelLoadVersion || agentId !== window.WAIFU_GET_AGENT_ID?.()) return
+    if (version !== modelLoadVersion || agentId !== window.WAIFU_GET_AGENT_ID?.() || window.PPC_LIVE2D_ENABLED === false) return
     window.PPC_LIVE2D_CONFIG = { ...(window.PPC_LIVE2D_CONFIG || {}), modelId, modelTexturesId, activeAgent: agentId }
     showMessage(message, 4000, 10)
     const ok = await ensureLoadFn()
-    if (version !== modelLoadVersion || agentId !== window.WAIFU_GET_AGENT_ID?.()) return
+    if (version !== modelLoadVersion || agentId !== window.WAIFU_GET_AGENT_ID?.() || window.PPC_LIVE2D_ENABLED === false) return
     if (!ok || typeof window.loadlive2d !== "function") { try { console.warn("loadlive2d unavailable") } catch (_) {}; return }
     if (useCDN) {
       if (!modelList) await loadModelList();
-      if (version !== modelLoadVersion || agentId !== window.WAIFU_GET_AGENT_ID?.()) return
+      if (version !== modelLoadVersion || agentId !== window.WAIFU_GET_AGENT_ID?.() || window.PPC_LIVE2D_ENABLED === false) return
       const target = modelList.models[modelId];
       const indexName = modelTexturesId > 0 ? `index_${modelTexturesId}.json` : "index.json";
       window.loadlive2d("live2d", `${cdnPath}model/${target}/${indexName}`);

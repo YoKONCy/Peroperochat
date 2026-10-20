@@ -1,12 +1,13 @@
 <template>
   <Teleport to="body">
     <Transition name="room-drawer" appear @after-leave="$emit('close')">
-      <div v-if="visible" class="room-drawer-overlay companion-surface" :class="`room-drawer-overlay--${variant}`" :data-tone="tone" :style="viewportStyle" @click.self="requestClose">
+      <div v-if="visible" class="room-drawer-overlay companion-surface" :class="[`room-drawer-overlay--${variant}`, { 'remote-themed': remoteTheme, 'standalone-design': !remoteTheme && localTheme }]" :data-tone="tone" :data-remote-theme="remoteTheme?.mode" :data-decoration="remoteTheme?.decoration" :data-bubble="remoteTheme?.bubble" :data-reduce-motion="remoteTheme ? remoteTheme.reduceMotion : localTheme?.reduceMotion" :style="[viewportStyle, remoteTheme ? remoteTheme.style : localTheme?.style]" @click.self="requestClose">
         <section ref="panel" class="room-drawer-panel" role="dialog" aria-modal="true" :aria-label="title" tabindex="-1" @keydown="handleKeydown">
           <header class="room-drawer-header">
-            <CompanionEmblem class="drawer-emblem" />
+            <RemoteIcon v-if="remoteTheme && remoteTheme.decoration !== 'none'" class="drawer-emblem" :name="remoteTheme.decoration" artwork />
+            <CompanionEmblem v-else-if="!remoteTheme" class="drawer-emblem" />
             <div><span v-if="subtitle" class="room-drawer-eyebrow">{{ subtitle }}</span><h2>{{ title }}</h2></div>
-            <button class="room-icon-button" aria-label="关闭" :disabled="busy" @click="requestClose"><RoomIcon name="close" /></button>
+            <button class="room-icon-button" aria-label="关闭" :disabled="busy" @click="requestClose"><component :is="remoteTheme ? RemoteIcon : RoomIcon" name="close" /></button>
           </header>
           <div class="room-drawer-content"><slot /></div>
           <footer v-if="$slots.footer" class="room-drawer-footer"><slot name="footer" /></footer>
@@ -17,15 +18,20 @@
 </template>
 
 <script setup>
-import { ref, onMounted, onBeforeUnmount, nextTick } from 'vue'
+import { ref, inject, onMounted, onBeforeUnmount, nextTick } from 'vue'
+import { REMOTE_THEME } from '../../services/remoteTheme'
+import { LOCAL_APPEARANCE } from '../../stores/appearance'
 import RoomIcon from './RoomIcon.vue'
 import CompanionEmblem from './CompanionEmblem.vue'
+import RemoteIcon from '../remote/RemoteIcon.vue'
 import { useRoomViewport } from '../../composables/useRoomViewport'
 const props = defineProps({ title: { type: String, required: true }, subtitle: { type: String, default: '' }, tone: { type: String, default: 'pero' }, variant: { type: String, default: 'default' }, busy: Boolean })
 defineEmits(['close'])
 const panel = ref(null)
 const visible = ref(true)
 const { viewportStyle } = useRoomViewport()
+const remoteTheme = inject(REMOTE_THEME, null)
+const localTheme = inject(LOCAL_APPEARANCE, null)
 let previousFocus = null
 function requestClose() { if (!props.busy) visible.value = false }
 function handleKeydown(event) {

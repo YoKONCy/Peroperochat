@@ -1,7 +1,7 @@
 <template>
-  <CompanionPage class="settings-page" title="设置" subtitle="模型、偏好与应用数据" @back="router.push('/')">
-    <div class="settings-layout">
-      <aside class="settings-navigation">
+  <CompanionPage class="settings-page" title="设置" subtitle="模型、偏好与应用数据" @back="goBack">
+    <div class="settings-layout" :class="{ 'settings-layout--overview': tab === 'overview' }">
+      <aside v-show="tab !== 'overview'" class="settings-navigation">
         <div class="settings-partner"><CharacterAvatar class="settings-portrait" :src="agent.avatar" :label="agent.name" /><div><CompanionEmblem /><strong>{{ agent.name }}</strong><small>当前伙伴</small></div></div>
         <nav aria-label="设置分类" role="tablist">
           <button v-for="(item, index) in categories" :id="`settings-tab-${item.id}`" :key="item.id" type="button" role="tab" :aria-selected="tab === item.id" :aria-controls="`settings-panel-${item.id}`" :tabindex="tab === item.id ? 0 : -1" :class="{ selected: tab === item.id }" @click="tab = item.id" @keydown="onCategoryKey($event, index)"><RoomIcon :name="item.icon" /><span>{{ item.label }}</span><i v-if="dirtySections[item.id]" aria-label="未保存" /></button>
@@ -9,10 +9,19 @@
       </aside>
       <section :id="`settings-panel-${tab}`" class="settings-content" role="tabpanel" :aria-labelledby="`settings-tab-${tab}`">
         <div :key="tab" class="settings-panel-body">
-          <header class="settings-section-heading"><span class="settings-section-symbol"><RoomIcon :name="currentCategory.icon" /></span><div><h2>{{ currentCategory.label }}</h2><p>{{ currentCategory.description }}</p></div><span v-if="dirtySections[tab]" class="settings-unsaved">未保存</span></header>
+          <header v-if="tab !== 'overview'" class="settings-section-heading"><span class="settings-section-symbol"><RoomIcon :name="currentCategory.icon" /></span><div><h2>{{ currentCategory.label }}</h2><p>{{ currentCategory.description }}</p></div><span v-if="dirtySections[tab]" class="settings-unsaved">未保存</span></header>
           <p v-if="loadError" class="room-error" role="alert">{{ loadError }} <button class="room-text-button" @click="load">重新读取</button></p>
           <p v-if="loading" class="control-hint" role="status">正在读取设置…</p>
 
+          <div v-if="tab === 'overview'" class="settings-overview">
+            <button class="settings-overview-profile" @click="router.push('/roles')"><CharacterAvatar :src="agent.avatar" :label="agent.name" /><span><strong>{{ agent.name }}</strong><small>独立模式</small><small>每一位伙伴，都有自己的日常</small></span><RoomIcon name="arrow" /></button>
+            <section class="settings-overview-group"><button v-for="item in categories.filter(item => ['api', 'model', 'user', 'role'].includes(item.id))" :key="item.id" @click="tab = item.id"><span class="overview-symbol"><RoomIcon :name="item.icon" /></span><span><strong>{{ item.label }}</strong><small>{{ item.description }}</small></span><RoomIcon name="arrow" /></button></section>
+            <section class="settings-overview-group"><button @click="tab = 'appearance'"><span class="overview-symbol"><RoomIcon name="palette" /></span><span><strong>显示与主题</strong><small>{{ displayPreferences.displayMode === 'live2d' ? '通用 Pio Live2D' : '静态立绘与 CG' }} · 配色与玻璃材质</small></span><i class="overview-color" /><RoomIcon name="arrow" /></button></section>
+            <section class="settings-overview-group"><button @click="router.push({ path: '/', query: { panel: 'remote' } })"><span class="overview-symbol"><RoomIcon name="remote" /></span><span><strong>运行模式与远程连接</strong><small>独立陪伴 / infOS 客户端</small></span><RoomIcon name="arrow" /></button></section>
+            <section class="settings-overview-group"><button @click="router.push({ path: '/', query: { panel: 'reminders' } })"><span class="overview-symbol"><RoomIcon name="bell" /></span><span><strong>日常提醒</strong><small>时间、待办与通知状态</small></span><RoomIcon name="arrow" /></button><button @click="tab = 'memory'"><span class="overview-symbol"><RoomIcon name="diary" /></span><span><strong>日记</strong><small>与 {{ agent.name }} 的点滴记录</small></span><RoomIcon name="arrow" /></button></section>
+            <section class="settings-overview-group"><button @click="tab = 'data'"><span class="overview-symbol"><RoomIcon name="document" /></span><span><strong>数据与备份</strong><small>导出、恢复与本地数据管理</small></span><RoomIcon name="arrow" /></button></section>
+          </div>
+          <RoomAppearanceSettings v-if="tab === 'appearance'" />
           <form v-if="tab === 'api'" @submit.prevent="saveApi">
             <fieldset :disabled="loading || !loaded || !!busy">
               <div class="settings-field-grid">
@@ -72,6 +81,8 @@ import CharacterAvatar from '../components/companion/CharacterAvatar.vue'
 import CompanionEmblem from '../components/companion/CompanionEmblem.vue'
 import ChoicePicker from '../components/companion/ChoicePicker.vue'
 import BrandIcon from '../components/companion/BrandIcon.vue'
+import RoomAppearanceSettings from '../components/companion/RoomAppearanceSettings.vue'
+import { displayPreferences } from '../stores/appearance'
 import { modelBrandDefinition, resolveModelBrand, resolveProviderBrand } from '../utils/modelBrands'
 import { AGENTS, activeAgentId, agentList } from '../stores/agents'
 import { getApiKey, getConfig, exportAllData, importAllData, resetAll } from '../api'
@@ -79,8 +90,11 @@ import { localInvoke } from '../services/localChat'
 import { getModelConfiguration, saveApiConfiguration, saveModelParameters } from '../services/standalone'
 
 const router = useRouter()
-const tab = ref('api')
+const tab = ref(router.currentRoute.value.query.section === 'data' ? 'data' : 'overview')
+function goBack() { if (tab.value === 'overview') router.push('/'); else tab.value = 'overview' }
 const categories = [
+  { id: 'overview', label: '全部设置', icon: 'settings', description: '房间里的显示与使用偏好' },
+  { id: 'appearance', label: '显示与主题', icon: 'palette', description: '角色显示、配色与玻璃材质' },
   { id: 'api', label: '模型连接', icon: 'connection', description: '选择聊天使用的服务、协议与模型' },
   { id: 'model', label: '回复偏好', icon: 'sliders', description: '调整回复风格、思考强度与长度' },
   { id: 'user', label: '个人资料', icon: 'profile', description: '让伙伴更了解你' },
@@ -231,6 +245,17 @@ onBeforeUnmount(() => { disposed = true; loadVersion++ })
 </script>
 
 <style scoped>
+.settings-layout--overview { display: block !important; }
+.settings-layout--overview .settings-content { height: 100%; padding: 0; border: 0; background: transparent; backdrop-filter: none; }
+.settings-layout--overview .settings-content::before { display: none; }
+.settings-overview { max-width: 680px; margin: 0 auto; }
+.settings-overview-profile { width: 100%; display: flex; align-items: center; gap: 16px; background: var(--room-glass); border: 1px solid #ffffffc9; border-radius: 22px; padding: 21px 18px; margin-bottom: 15px; text-align: left; backdrop-filter: blur(18px); }
+.settings-overview-profile > :first-child { width: 62px; height: 62px; border: 3px solid white; border-radius: 50%; }.settings-overview-profile > span { flex: 1; min-width: 0; }.settings-overview-profile strong { display: block; font-size: 22px; font-weight: 600; }.settings-overview-profile small { display: block; margin-top: 5px; color: var(--room-muted); font-size: 11px; }
+.settings-overview-group { padding: 0 15px; margin-bottom: 13px; border: 1px solid #ffffffc9; border-radius: 20px; background: var(--room-glass); backdrop-filter: blur(18px); }
+.settings-overview-group > button { display: flex; gap: 12px; align-items: center; width: 100%; text-align: left; border: 0; border-bottom: 1px solid var(--room-line); background: transparent; padding: 15px 0; }.settings-overview-group > button:last-child { border-bottom: 0; }
+.settings-overview-group button > span:nth-child(2) { flex: 1; min-width: 0; }.settings-overview-group strong { display: block; font-size: 13px; font-weight: 600; }.settings-overview-group small { display: block; margin-top: 5px; font-size: 10px; line-height: 1.6; color: var(--room-muted); }
+.overview-symbol { display: grid; place-items: center; width: 35px; height: 35px; background: #ffffff9c; border: 1px solid #dce6f680; border-radius: 12px; color: var(--room-accent); flex: none; }.overview-symbol svg { width: 20px; height: 20px; }.settings-overview-group button > svg:last-child, .settings-overview-profile > svg:last-child { width: 13px; height: 13px; color: var(--room-muted); }
+.overview-color { width: 20px; height: 20px; border-radius: 50%; background: var(--room-accent); border: 2px solid white; margin-right: 2px; }
 .settings-page :deep(.companion-page-body) { display: flex; overflow: hidden; }
 .settings-layout { flex: 1; min-height: 0; min-width: 0; display: grid; grid-template-columns: 200px minmax(0, 1fr); gap: 24px; }
 .settings-navigation { min-height: 0; overflow-y: auto; }

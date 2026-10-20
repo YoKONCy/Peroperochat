@@ -1,6 +1,6 @@
 import { computed } from 'vue'
 import { AGENTS, DEFAULT_AGENTS, activeAgentId, agentsLoading, activeAgent, agentList,
-  loadAgents, saveAgent, deleteAgent, setActiveAgentId, roleAction } from '../stores/agents'
+  loadAgents, deleteAgent, setActiveAgentId, roleAction } from '../stores/agents'
 export { AGENTS, DEFAULT_AGENTS, loadAgents, saveAgent, deleteAgent,
   loadActiveAgentId, getActiveAgentId, setActiveAgentId } from '../stores/agents'
 

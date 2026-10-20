@@ -1,14 +1,27 @@
 use rusqlite::OptionalExtension;
 use serde::{Deserialize,Serialize};
-use tauri::{AppHandle,Manager};
-use crate::{mode::{Coordinator,Target},local::types::*};
+use tauri::{AppHandle,Emitter,Manager};
+use crate::{mode::{Coordinator,Target,Token},local::types::*};
 
 #[derive(Clone,Debug,Serialize,Deserialize)]
 #[serde(rename_all="camelCase",deny_unknown_fields)]
-pub struct Profile {pub id:String,pub server_id:String,pub endpoint:String,pub display_name:String,pub app_version:String}
+pub struct Profile {
+    pub id:String,pub server_id:String,pub endpoint:String,pub display_name:String,pub app_version:String,
+    #[serde(default)] pub credential_id:Option<String>,
+    #[serde(default)] pub device:Option<super::access::Device>,
+    #[serde(default)] pub session_owner:Option<String>,
+}
+impl Profile {pub fn credential_key(&self)->&str {self.credential_id.as_deref().unwrap_or(&self.id)}}
 #[derive(Deserialize)]
 #[serde(rename_all="camelCase",deny_unknown_fields)]
-pub struct ProfileInput {pub endpoint:String,pub token:String,#[serde(default)] pub allow_insecure:bool}
+pub struct ProfileInput {
+    pub endpoint:String,#[serde(default)] pub token:String,#[serde(default)] pub code:String,
+    #[serde(default)] pub method:super::access::Method,
+    #[serde(default="device_name")] pub name:String,#[serde(default="remember")] pub remember:bool,
+    #[serde(default)] pub profile_id:Option<String>,#[serde(default)] pub allow_insecure:bool,
+}
+fn device_name()->String {"PeroperoChat".into()}
+fn remember()->bool {true}
 
 pub fn normalize_endpoint(raw:&str,allow_insecure:bool)->ChatResult<String> {
     let mut url=reqwest::Url::parse(raw.trim()).map_err(|_|ChatError::new("INVALID_ENDPOINT","请输入完整的 infOS 服务地址"))?;
@@ -34,27 +47,73 @@ pub fn remote_profiles(mode:tauri::State<Coordinator>)->ChatResult<Vec<Profile>>
     rows.map(|raw|serde_json::from_str(&raw?).map_err(|_|ChatError::new("INVALID_PROFILE","远程连接配置损坏"))).collect()
 }
 #[tauri::command]
-pub async fn remote_save_profile(app:AppHandle,input:ProfileInput)->ChatResult<Profile> {
-    if input.token.len()>4096 || input.token.contains(['\r','\n']) {return Err(ChatError::new("INVALID_CREDENTIAL","远程凭据格式无效"));}
+pub async fn remote_save_profile(app:AppHandle,input:ProfileInput,mode_token:Token)->ChatResult<Profile> {
+    let mode=app.state::<Coordinator>();
+    {let _gate=mode.gate(Some(&mode_token),false)?;}
     let endpoint=normalize_endpoint(&input.endpoint,input.allow_insecure)?;
-    let identity=super::transport::probe(&endpoint,&input.token).await?;
-    let profile=Profile {id:uuid::Uuid::new_v4().to_string(),server_id:identity.server_id,endpoint,display_name:identity.display_name,app_version:identity.app_version};
-    let mode=app.state::<Coordinator>();let _switch=mode.switch_lock.lock().await;
-    let conn=crate::mode::open_existing(mode.path())?;
-    let count:u32=conn.query_row("SELECT COUNT(*) FROM remote_profiles",[],|r|r.get(0))?;
-    if count>=20 {return Err(ChatError::new("PROFILE_LIMIT","最多保存 20 个连接，请先删除不用的配置"));}
-    super::vault::save(&app,&profile.id,&input.token)?;
-    if let Err(error)=conn.execute("INSERT INTO remote_profiles(id,value) VALUES(?1,?2)",rusqlite::params![profile.id,serde_json::to_string(&profile).unwrap()]) {
-        let _=super::vault::delete(&app,&profile.id);return Err(error.into());
+    let previous=input.profile_id.as_deref().map(|id|get(&mode,id)).transpose()?;
+    if previous.as_ref().is_some_and(|profile|profile.endpoint!=endpoint) {return Err(ChatError::new("REMOTE_IDENTITY_CHANGED","重新授权不能更改连接地址，请另存连接"));}
+    // 兑换完成后核对稳定实例身份；同一地址换了实例也不能复用旧数据分区。
+    let code=if matches!(input.method,super::access::Method::Bearer) {&input.token} else {&input.code};
+    let credential=super::access::exchange(&endpoint,input.method,code,&input.name,input.remember).await?;
+    let result=async {
+        let identity=super::transport::probe(&endpoint,&credential.secret).await?;
+        if previous.as_ref().is_some_and(|profile|profile.server_id!=identity.server_id) {return Err(ChatError::new("REMOTE_IDENTITY_CHANGED","地址对应的 infOS 实例已改变，不能复用原连接的数据分区"));}
+        let profile=Profile {id:previous.as_ref().map(|profile|profile.id.clone()).unwrap_or_else(||uuid::Uuid::new_v4().to_string()),
+            server_id:identity.server_id,endpoint:endpoint.clone(),display_name:identity.display_name,app_version:identity.app_version,
+            credential_id:Some(uuid::Uuid::new_v4().to_string()),device:credential.device.clone(),
+            session_owner:if credential.device.is_some() && !input.remember {Some(mode.snapshot()?.runtime_owner_id)} else {None}};
+        let _switch=mode.switch_lock.lock().await;
+        {let _gate=mode.gate(Some(&mode_token),false)?;}
+        let mut conn=crate::mode::open_existing(mode.path())?;
+        if let Some(old)=&previous {
+            let current=get(&mode,&old.id)?;
+            if current.credential_id!=old.credential_id {return Err(ChatError::new("REMOTE_CREDENTIAL_CHANGED","连接授权已被另一操作更新，请重新打开连接面板"));}
+        } else {
+            let count:u32=conn.query_row("SELECT COUNT(*) FROM remote_profiles",[],|r|r.get(0))?;
+            if count>=20 {return Err(ChatError::new("PROFILE_LIMIT","最多保存 20 个连接，请先删除不用的配置"));}
+        }
+        // 新凭据先以独立安全存储键落盘，再原子切换指针；失败时旧凭据仍完整可用。
+        super::vault::save(&app,profile.credential_key(),&credential.secret)?;
+        let active=mode_token.target==(Target::Remote {profile_id:profile.id.clone()});
+        if active {
+            match mode.begin_switch(mode_token.target.clone()) {
+                Ok(state)=> {let _=app.emit("mode-event",&state);super::stop_all(&app);},
+                Err(error)=> {let _=super::vault::delete(&app,profile.credential_key());return Err(error);},
+            }
+        }
+        let saved=(||->ChatResult<()> {
+            let tx=conn.transaction_with_behavior(rusqlite::TransactionBehavior::Immediate)?;
+            tx.execute("INSERT INTO remote_profiles(id,value) VALUES(?1,?2) ON CONFLICT(id) DO UPDATE SET value=excluded.value",rusqlite::params![profile.id,serde_json::to_string(&profile).map_err(|_|super::inactive())?])?;
+            tx.commit()?;Ok(())
+        })();
+        if let Err(error)=saved {
+            let _=super::vault::delete(&app,profile.credential_key());
+            if active {if let Ok(state)=mode.fail() {let _=app.emit("mode-event",state);}}
+            return Err(error);
+        }
+        if active {
+            match mode.activate() {
+                Ok(state)=> {let _=app.emit("mode-event",state);},
+                Err(error)=> {if let Ok(state)=mode.fail() {let _=app.emit("mode-event",state);}return Err(error);},
+            }
+        }
+        if let Some(old)=&previous {let _=super::vault::delete(&app,old.credential_key());}
+        Ok(profile)
+    }.await;
+    // 未保存的新设备会话尽力撤销；不撤销用户原来的管理或兼容凭据。
+    if result.is_err() && credential.device.is_some() {
+        let retained=input.profile_id.as_deref().and_then(|id|get(&mode,id).ok()).is_some_and(|profile|profile.device.as_ref().map(|device|&device.id)==credential.device.as_ref().map(|device|&device.id));
+        if !retained {let _=super::access::revoke(&endpoint,&credential.secret).await;}
     }
-    Ok(profile)
+    result
 }
 #[tauri::command]
 pub async fn remote_delete_profile(app:AppHandle,id:String)->ChatResult<()> {
     let mode=app.state::<Coordinator>();let _switch=mode.switch_lock.lock().await;
     let profile=get(&mode,&id)?;let target=Target::Remote {profile_id:id.clone()};
     if mode.snapshot()?.selected_target==target {return Err(ChatError::new("PROFILE_ACTIVE","请先切换到其他运行目标，再删除连接"));}
-    super::vault::delete(&app,&profile.id)?;
+    super::vault::delete(&app,profile.credential_key())?;
     crate::mode::open_existing(mode.path())?.execute("DELETE FROM remote_profiles WHERE id=?1",[id])?;Ok(())
 }
 

@@ -1,5 +1,6 @@
 <template>
-  <RoomDrawer :title="`${agent.name} 的衣柜`" subtitle="服装细节预览 · 点选查看上身效果" :tone="tone" variant="wardrobe" @close="$emit('close')">
+  <RoomDrawer :title="`${agent.name} 的衣柜`" :subtitle="displayMode === 'live2d' ? '服装细节预览 · 点选查看上身效果' : '服装设置保留给 Live2D，静态立绘不换装'" :tone="tone" variant="wardrobe" @close="$emit('close')">
+    <button v-if="displayMode !== 'live2d'" class="room-wardrobe-display room-secondary-button" type="button" @click="$emit('display', 'live2d')"><RoomIcon name="model" />切换到 Live2D 查看服装</button>
     <p v-if="error" class="room-error" role="alert">{{ error }} <button class="room-text-button" @click="load">重试</button></p>
     <p v-if="loading" class="room-empty" role="status">正在打开衣柜…</p>
     <div v-else class="outfit-grid">
@@ -17,8 +18,10 @@ import { ElMessage } from 'element-plus'
 import RoomDrawer from './RoomDrawer.vue'
 import RoomIcon from './RoomIcon.vue'
 import OutfitThumbnail from './OutfitThumbnail.vue'
-const props = defineProps({ agent: { type: Object, required: true }, tone: { type: String, default: 'pero' }, texture: { type: [String, Number], default: '' } })
-defineEmits(['close'])
+import { localInvoke } from '../../services/localChat'
+import { getActiveAgentId } from '../../stores/agents'
+const props = defineProps({ agent: { type: Object, required: true }, tone: { type: String, default: 'pero' }, texture: { type: [String, Number], default: '' }, displayMode: { type: String, default: 'live2d' } })
+const emit = defineEmits(['close', 'display', 'updated'])
 const outfits = ref([])
 const loading = ref(true)
 const changing = ref(false)
@@ -43,16 +46,18 @@ async function choose(outfit) {
   if (changing.value) return
   changing.value = true
   try {
-    if (!window.WaifuWidget) throw new Error('请等角色加载好，再来换装')
-    await window.WaifuWidget.loadModel(0, textureId(outfit), `换上${outfit.name}啦`)
-    if (!disposed) selected.value = textureId(outfit)
+    const agentId = props.agent.id, texture = textureId(outfit)
+    await localInvoke('local_save_model_preferences', { agentId, modelId: 0, textureId: texture })
+    if (disposed || agentId !== getActiveAgentId()) return
+    selected.value = texture; emit('updated')
+    if (props.displayMode === 'live2d' && window.PPC_LIVE2D_ENABLED && window.WaifuWidget) await window.WaifuWidget.loadModel(0, texture, `换上${outfit.name}啦`, false)
   } catch (failure) { if (!disposed) ElMessage.error(failure.message) }
   finally { if (!disposed) changing.value = false }
 }
 async function switchModel() {
   if (changing.value) return
   changing.value = true
-  try { if (!window.WaifuWidget) throw new Error('角色还在准备中'); await window.WaifuWidget.loadOtherModel() }
+  try { if (props.displayMode !== 'live2d') { emit('display', 'live2d'); return }; if (!window.WaifuWidget) throw new Error('角色还在准备中'); await window.WaifuWidget.loadOtherModel() }
   catch (failure) { if (!disposed) ElMessage.error(failure.message) }
   finally { if (!disposed) changing.value = false }
 }
@@ -61,6 +66,7 @@ onBeforeUnmount(() => { disposed = true; controller?.abort() })
 </script>
 
 <style scoped>
+.room-wardrobe-display { display: flex; align-items: center; justify-content: center; gap: 8px; width: 100%; margin-bottom: 14px; }
 .outfit-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
 .outfit-grid > button { border: 1px solid var(--room-line); background: var(--room-surface); border-radius: 3px 10px 3px 3px; overflow: hidden; text-align: left; padding: 0; display: flex; flex-direction: column; position: relative; font-size: 12px; line-height: 1.5; }
 .outfit-grid > button.selected { box-shadow: inset 2px 0 var(--room-accent); border-color: var(--room-accent); background: var(--room-accent-soft); }

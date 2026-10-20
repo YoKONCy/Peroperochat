@@ -28,7 +28,7 @@ async fn get_api_key(app: AppHandle, mode_token:crate::mode::Token) -> Result<St
 #[tauri::command]
 async fn save_config(app: AppHandle, key: String, value: String, mode_token:crate::mode::Token) -> Result<(), local::types::ChatError> {
     crate::mode::LOCAL_TOKEN.scope(mode_token, async {
-    if key!="ppc.activeAgent" && !key.starts_with("ppc.ui.") {
+    if key=="ppc.ui.appearance" || (key!="ppc.activeAgent" && !key.starts_with("ppc.ui.")) {
         return Err(local::types::ChatError::new("INVALID_CONFIG","业务配置请通过对应的管理接口保存"));
     }
     if value.len()>8000 { return Err(local::types::ChatError::new("INVALID_CONFIG","界面配置过大")); }
@@ -120,6 +120,10 @@ pub fn run() {
         remote::remote_action,
         remote::remote_chat,
         remote::remote_connect,
+        remote::remote_session_status,
+        remote::remote_logout_device,
+        remote::notifications::remote_notifications,
+        remote::notifications::remote_ack_notification,
         remote::remote_subscribe,
         remote::remote_surface_input,
         remote::remote_pending_requests,
@@ -162,6 +166,8 @@ pub fn run() {
         local::prompts::local_prompt_workspace,
         local::prompts::local_manage_prompts,
         local::identity::local_character_projection,
+        local::appearance::local_appearance,
+        local::appearance::local_save_appearance,
         local::blackjack::local_blackjack_snapshot,
         local::blackjack::local_blackjack_play,
         local::identity::local_save_model_preferences,

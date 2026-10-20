@@ -4,12 +4,19 @@ import { listen } from '@tauri-apps/api/event'
 import { normalizeError } from '../services/localChatClient'
 
 // 仅展示原生控制投影；前端永远不能自行授予运行权或在离线时切回独立模式。
-export const modeState = shallowReactive({ snapshot: null, loading: true, error: null })
+export const modeState = shallowReactive({ snapshot: null, loading: true, error: null, requestedTarget: null, restoring: false, restoreError: null, restoreAttempt: 0 })
+// 仅通知界面播放过渡，不延迟原生切换，也不改变业务运行令牌。
+export const modeTransition = shallowReactive({ serial: 0, target: null })
 export const isStandalone = computed(() => modeState.snapshot?.phase === 'stable' && modeState.snapshot.activeTarget?.mode === 'standalone')
 export const isRemote = computed(() => modeState.snapshot?.phase === 'stable' && modeState.snapshot.activeTarget?.mode === 'remote')
 const invalidators = new Set()
 let initialized = null
 let dispose = null
+
+function announceTransition(target) {
+  modeTransition.target = target ? { ...target } : null
+  modeTransition.serial++
+}
 
 export function sameToken(a, b) {
   return !!a && !!b && a.installationId === b.installationId && a.epoch === b.epoch &&
@@ -35,6 +42,10 @@ function apply(snapshot) {
   if (!snapshot || snapshot.schemaVersion !== 1 || !Number.isSafeInteger(snapshot.revision) || !Number.isSafeInteger(snapshot.activationEpoch)) throw modeError()
   const previous = modeState.snapshot
   if (previous?.installationId === snapshot.installationId && previous.revision >= snapshot.revision) return
+  if (previous && (previous.installationId !== snapshot.installationId || previous.activationEpoch !== snapshot.activationEpoch) &&
+      !(modeState.loading && modeState.requestedTarget?.mode === snapshot.selectedTarget?.mode && modeState.requestedTarget?.profileId === snapshot.selectedTarget?.profileId)) {
+    announceTransition(snapshot.selectedTarget)
+  }
   modeState.snapshot = snapshot
   modeState.error = snapshot.lastError || null
   if (!previous || previous.installationId !== snapshot.installationId || previous.activationEpoch !== snapshot.activationEpoch ||
@@ -83,7 +94,10 @@ export function initializeMode() {
   return initialized
 }
 export async function switchMode(target) {
+  if (modeState.loading) throw Object.assign(new Error('运行模式正在切换，请稍候'), { code: 'MODE_BUSY' })
+  modeState.requestedTarget = { ...target }
   modeState.loading = true
+  announceTransition(target)
   try {
     // 切换由原生层串行化，失败时重新读取闭门状态；不乐观更新当前模式。
     apply(await invoke('mode_switch', { target }))
@@ -91,5 +105,7 @@ export async function switchMode(target) {
   } catch (error) {
     await refreshMode().catch(() => {})
     throw normalizeError(error)
-  } finally { modeState.loading = false }
+  } finally { modeState.loading = false; modeState.requestedTarget = null }
 }
+
+export function retryModeData() { modeState.restoreAttempt++ }

@@ -4,10 +4,11 @@ import { currentToken, assertToken, onModeInvalidated } from '../mode'
 import { applyRemoteFrame, createRemoteSurfaceState, installRemoteProjection } from '../../services/remoteSurface'
 
 // 独立模式 Store 不参与远程数据投影；服务端是消息、任务与角色状态的权威。
-export const remoteState = shallowReactive({ connection: 'offline', sessionId: null, agents: [], activeAgentId: null, error: null, pendingError: null, ready: false })
+export const remoteState = shallowReactive({ connection: 'offline', sessionId: null, agents: [], activeAgentId: null, error: null, pendingError: null, notificationError: null, ready: false, initializing: false, restoringView: false })
 export const remoteViews = reactive(new Map())
 export const remoteExecutions = reactive(new Map())
 export const remotePendingRequests = reactive(new Map())
+export const remoteNotifications = reactive(new Map())
 let disposeEvents = null
 let listener = null
 let generation = 0
@@ -16,8 +17,20 @@ let bootstrapTimer = null
 let initialization = null
 let pendingVersion = 0
 let reconciliation = null
-const blockedCodes = new Set(['REMOTE_AUTH_REQUIRED', 'REMOTE_IDENTITY_CHANGED', 'REMOTE_INCOMPATIBLE', 'CREDENTIAL_UNAVAILABLE'])
+let notificationTimer = null
+let notificationVersion = 0
+let resuming = null
+let lastResumeAt = 0
+const blockedCodes = new Set(['REMOTE_AUTH_REQUIRED', 'REMOTE_IDENTITY_CHANGED', 'REMOTE_INCOMPATIBLE', 'REMOTE_PROTOCOL', 'CREDENTIAL_UNAVAILABLE', 'PROFILE_NOT_FOUND', 'INVALID_PROFILE'])
 const offlineCodes = new Set(['REMOTE_NETWORK', 'REMOTE_HTTP', 'REMOTE_RATE_LIMIT'])
+
+function blockConnection(error) {
+  if (!blockedCodes.has(error.code)) return false
+  remoteState.connection = ['REMOTE_AUTH_REQUIRED', 'CREDENTIAL_UNAVAILABLE'].includes(error.code) ? 'auth_required' : 'incompatible'
+  remoteState.ready = false; remoteState.error = error.message
+  clearTimeout(bootstrapTimer); bootstrapTimer = null
+  return true
+}
 
 function key(query) { return JSON.stringify(query) }
 export function clearRemoteState() {
@@ -36,11 +49,43 @@ export function clearRemoteState() {
   remoteState.error = null
   remoteState.pendingError = null
   remoteState.ready = false
+  remoteState.initializing = false
+  remoteState.restoringView = false
   remoteViews.clear()
   remoteExecutions.clear()
   remotePendingRequests.clear()
+  clearTimeout(notificationTimer); notificationTimer = null; notificationVersion++
+  remoteNotifications.clear(); remoteState.notificationError = null
+  resuming = null
+  lastResumeAt = 0
 }
 onModeInvalidated(clearRemoteState)
+
+export async function refreshRemoteNotifications() {
+  const token = currentToken(), request = ++notificationVersion
+  const result = await remoteClient.notifications(token)
+  assertToken(token, 'remote')
+  if (request !== notificationVersion) return
+  if (!Array.isArray(result.data?.items)) throw new Error('远程通知缓存格式无效')
+  remoteNotifications.clear()
+  for (const item of result.data.items) remoteNotifications.set(`${item.principalId}:${item.notificationId}`, item)
+  remoteState.notificationError = null
+}
+function scheduleNotifications() {
+  if (notificationTimer) return
+  const token = currentToken()
+  notificationTimer = setTimeout(() => {
+    notificationTimer = null
+    try { assertToken(token, 'remote') } catch { return }
+    refreshRemoteNotifications().catch(error => { try { assertToken(token, 'remote'); remoteState.notificationError = error.message } catch { /* 旧连接错误不写入新页面。 */ } })
+  }, 150)
+}
+export async function acknowledgeRemoteNotification(item) {
+  const token = currentToken()
+  await remoteClient.ackNotification(item.principalId, { notificationId: item.notificationId, revision: item.revision }, token)
+  assertToken(token, 'remote')
+  await refreshRemoteNotifications()
+}
 
 function scheduleBootstrap(delay = 5000) {
   if (bootstrapTimer) return
@@ -124,7 +169,7 @@ async function listenOnce() {
   if (disposeEvents) return
   if (!listener) listener = remoteClient.listen(event => {
     if (event.kind === 'connection') {
-      if (event.data.state === 'offline' && event.data.sessionId !== remoteState.sessionId) return
+      if (event.data.state === 'offline' && (event.data.sessionId !== remoteState.sessionId || remoteState.connection === 'auth_required')) return
       remoteState.connection = event.data.state
       if (event.data.state === 'online') {
         remoteState.sessionId = event.data.sessionId
@@ -143,10 +188,11 @@ async function listenOnce() {
         for (const view of remoteViews.values()) view.stale = true
       } else scheduleRefresh()
     }
-    if (event.kind === 'gateway') {
+    if (event.kind === 'gateway' || event.kind === 'snapshot_required') {
       // Gateway 只触发读模型失效；不把通知回放当作新消息或自行计算业务状态。
       for (const view of remoteViews.values()) view.stale = true
       scheduleRefresh()
+      if (event.kind === 'snapshot_required' || event.data?.payload?.action === 'durable_notification') scheduleNotifications()
       return
     }
     const execution = remoteExecutions.get(event.requestId)
@@ -208,6 +254,7 @@ export async function readRemote(query, { cachedOnly = false, allowCached = true
     assertToken(token, 'remote')
     const view = remoteViews.get(id)
     if (view?.requestVersion === requestVersion) Object.assign(view, { loading: false, error: error.message, stale: true })
+    blockConnection(error)
     if (error.code === 'REMOTE_STALE_READ') scheduleRefresh()
     throw error
   }
@@ -217,16 +264,25 @@ export async function initializeRemote() {
   assertToken(token, 'remote')
   const version = generation
   if (initialization?.version === version) return initialization.promise
+  remoteState.initializing = true
+  if (!['online', 'auth_required', 'incompatible'].includes(remoteState.connection)) remoteState.connection = 'connecting'
   const promise = (async () => {
-    await listenOnce()
-    await refreshRemotePendingRequests()
-    const cached = await readRemote({ kind: 'agents' }, { cachedOnly: true })
-    assertToken(token, 'remote')
-    if (Array.isArray(cached)) {
-      remoteState.agents = cached
-      remoteState.activeAgentId ||= cached.find(agent => agent.isEnabled)?.id || cached[0]?.id || null
-    }
     try {
+      await listenOnce()
+      // 本机辅助记录读取失败单独展示，不阻断设备鉴权和 Gateway 恢复。
+      await refreshRemotePendingRequests().catch(error => { assertToken(token, 'remote'); remoteState.pendingError = error.message })
+      await refreshRemoteNotifications().catch(error => { assertToken(token, 'remote'); remoteState.notificationError = error.message })
+      const cached = await readRemote({ kind: 'agents' }, { cachedOnly: true }).catch(() => null)
+      assertToken(token, 'remote')
+      if (Array.isArray(cached)) {
+        remoteState.agents = cached
+      }
+      // 优先恢复本连接的上次会话角色；没有选择时交给原生保存的主体或服务端发现。
+      if (!remoteState.activeAgentId) {
+        const home = await remoteClient.uiRead({ kind: 'home' }, token).catch(error => { assertToken(token, 'remote'); remoteState.error = error.message; return null })
+        assertToken(token, 'remote')
+        if (!remoteState.activeAgentId && home?.data?.agentId) remoteState.activeAgentId = home.data.agentId
+      }
       // 原生先持有恢复目标；即使没有缓存角色且此刻离线，也会继续尝试发现角色。
       const connected = await remoteClient.connect(remoteState.activeAgentId, token)
       assertToken(token, 'remote')
@@ -259,15 +315,11 @@ export async function initializeRemote() {
       assertToken(token, 'remote')
       remoteState.ready = false
       remoteState.error = error.message
-      if (blockedCodes.has(error.code)) {
-        remoteState.connection = error.code === 'REMOTE_AUTH_REQUIRED' ? 'auth_required' : 'incompatible'
-        clearTimeout(bootstrapTimer)
-        bootstrapTimer = null
-      } else scheduleBootstrap()
+      if (!blockConnection(error)) { remoteState.connection = 'offline'; scheduleBootstrap() }
     }
   })()
   initialization = { version, promise }
-  try { await promise } finally { if (initialization?.promise === promise) initialization = null }
+  try { await promise } finally { if (initialization?.promise === promise) { initialization = null; remoteState.initializing = false } }
 }
 export async function performRemote(action, options) {
   const token = currentToken()
@@ -332,5 +384,35 @@ export async function sendRemoteChat(input, { requestId = crypto.randomUUID() } 
   return execution
 }
 export async function reconnectRemote() {
+  const token = currentToken()
+  await remoteClient.connect(remoteState.activeAgentId, token, true)
+  assertToken(token, 'remote')
   await initializeRemote()
+  assertToken(token, 'remote')
+  if (!remoteState.ready) throw new Error(remoteState.error || '服务端尚未就绪，请稍后再试')
+}
+export async function resumeRemote() {
+  if (resuming) return resuming
+  if (initialization) return initialization.promise
+  if (['auth_required', 'incompatible'].includes(remoteState.connection)) return
+  if (Date.now() - lastResumeAt < 4000) return
+  lastResumeAt = Date.now()
+  const token = currentToken()
+  const promise = (async () => {
+    try {
+      try { await remoteClient.sessionStatus(token) }
+      catch (error) { if (error.code !== 'REMOTE_NOT_FOUND') throw error }
+      assertToken(token, 'remote')
+      await reconnectRemote()
+      assertToken(token, 'remote')
+      for (const view of remoteViews.values()) view.stale = true
+      scheduleRefresh(); scheduleNotifications()
+    } catch (error) {
+      try { assertToken(token, 'remote') } catch { return }
+      remoteState.error = error.message
+      if (!blockConnection(error)) { remoteState.connection = 'offline'; remoteState.ready = false; scheduleBootstrap() }
+    }
+  })()
+  resuming = promise
+  try { await promise } finally { if (resuming === promise) resuming = null }
 }

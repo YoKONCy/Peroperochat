@@ -63,4 +63,7 @@ data/
 *.db
 *.db-shm
 *.db-wal
+*.jks
+*.keystore
+*.p12
 settings.json

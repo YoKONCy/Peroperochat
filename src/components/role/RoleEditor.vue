@@ -50,6 +50,14 @@
                 />
               </el-form-item>
               
+              <el-form-item label="静态立绘或 CG">
+                <el-input v-model="formData.standing_image" placeholder="应用内素材路径或 HTTP(S) 图片地址，可留空" />
+                <button type="button" class="room-text-button" :disabled="artLoading" @click="pickArt('standing_image')">选择 PNG／JPEG／WebP 图片</button>
+                <span class="form-hint">显示模式可随时切换为通用 Pio。角色包导入、导出时保留此素材地址。</span>
+              </el-form-item>
+              <el-form-item label="图片排版"><el-select v-model="formData.illustration_layout"><el-option label="透明立绘" value="standing" /><el-option label="完整 CG 卡片" value="card" /></el-select></el-form-item>
+              <el-form-item label="房间背景"><el-input v-model="formData.room_background" placeholder="应用内素材路径或 HTTP(S) 图片地址，留空使用默认房间" /><button type="button" class="room-text-button" :disabled="artLoading" @click="pickArt('room_background')">选择背景图片</button></el-form-item>
+              <input ref="artInput" type="file" accept="image/png,image/jpeg,image/webp" hidden @change="readArt" />
               <el-form-item label="标签">
                 <div class="tags-input">
                   <el-tag
@@ -184,7 +192,7 @@
       <div class="footer-left"></div>
       <div class="footer-right">
         <el-button :disabled="isSaving" @click="$emit('close')">取消</el-button>
-        <el-button type="primary" @click="handleSave" :loading="isSaving">
+        <el-button type="primary" @click="handleSave" :loading="isSaving" :disabled="artLoading">
           保存角色
         </el-button>
       </div>
@@ -193,7 +201,7 @@
 </template>
 
 <script setup>
-import { ref, reactive, computed, onMounted, watch } from 'vue'
+import { ref, reactive, computed, onMounted, onBeforeUnmount, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import RoomIcon from '../companion/RoomIcon.vue'
 import CharacterAvatar from '../companion/CharacterAvatar.vue'
@@ -220,11 +228,29 @@ const activeTab = ref('basic')
 const isSaving = computed(() => props.saving)
 const avatarInput = ref(null)
 const newTag = ref('')
+const artInput = ref(null), artLoading = ref(false)
+let artField = 'standing_image', artReader = null, artVersion = 0
+function pickArt(field) { artField = field; artInput.value?.click() }
+function readArt(event) {
+  const file = event.target.files?.[0], field = artField
+  event.target.value = ''
+  if (!file) return
+  if (!['image/png', 'image/jpeg', 'image/webp'].includes(file.type) || file.size > 5 * 1024 * 1024) { ElMessage.error('请选择不超过 5MB 的 PNG、JPEG 或 WebP 图片'); return }
+  artReader?.abort(); const version = ++artVersion
+  const reader = new FileReader(); artReader = reader; artLoading.value = true
+  reader.onload = () => { if (version === artVersion) { formData[field] = reader.result; artLoading.value = false } }
+  reader.onerror = () => { if (version === artVersion) { artLoading.value = false; ElMessage.error('图片读取失败，请重新选择') } }
+  reader.readAsDataURL(file)
+}
+onBeforeUnmount(() => { artVersion++; artReader?.abort() })
 
 const formData = reactive({
   id: '',
   name: '',
   avatar: '',
+  standing_image: '',
+  room_background: '',
+  illustration_layout: 'standing',
   description: '',
   tags: [],
   idle_messages_text: '',
@@ -240,10 +266,14 @@ const formData = reactive({
 })
 
 function resetForm() {
+  artVersion++; artReader?.abort(); artLoading.value = false
   if (props.role && !props.isNew) {
     formData.id = props.role.id || ''
     formData.name = props.role.name || ''
     formData.avatar = props.role.avatar || ''
+    formData.standing_image = props.role.standing_image || ''
+    formData.room_background = props.role.room_background || ''
+    formData.illustration_layout = props.role.illustration_layout || 'standing'
     formData.description = props.role.description || ''
     formData.tags = [...(props.role.tags || [])]
     formData.idle_messages_text = Array.isArray(props.role.idle_messages) ? props.role.idle_messages.join('\n') : ''
@@ -260,6 +290,9 @@ function resetForm() {
     formData.id = `custom_${Date.now()}`
     formData.name = '新角色'
     formData.avatar = ''
+    formData.standing_image = ''
+    formData.room_background = ''
+    formData.illustration_layout = 'standing'
     formData.description = ''
     formData.tags = []
     formData.idle_messages_text = ''

@@ -19,7 +19,7 @@ export function remoteMarkdown(value) {
   }
   return fragment.innerHTML
 }
-export const remoteStatus = value => ({ running: '执行中', pending: '待处理', queued: '排队中', waiting_input: '等待回复', waiting_approval: '等待审批', completed: '已完成', failed: '执行失败', paused: '已暂停', cancelled: '已取消', interrupted: '已中断', calling: '执行中', assembling: '准备中', open: '进行中', committed: '已保存', unknown: '结果待核对', sending: '发送中', observing: '正在接收' }[value] || value || '')
+export const remoteStatus = value => ({ running: '执行中', pending: '待处理', queued: '排队中', waiting_input: '等待回复', waiting_approval: '等待审批', waiting: '等待中', blocked: '受阻', thinking: '思考中', generating: '生成中', tool_failed: '工具执行失败', completed: '已完成', failed: '执行失败', paused: '已暂停', cancelled: '已取消', interrupted: '已中断', calling: '执行中', assembling: '准备参数', open: '进行中', committed: '已保存', unknown: '结果待核对', sending: '发送中', observing: '正在接收' }[value] || value || '')
 export function remoteItems(data) { const values = Array.isArray(data) ? data : data?.items || data?.requests || data?.tasks || data?.entries || data?.nodes; return Array.isArray(values) ? values : [] }
 export async function openRemoteLink(event) {
   const link = event.target.closest('a[href]')

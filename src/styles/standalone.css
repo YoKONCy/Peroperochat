@@ -1,0 +1,138 @@
+/* 轻透日常：独立模式共享设计语言，远程客户端继续使用自己的主题。 */
+.standalone-design.companion-surface, .standalone-design.companion-surface .companion-surface {
+  --room-ink: var(--local-ink, #2b3c56);
+  --room-muted: #8395ad;
+  --room-accent: var(--local-accent, #467fc5);
+  --room-accent-bright: color-mix(in srgb, var(--room-accent) 40%, white);
+  --room-accent-soft: var(--local-wash, #eaf4ff);
+  --room-page: #f0f6fc;
+  --room-surface: rgb(255 255 255 / var(--local-glass, .8));
+  --room-subtle: #f5f9ffed;
+  --room-glass: rgb(255 255 255 / var(--local-glass, .8));
+  --room-line: #a5bfd83d;
+  --room-bubble: #ffffffea;
+  --room-user-bubble: color-mix(in srgb, var(--room-accent-soft) 78%, white);
+  --room-action: var(--room-accent);
+  --room-shadow: 0 6px 24px #355a8e0b;
+  --room-radius: 16px;
+  --room-spring: cubic-bezier(.2,.8,.25,1);
+}
+.standalone-design.companion-surface .room-primary-button { border: 1px solid transparent; border-radius: 12px; background: var(--room-accent); box-shadow: none; min-height: 44px; }
+.standalone-design.companion-surface .room-secondary-button, .standalone-design.companion-surface .room-danger-button { border-radius: 12px; background: #ffffffad; }
+.standalone-design.companion-surface .room-error { border-radius: 12px; border: 1px solid #edcfdc; }
+.standalone-design.companion-surface .room-icon-button { border-radius: 12px; }
+.standalone-design.companion-surface .companion-home { background: #eaf3fc; }
+.standalone-design.companion-surface .room-vignette { background: linear-gradient(#e9f4ff16, transparent 55%, #d0e5ff20); }
+.standalone-design.companion-surface .room-header { padding: calc(16px + env(safe-area-inset-top)) 18px 8px; gap: 8px; }
+.standalone-design.companion-surface .room-selector { border: 1px solid #ffffffbd; border-radius: 14px 20px 14px 14px; background: var(--room-glass); backdrop-filter: blur(18px) saturate(1.08); padding: 7px 11px 7px 7px; gap: 9px; box-shadow: inset 0 1px 0 #ffffffbc, 0 3px 12px #355a8e08; max-width: calc(100% - 128px); }
+.standalone-design.companion-surface .room-selector::after { display: none; }
+.standalone-design.companion-surface .header-avatar { width: 36px; height: 36px; border: 2px solid white; border-radius: 50%; clip-path: none; box-shadow: 0 0 0 1px #a4badb50; }
+.standalone-design.companion-surface .room-selector-name { gap: 7px; }.standalone-design.companion-surface .room-selector-name strong { font-size: 15px; letter-spacing: 0; }
+.standalone-design.companion-surface .room-selector-name .companion-emblem { display: none; }
+.standalone-design.companion-surface .room-selector-status { font-size: 10px; max-width: 145px; }.standalone-design.companion-surface .room-selector-label { gap: 4px; }
+.standalone-design.companion-surface .room-header-actions { align-items: center; gap: 6px; }
+.standalone-design.companion-surface .room-header-actions > button { width: 36px; height: 38px; border: 1px solid #ffffffbd; border-radius: 12px; background: var(--room-glass); backdrop-filter: blur(18px); box-shadow: none; }
+.standalone-design.companion-surface .room-display-toggle { display: flex; align-items: center; gap: 2px; padding: 3px; border: 1px solid #ffffffbd; border-radius: 13px; background: var(--room-glass); backdrop-filter: blur(18px); }
+.standalone-design.companion-surface .room-display-toggle button { display: grid; place-items: center; width: 29px; height: 30px; border: 0; background: transparent; border-radius: 9px; color: var(--room-muted); box-shadow: none; }
+.standalone-design.companion-surface .room-display-toggle button[aria-pressed='true'] { background: var(--room-accent-soft); color: var(--room-accent); }
+.standalone-design.companion-surface .room-display-toggle svg { width: 17px; height: 17px; }
+/* 两种显示各自按原始比例布局，人物底部对齐实际输入栏，不拉伸画布。 */
+.standalone-design.companion-surface .room-character-stage { --actor-size: min(90vw, calc(var(--room-height, 100dvh) * .62), 560px); position: absolute; left: 50%; top: auto; bottom: calc(var(--dock-height) + 5px); width: var(--actor-size); height: auto; aspect-ratio: 1; transform: translateX(-50%); transition: opacity .2s, bottom .28s, width .28s; }
+.standalone-design.companion-surface .display-illustration .room-character-stage { width: min(85vw, 480px); height: calc(var(--room-height, 100dvh) * var(--figure-ratio, .57)); aspect-ratio: auto; }
+.standalone-design.companion-surface .room-static-character { display: block; position: absolute; inset: 0; width: 100%; height: 100%; border: 0; padding: 0; background: transparent; }
+.standalone-design.companion-surface .room-static-character img { display: block; width: 100%; height: 100%; object-fit: contain; object-position: center bottom; }
+.standalone-design.companion-surface .room-static-character:active { transform: none; }
+.standalone-design.companion-surface .room-static-character--card { width: min(100%, 330px); left: 50%; right: auto; transform: translateX(-50%); border: 3px solid #ffffffd9; border-radius: 24px; overflow: hidden; box-shadow: 0 10px 35px #355a8e17; }
+.standalone-design.companion-surface .room-static-character--card:active { transform: translateX(-50%); }
+.standalone-design.companion-surface .room-static-character--card img { object-fit: cover; object-position: center 35%; }
+.standalone-design.companion-surface .character-fallback-avatar { border-radius: 50%; aspect-ratio: 1; }
+.standalone-design.companion-surface .room-character-canvas #live2d { filter: none; }
+.standalone-design.companion-surface .room-character-canvas.is-loading #waifu { visibility: hidden; }
+.standalone-design.companion-surface .companion-home--peek .room-character-stage { top: calc(76px + env(safe-area-inset-top)); bottom: auto; left: 74%; width: 52%; height: 36%; aspect-ratio: auto; }
+.standalone-design.companion-surface .companion-home--peek.display-live2d .room-character-stage { width: min(64vw, 360px); height: auto; aspect-ratio: 1; }
+.standalone-design.companion-surface .companion-home--peek .room-static-character img { object-position: center top; }
+.standalone-design.companion-surface .companion-home--full .room-character-stage, .standalone-design.companion-surface .is-keyboard .room-character-stage { opacity: 0; pointer-events: none; }
+.standalone-design.companion-surface .is-wardrobe .room-character-stage { top: calc(90px + env(safe-area-inset-top)); bottom: auto; height: 48%; }
+.standalone-design.companion-surface .is-wardrobe.display-live2d .room-character-stage { height: auto; aspect-ratio: 1; }
+.standalone-design.companion-surface .room-character-speech { top: -70px; left: calc(50% - 50vw + 18px); transform: none; width: max-content; min-width: 100px; max-width: min(calc(100vw - 104px), 320px); padding: 16px 15px 13px; border: 1px solid var(--room-accent-bright); border-radius: 16px 18px 16px 5px; background: #fffffff0; box-shadow: 0 3px 9px #466c9a09; }
+.standalone-design.companion-surface .room-character-speech::before { top: auto; bottom: -5px; left: 31px; width: 9px; height: 9px; border: 0; border-right: 1px solid var(--room-accent-bright); border-bottom: 1px solid var(--room-accent-bright); border-radius: 0; }
+.standalone-design.companion-surface .room-character-speech:active { transform: scale(.98); }
+.standalone-design.companion-surface .speech-name { top: -10px; left: 14px; padding: 2px 11px; border: 0; border-radius: 6px 6px 6px 2px; font-size: 10px; font-weight: 500; }
+.standalone-design.companion-surface .speech-text { font-size: 13px; line-height: 1.75; }
+.standalone-design.companion-surface .room-quick-actions { top: 36%; right: 13px; gap: 13px; }
+.standalone-design.companion-surface .room-quick-actions::before { display: none; }
+.standalone-design.companion-surface .room-quick-actions button { padding: 0; border: 1px solid #ffffffbd; background: var(--room-glass); backdrop-filter: blur(18px) saturate(1.08); border-radius: 14px 16px 14px 8px; min-width: 45px; min-height: 56px; gap: 4px; padding-bottom: 6px; }
+.standalone-design.companion-surface .room-quick-actions button > span { border: 0; background: transparent; width: 40px; height: 33px; padding-top: 5px; }
+.standalone-design.companion-surface .room-quick-actions small { font-size: 9px; text-shadow: none; }.standalone-design.companion-surface .room-quick-actions svg { width: 22px; height: 22px; }
+.standalone-design.companion-surface .reminder-strip { bottom: calc(var(--dock-height) + 13px); left: 16px; width: auto; max-width: calc(100% - 32px); min-height: 33px; gap: 7px; padding: 7px 10px; border: 1px solid #ffffffb8; border-radius: 12px; background: var(--room-glass); backdrop-filter: blur(18px); box-shadow: 0 3px 12px #355a8e08; }
+.standalone-design.companion-surface .reminder-strip-icon { width: 20px; height: 20px; background: transparent; }.standalone-design.companion-surface .reminder-strip-copy { gap: 2px; }.standalone-design.companion-surface .reminder-strip strong { font-size: 10px; }
+/* 对话继续保留流式、思考、图片和消息管理，统一气泡与输入栏外观。 */
+.standalone-design.companion-surface .room-chat { border: 1px solid #ffffffa8; border-bottom: 0; border-radius: 25px 25px 0 0; background: rgb(245 249 255 / var(--local-glass, .8)); backdrop-filter: blur(18px) saturate(1.05); }
+.standalone-design.companion-surface .room-chat--rest { border: 0; background: transparent; backdrop-filter: none; }
+.standalone-design.companion-surface .room-composer { align-items: center; gap: 5px; min-height: 58px; margin: 6px 12px 0; padding: 7px; border: 1px solid #ffffffbd; border-radius: 18px; background: var(--room-glass); backdrop-filter: blur(18px) saturate(1.08); }
+.standalone-design.companion-surface .room-chat--rest .room-composer { margin: 0; border: 1px solid #ffffffbd; border-radius: 18px; background: #ffffffdc; box-shadow: inset 0 1px 0 #ffffffbc, 0 3px 12px #355a8e08; }
+.standalone-design.companion-surface .room-composer textarea { padding: 8px 3px; font-size: 14px; line-height: 22px; }
+.standalone-design.companion-surface .attachment-button { color: var(--room-accent); width: 34px; height: 38px; }
+.standalone-design.companion-surface .composer-send { width: 40px; height: 40px; border-radius: 50%; background: var(--room-accent); }
+.standalone-design.companion-surface .last-reply { border-radius: 14px; border-color: #ffffffbd; background: var(--room-glass); box-shadow: none; }
+.standalone-design.companion-surface .chat-role-avatar, .standalone-design.companion-surface .intro-avatar { border-radius: 50%; aspect-ratio: 1; }
+.standalone-design.companion-surface .chat-role-avatar { width: 28px; height: 28px; }
+.standalone-design.companion-surface .chat-messages { padding: 16px 15px; }.standalone-design.companion-surface .chat-heading { padding-left: 17px; }
+.standalone-design.companion-surface .room-message:not(.user) { padding: 0 0 0 44px; margin-right: 17px; }
+.standalone-design.companion-surface .message-avatar { position: absolute; left: 0; top: 0; width: 32px; height: 32px; border-radius: 50%; border: 2px solid white; }
+.standalone-design.companion-surface .message-byline { font-size: 10px; gap: 8px; }.standalone-design.companion-surface .message-byline time { margin-left: auto; }
+.standalone-design.companion-surface .message-body { border: 1px solid #ffffffb3; border-radius: 5px 16px 16px 16px; padding: 12px 14px; background: var(--room-bubble); }
+.standalone-design.companion-surface .user .message-body { border-radius: 16px 5px 16px 16px; background: var(--room-user-bubble); }
+.standalone-design.companion-surface .message-actions { border-radius: 14px; backdrop-filter: blur(18px); }
+/* 抽屉、衣柜与设置沿用同一套轻薄玻璃和更柔和的圆角。 */
+.standalone-design.companion-surface.room-drawer-overlay { background: #2b446633; backdrop-filter: blur(5px); }
+.standalone-design.companion-surface.room-drawer-overlay--wardrobe { background: linear-gradient(180deg, transparent 35%, #2b446620); backdrop-filter: none; }
+.standalone-design.companion-surface .room-drawer-panel { border: 1px solid #ffffffc9; border-bottom: 0; border-radius: 26px 26px 0 0; background: #f8fbfff0; box-shadow: 0 12px 50px #355a8e15; backdrop-filter: blur(22px) saturate(1.08); }
+.standalone-design.companion-surface .room-drawer-header { padding: 22px 22px 18px; }.standalone-design.companion-surface .room-drawer-content { padding: 0 22px 22px; }
+.standalone-design.companion-surface .room-drawer-header h2 { font-size: 18px; font-weight: 600; }.standalone-design.companion-surface .drawer-emblem { width: 24px; opacity: .75; }
+.standalone-design.companion-surface .room-drawer-header > .room-icon-button { border-radius: 12px; background: #edf3fb80; }
+.standalone-design.companion-surface .room-drawer-footer { padding: 13px 22px; border-top-color: var(--room-line); }
+.standalone-design.companion-surface .outfit-grid { gap: 11px; }.standalone-design.companion-surface .outfit-grid > button { border-radius: 15px; background: var(--room-glass); }
+.standalone-design.companion-surface .outfit-grid > button.selected { box-shadow: 0 0 0 1px var(--room-accent); }.standalone-design.companion-surface .outfit-name { padding: 11px; font-size: 11px; justify-content: center; }
+.standalone-design.companion-surface .room-menu-list > button { border-radius: 15px; background: #ffffff9c; padding: 15px 13px; margin-bottom: 9px; border: 1px solid var(--room-line); }
+.standalone-design.companion-surface .room-menu-list > button > svg:first-child { background: var(--room-accent-soft); padding: 9px; width: 37px; height: 37px; border-radius: 12px; }
+.standalone-design.companion-surface .room-profile-note, .standalone-design.companion-surface .room-role-list button, .standalone-design.companion-surface .room-persona p { border-radius: 16px; }
+.standalone-design.companion-surface .role-avatar, .standalone-design.companion-surface .profile-avatar { border-radius: 50%; aspect-ratio: 1; height: auto; }
+.standalone-design.companion-surface .companion-page { background: linear-gradient(#eef5ffdf, #f5f9ffe8), url('/companion/sunlit-room.png') center / cover; }
+.standalone-design.companion-surface .companion-page::before { display: none; }
+.standalone-design.companion-surface .companion-page-header { border-bottom: 1px solid #ffffffb8; background: #ffffffa1; backdrop-filter: blur(20px); }
+.standalone-design.companion-surface .companion-page-header::after, .standalone-design.companion-surface .page-kicker { display: none; }
+.standalone-design.companion-surface .page-back { width: 37px; height: 37px; border: 1px solid #ffffffd9; border-radius: 12px; background: #ffffff80; }
+.standalone-design.companion-surface .page-emblem { opacity: .65; width: 23px; }.standalone-design.companion-surface .page-partner { border-radius: 50%; clip-path: none; width: 36px; height: 36px; border: 2px solid white; }
+.standalone-design.companion-surface .settings-content { border-radius: 20px; border: 1px solid #ffffffbd; background: #ffffffbd; backdrop-filter: blur(18px); }
+.standalone-design.companion-surface .settings-content::before, .standalone-design.companion-surface .settings-partner::after { display: none; }
+.standalone-design.companion-surface .settings-layout--overview .settings-content { height: 100%; padding: 0; border: 0; background: transparent; backdrop-filter: none; }
+.standalone-design.companion-surface .choice-picker, .standalone-design.companion-surface .choice-options button, .standalone-design.companion-surface .control-input { border-radius: 12px; }
+.standalone-design.companion-surface .settings-navigation nav button { border: 0; border-radius: 12px; padding: 11px; }.standalone-design.companion-surface .settings-navigation nav button.selected { background: var(--room-accent-soft); color: var(--room-accent); }
+.standalone-design.companion-surface .settings-field input, .standalone-design.companion-surface .settings-field textarea, .standalone-design.companion-surface .settings-secret, .standalone-design.companion-surface .settings-model-input { border-radius: 12px; }
+.standalone-design.companion-surface .settings-destinations > button, .standalone-design.companion-surface .settings-data-list article { border-radius: 16px; }
+.standalone-design.companion-surface .role-editor .el-input__wrapper, .standalone-design.companion-surface .role-editor .el-textarea__inner, .standalone-design.companion-surface .role-editor .el-select__wrapper, .standalone-design.companion-surface .role-editor .tags-input { border-radius: 12px; background: #ffffffb8; }
+.standalone-design.companion-surface .role-editor .avatar-preview { border-radius: 18px; }.standalone-design.companion-surface .role-editor .el-button { border-radius: 12px; }
+.standalone-design.companion-surface .role-editor .el-button--primary { background: var(--room-accent); border-color: var(--room-accent); }
+.standalone-design.companion-surface[data-reduce-motion='true'] *, .standalone-design.companion-surface[data-reduce-motion='true'] *::before, .standalone-design.companion-surface[data-reduce-motion='true'] *::after { animation: none !important; transition: none !important; scroll-behavior: auto !important; }
+@media (min-width: 760px) {
+  .standalone-design.companion-surface .room-drawer-panel { border: 1px solid #ffffffc9; border-radius: 24px; }
+}
+@media (min-width: 960px) {
+  .standalone-design.companion-surface .room-header { padding: calc(22px + env(safe-area-inset-top)) 28px 12px; }
+  .standalone-design.companion-surface .room-character-stage, .standalone-design.companion-surface .companion-home--peek .room-character-stage { left: calc((100% - 480px) / 2); bottom: 58px; top: auto; width: min(calc(100vw - 540px), 65vh, 560px); height: auto; aspect-ratio: 1; }
+  .standalone-design.companion-surface .display-illustration .room-character-stage { width: min(calc(100vw - 540px), 480px); height: min(calc(var(--room-height, 100dvh) * var(--figure-ratio, .57)), 650px); aspect-ratio: auto; }
+  .standalone-design.companion-surface .room-chat { right: 28px; bottom: 24px; width: 420px; border-radius: 24px; border-bottom: 1px solid #ffffffa8; }
+  .standalone-design.companion-surface .room-chat--rest { border: 0; }.standalone-design.companion-surface .room-quick-actions { right: 28px; top: 105px; flex-direction: row; }
+  .standalone-design.companion-surface .room-character-speech { left: 50%; top: -65px; transform: translateX(-50%); max-width: min(calc(100vw - 550px), 320px); }
+  .standalone-design.companion-surface .reminder-strip { left: 28px; bottom: 24px; max-width: calc(100% - 530px); }
+  .standalone-design.companion-surface .companion-home--full .room-character-stage { opacity: 0; pointer-events: none; }
+}
+@media (max-width: 360px) {
+  .standalone-design.companion-surface .room-header { padding-left: 12px; padding-right: 12px; }
+  .standalone-design.companion-surface .room-selector { padding-right: 7px; max-width: calc(100% - 119px); }.standalone-design.companion-surface .header-avatar { width: 31px; height: 31px; }
+  .standalone-design.companion-surface .room-selector-name strong { font-size: 14px; }.standalone-design.companion-surface .room-selector-name > svg { display: none; }
+}
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .standalone-design.companion-surface .room-selector, .standalone-design.companion-surface .room-chat, .standalone-design.companion-surface .room-drawer-panel { background: #f8fbfff5; }
+}

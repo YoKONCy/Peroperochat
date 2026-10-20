@@ -3,8 +3,9 @@
     <div class="remote-detail-toolbar"><button class="room-text-button" :disabled="loading || busy" @click="reload"><RoomIcon name="refresh" />刷新</button><span v-if="view?.cached" class="remote-help">缓存内容</span></div>
     <p v-if="error || view?.error" class="room-error" role="alert">{{ error || view.error }}</p><p v-if="loading && !data" class="room-empty">正在读取…</p>
     <div v-if="detail.summary" class="markdown-body" v-html="remoteMarkdown(detail.summary)" />
+    <RemoteTaskPlan v-if="task?.plan" :plan="task.plan" />
     <RemoteSurface v-for="surface in data?.surfaces || []" :key="surface.surfaceId" :surface="surface" :disabled="remoteState.connection !== 'online'" @updated="reload" @resource="$emit('resource', $event)" />
-    <template v-if="detail.query.kind === 'plan'"><h2>{{ data?.title || '行动清单' }}</h2><p v-if="!data" class="remote-help">此会话暂无行动清单。</p><ol class="remote-plan"><li v-for="step in data?.steps || []" :key="step.id"><span>{{ step.title }}</span><small>{{ ({ pending: '待处理', in_progress: '进行中', completed: '已完成', blocked: '等待处理' })[step.status] || step.status }}</small></li></ol></template>
+    <template v-if="detail.query.kind === 'plan'"><RemoteTaskPlan v-if="data" :plan="data" /><p v-else class="remote-help">此会话暂无行动清单。</p></template>
     <template v-if="detail.query.kind === 'document' && data"><h2>{{ data.title }}</h2><p class="remote-help">{{ remoteStatus(data.status) }} · {{ data.partCount }} 个片段</p><p v-if="data.error" class="room-error">{{ data.error }}</p><section v-for="part in data.parts || []" :key="part.id" class="remote-document-part"><h3>{{ part.title || `片段 ${part.ordinal + 1}` }}</h3><div class="markdown-body" v-html="remoteMarkdown(part.summary)" /></section></template>
     <template v-if="detail.query.kind === 'memory_source' && data"><p v-if="data.available === false" class="remote-help">原始会话内容已不可用。</p><article v-for="message in data.messages || []" :key="message.id" class="remote-source-message"><small>{{ message.role === 'user' ? '你' : '角色' }}</small><div class="markdown-body" v-html="remoteMarkdown(message.content)" /></article></template>
     <template v-if="detail.query.kind === 'workspace_file' && data"><dl class="remote-metadata"><dt>文件</dt><dd>{{ data.name || detail.title }}</dd><dt>大小</dt><dd>{{ data.sizeBytes ?? data.size }} 字节</dd></dl><button class="room-primary-button" @click="openFile">查看文件</button></template>
@@ -14,8 +15,9 @@
 <script setup>
 import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
 import RoomDrawer from '../companion/RoomDrawer.vue'
-import RoomIcon from '../companion/RoomIcon.vue'
+import RoomIcon from './RemoteIcon.vue'
 import RemoteSurface from './RemoteSurface.vue'
+import RemoteTaskPlan from './RemoteTaskPlan.vue'
 import { readRemote, remoteViews, remoteState, performRemote } from '../../stores/remote'
 import { currentToken, assertToken } from '../../stores/mode'
 import { remoteMarkdown, remoteStatus, openRemoteLink } from '../../utils/remoteMarkdown'

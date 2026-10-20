@@ -1,0 +1,457 @@
+@charset "UTF-8";
+
+/* 标准主题的视觉细节层：布局仍由基础组件控制，角色样式包在此之后覆盖。 */
+.icon {
+  stroke-width: 1.4;
+}
+.icon-wash {
+  fill: currentColor;
+  fill-opacity: .085;
+  stroke: none;
+}
+.icon-detail {
+  stroke: var(--accent-secondary, currentColor);
+  opacity: .75;
+  stroke-width: 1.15;
+}
+.icon-jewel {
+  fill: var(--accent-secondary, currentColor);
+  stroke: currentColor;
+  stroke-width: .65;
+}
+.svg-art {
+  display: inline-block;
+  width: 64px;
+  height: 29px;
+  vertical-align: middle;
+  fill: none;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  flex-shrink: 0;
+  pointer-events: none;
+}
+.art-soft { fill: currentColor; fill-opacity: .09; stroke: none; }
+.art-fold { fill: currentColor; fill-opacity: .17; stroke: none; }
+.art-line { stroke: currentColor; stroke-width: .8; vector-effect: non-scaling-stroke; }
+.art-hairline { stroke: currentColor; stroke-width: .6; opacity: .5; vector-effect: non-scaling-stroke; }
+.art-jewel { fill: var(--accent-secondary, currentColor); stroke: currentColor; stroke-width: .65; vector-effect: non-scaling-stroke; }
+.art-light { fill: var(--surface, #f8fcff); fill-opacity: .7; stroke: none; }
+
+/* 展示页的装帧减少厚重边框，强调细线、留白与主题标记。 */
+body {
+  background: radial-gradient(ellipse at 3% 6%, #e0edfc7a, transparent 35%), radial-gradient(ellipse at 98% 55%, #e8dff35c, transparent 30%), #f5f7fb;
+}
+.studio-header { height: 94px; }
+.wordmark { font-weight: 600; letter-spacing: -.8px; }
+.wordmark > img { width: 46px; height: 32px; }
+.wordmark small { color: #8c9cb3; letter-spacing: 2.5px; }
+.studio-intro { padding-top: 43px; padding-bottom: 35px; }
+.studio-intro h1 { font-weight: 500; letter-spacing: 2px; }
+.studio-intro h1 em { color: #7b96bf; }
+.studio-controls {
+  border-top-color: #d4dfef;
+  border-bottom-color: #d4dfef;
+  box-shadow: 0 9px 22px -22px #4c6b9e;
+}
+.view-tabs { gap: 9px; }
+.view-tabs button { border-radius: 3px 11px 3px 3px; position: relative; }
+.view-tabs .is-active {
+  background: linear-gradient(125deg, #e4edf9, #f4f7fc);
+  box-shadow: inset 0 1px 0 #ffffffea, inset 0 -1px 0 #bdcde4;
+}
+.view-tabs .is-active::after {
+  content: '';
+  position: absolute;
+  width: 4px;
+  height: 4px;
+  left: 7px;
+  top: calc(50% - 2px);
+  background: #85a4cc;
+  transform: rotate(45deg);
+}
+.board-heading { gap: 14px; margin-bottom: 28px; }
+.board-emblem {
+  width: 77px;
+  height: 41px;
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  transform: none;
+  color: #729ec8;
+}
+.board-emblem > .svg-art { width: 76px; height: 34px; }
+.board-dark .board-emblem { background: transparent; border: 0; color: #ac8eae; }
+.board-heading h2 { font-size: 23px; letter-spacing: 3px; font-weight: 500; }
+.board-heading small { letter-spacing: 2.8px; font-size: 7px; }
+.theme-section { position: relative; }
+.theme-section::after {
+  content: '';
+  position: absolute;
+  top: 59px;
+  left: 52%;
+  right: 19%;
+  height: 1px;
+  pointer-events: none;
+  background: linear-gradient(90deg, #bdcfe451, #bdcfe407);
+}
+.board-dark::after { background: linear-gradient(90deg, #c1accd70, #c1accd07); }
+.phone-grid { gap: 27px; }
+.device {
+  --button-face: color-mix(in srgb, var(--accent) 87%, #183150);
+  --edge-light: #ffffffd9;
+  --bevel: color-mix(in srgb, var(--accent) 26%, var(--surface));
+  --panel-shadow: color-mix(in srgb, var(--accent) 9%, transparent);
+  --line: color-mix(in srgb, var(--accent) 24%, #e6edf7);
+  --muted: #7d8ca3;
+  background: linear-gradient(125deg, #e4edf6, #9eafc4 38%, #d6e2ef 75%, #91a4bf);
+  border-color: #acbdd1;
+  box-shadow: inset 0 0 0 1px #ffffffb8, 0 2px 3px #2d486512, 0 16px 34px -22px #365a8f7a, 0 0 0 2px #e4edf6;
+}
+.device[data-mode="dark"] {
+  --button-face: var(--accent);
+  --edge-light: #e4d5f01c;
+  --bevel: color-mix(in srgb, var(--accent-secondary) 48%, var(--surface));
+  --panel-shadow: #07041324;
+  --line: color-mix(in srgb, var(--accent-secondary) 23%, #393443);
+  --surface: #1c1b29;
+  --surface-alt: #23202f;
+  --muted: #aaa2ba;
+  background: linear-gradient(125deg, #b2a4bf, #5e566e 40%, #a18aa7 80%, #6a5e7e);
+  border-color: #a795b3;
+  box-shadow: inset 0 0 0 1px #ede2f46b, 0 2px 3px #25162d14, 0 18px 34px -22px #33213b8c, 0 0 0 2px #e8e1ef;
+}
+.device-screen { box-shadow: 0 0 0 1px #182c4b18; }
+.device[data-mode="dark"] .device-screen { box-shadow: 0 0 0 1px #100d1b9e; }
+.app-view {
+  background: radial-gradient(ellipse at 100% 0, var(--wash), transparent 45%), var(--surface);
+}
+.app-header {
+  padding-top: 12px;
+  padding-bottom: 13px;
+  box-shadow: 0 6px 18px -15px var(--panel-shadow);
+  border-bottom-color: var(--line);
+}
+.header-title h3 { font-weight: 600; letter-spacing: .7px; }
+.header-title > span { letter-spacing: .4px; font-size: 8px; }
+.avatar {
+  border-color: var(--bevel);
+  box-shadow: 0 0 0 2px var(--surface), 0 0 0 3px color-mix(in srgb, var(--accent-secondary) 30%, transparent);
+}
+.app-header .avatar { margin-right: 3px; }
+.icon-button { border-radius: 5px 10px 5px 5px; }
+.header-actions .icon-button { color: var(--accent); }
+.icon-button .icon-wash { fill-opacity: .1; }
+
+/* 首页保留角色 CG，通过渐隐和半透明铭牌衔接内容，避免描白字的廉价感。 */
+.home-hero::after {
+  background: linear-gradient(0deg, var(--surface), color-mix(in srgb, var(--surface) 88%, transparent) 7%, transparent 42%);
+}
+.instance-pill {
+  border-radius: 3px 11px 3px 3px;
+  border-color: color-mix(in srgb, var(--accent-secondary) 42%, var(--surface));
+  background: color-mix(in srgb, var(--surface) 88%, transparent);
+  box-shadow: inset 0 1px 0 var(--edge-light), 0 4px 18px #14264108;
+  padding: 9px 10px;
+}
+.instance-pill strong { letter-spacing: .6px; }
+.glass-button { border-radius: 5px 11px 5px 5px; box-shadow: inset 0 1px 0 var(--edge-light); }
+.hero-greeting {
+  left: 16px;
+  bottom: 18px;
+  padding: 8px 24px 8px 10px;
+  border-left: 1px solid var(--accent-secondary);
+  border-radius: 0 15px 0 0;
+  background: linear-gradient(90deg, color-mix(in srgb, var(--surface) 88%, transparent), color-mix(in srgb, var(--surface) 10%, transparent));
+}
+.hero-greeting p { text-shadow: none; font-size: 11px; font-weight: 500; line-height: 1.85; letter-spacing: .3px; }
+.character-signature { text-shadow: none; font-size: 28px; gap: 8px; }
+.character-signature .ornament { width: 35px; height: 16px; }
+.hero-art-toggle { border-radius: 3px 8px 3px 3px; width: 28px; height: 28px; }
+.avatar-only .hero-greeting { border-left: 0; padding: 8px 0; background: transparent; }
+.avatar-hero-decoration .ornament { width: 180px; height: 80px; }
+.resume-card {
+  padding: 14px 14px 11px;
+  border-color: var(--bevel);
+  border-radius: 3px 17px 3px 10px;
+  box-shadow: inset 0 1px 0 var(--edge-light), 0 5px 16px -10px var(--panel-shadow);
+  background: linear-gradient(110deg, var(--surface) 25%, var(--wash));
+}
+.resume-card::before { top: -8px; right: -6px; width: 22px; height: 22px; background: color-mix(in srgb, var(--accent-secondary) 10%, transparent); }
+.resume-card::after {
+  content: '';
+  position: absolute;
+  left: 10px;
+  bottom: 0;
+  width: 39px;
+  height: 2px;
+  background: linear-gradient(90deg, var(--accent-secondary), transparent);
+}
+.resume-art { position: absolute; width: 44%; height: auto; right: -1px; bottom: 18px; color: var(--accent); opacity: .48; }
+.resume-label, .resume-card h3, .resume-card p, .resume-footer { position: relative; }
+.resume-label { font-size: 9px; letter-spacing: .25px; }
+.resume-card h3 { font-size: 16px; margin-top: 14px; margin-bottom: 9px; max-width: 80%; }
+.resume-card p { max-width: 71%; font-size: 9px; }
+.resume-footer { font-size: 7px; }
+.resume-footer i { border-radius: 5px 9px 5px 5px; width: 25px; height: 25px; border: 1px solid var(--line); box-shadow: inset 0 1px 0 var(--edge-light); }
+.section-heading { gap: 8px; margin-top: 23px; }
+.section-heading h4 { display: flex; align-items: center; gap: 5px; font-weight: 600; white-space: nowrap; letter-spacing: .5px; }
+.section-heading h4::before { display: none; }
+.section-jewel { width: 11px; height: 14px; color: var(--accent); }
+.section-rule { height: 1px; flex: 1; background: linear-gradient(90deg, var(--line), transparent); min-width: 10px; }
+.section-heading .quiet-button { white-space: nowrap; }
+.home-task-list { border: 0; border-radius: 0; background: none; }
+.home-task { padding: 11px 0; gap: 10px; }
+.home-task + .home-task { border-color: color-mix(in srgb, var(--line) 70%, transparent); }
+.task-icon { width: 31px; height: 32px; display: grid; place-items: center; background: var(--wash); border: 1px solid var(--line); border-radius: 5px 10px 5px 5px; }
+.task-icon > .icon { width: 20px; height: 20px; }
+.home-task strong { font-size: 10px; font-weight: 550; }
+.home-task small { line-height: 1.7; }
+.task-pulse { width: 5px; height: 5px; margin-right: 5px; }
+.home-whisper { gap: 9px; font-size: 7px; letter-spacing: 1px; }
+.home-whisper .ornament { width: 30px; height: 14px; color: var(--accent-secondary); }
+
+/* 气泡使用有折边的姓名签和真实的发言尖角；装饰停留在阅读区外。 */
+.role-message { gap: 9px; margin-top: 16px; margin-bottom: 20px; }
+.role-message > .avatar { width: 29px; height: 29px; margin-top: 11px; }
+.message-signature {
+  height: 20px;
+  padding: 0 9px;
+  margin-left: 5px;
+  margin-bottom: -1px;
+  color: var(--surface);
+  background: var(--accent);
+  border: 0;
+  border-radius: 1px 4px 0 0;
+  box-shadow: inset 0 1px 0 color-mix(in srgb, var(--surface) 35%, transparent);
+  letter-spacing: .6px;
+  font-size: 9px;
+  gap: 9px;
+}
+.message-signature::after {
+  inset: 0 -10px 0 0;
+  border: 0;
+  background: var(--accent);
+  border-radius: 0 2px 0 0;
+  transform: skewX(-24deg);
+}
+.message-signature::before {
+  content: '';
+  position: absolute;
+  width: 5px;
+  height: 6px;
+  top: 0;
+  left: -5px;
+  background: color-mix(in srgb, var(--accent) 62%, var(--ink));
+  clip-path: polygon(100% 0, 100% 100%, 0 100%);
+}
+.message-signature .ornament { width: 27px; height: 13px; color: currentColor; }
+.message-signature .art-jewel { fill: currentColor; stroke: currentColor; }
+.message-signature .art-light { fill: var(--accent); }
+.message-bubble {
+  border-color: var(--bevel);
+  border-radius: 3px 14px 4px 12px;
+  padding: 12px;
+  box-shadow: inset 0 1px 0 var(--edge-light), 0 4px 14px -9px var(--panel-shadow);
+  background: linear-gradient(135deg, var(--surface), var(--panel));
+}
+.message-bubble::before {
+  content: '';
+  position: absolute;
+  top: 10px;
+  left: -4px;
+  width: 6px;
+  height: 6px;
+  background: var(--surface);
+  border-left: 1px solid var(--bevel);
+  border-bottom: 1px solid var(--bevel);
+  transform: rotate(45deg);
+}
+.message-bubble p { font-size: 11px; line-height: 1.95; letter-spacing: .15px; }
+.bubble-corner { right: 10px; bottom: -8px; width: 30px; height: 15px; padding: 0 2px; background: var(--surface); }
+.bubble-corner .ornament { width: 29px; height: 14px; }
+.message-time { margin-top: 9px; font-size: 7px; opacity: .85; }
+.user-message > div { border-radius: 10px 3px 10px 10px; background: linear-gradient(135deg, color-mix(in srgb, var(--accent) 16%, var(--surface)), color-mix(in srgb, var(--accent) 22%, var(--surface))); box-shadow: inset 0 1px 0 var(--edge-light); }
+.device[data-mode="dark"] .message-signature { color: var(--accent-secondary); background: var(--wash); border: 1px solid var(--bevel); border-bottom: 0; border-radius: 4px 9px 0 0; box-shadow: none; }
+.device[data-mode="dark"] .message-signature::before { background: var(--bevel); }
+.device[data-mode="dark"] .message-signature::after { border: 0; border-top: 1px solid var(--bevel); background: var(--wash); border-radius: 0 5px 0 0; opacity: 1; }
+.device[data-mode="dark"] .message-signature .art-light { fill: var(--surface); }
+.device[data-mode="dark"] .message-bubble { border-color: var(--bevel); background: linear-gradient(125deg, color-mix(in srgb, var(--accent-secondary) 5%, var(--surface)), var(--surface)); }
+.device[data-mode="dark"] .bubble-corner { color: var(--accent-secondary); }
+.thinking-row { border-width: 0 0 1px; border-radius: 0; background: transparent; margin-left: 38px; }
+.thinking-row summary { padding: 7px 0 10px; font-size: 8px; }
+.thinking-row summary > .icon { width: 11px; height: 11px; }
+.tool-summary { margin-left: 38px; border-radius: 4px 12px 4px 8px; border-color: var(--line); background: linear-gradient(120deg, var(--wash), var(--surface)); box-shadow: inset 0 1px 0 var(--edge-light); }
+.mini-progress { margin-top: 8px; margin-bottom: 18px; }
+.mini-progress::before { background: linear-gradient(90deg, var(--accent-secondary), var(--line)); }
+.mini-progress > span::before { width: 7px; height: 7px; box-shadow: 0 0 0 3px var(--wash); }
+.mini-progress .done::before { background: var(--accent); box-shadow: inset 0 0 0 1.5px var(--surface), 0 0 0 2px var(--wash); }
+.tool-result { border: 1px solid var(--line); border-radius: 4px 8px 4px 4px; padding-top: 10px; padding-bottom: 10px; }
+.tool-disclosure { border-top-color: color-mix(in srgb, var(--line) 70%, transparent); }
+.status-tag { font-size: 7px; border-color: color-mix(in srgb, currentColor 28%, transparent); padding: 3px 5px; border-radius: 4px 7px 4px 4px; }
+
+/* 文件封面是独立矢量插画，文件类型和标题保持正常文本。 */
+.file-card { padding: 12px 11px; gap: 12px; border-radius: 4px 13px 4px 7px; border-color: var(--line); background: linear-gradient(115deg, var(--panel), var(--surface)); box-shadow: inset 0 1px 0 var(--edge-light); }
+.file-cover {
+  --paper-bg: #e6f2fb;
+  --paper-fold: #b8d1eb;
+  --paper-mid: #a8c8e2;
+  --paper-front: #7faaca;
+  --paper-ink: #5f8faf;
+  width: 44px;
+  height: 57px;
+  flex-basis: 44px;
+  display: block;
+  clip-path: none;
+  background: none;
+  color: var(--paper-ink);
+  position: relative;
+  transform: rotate(-3deg);
+  filter: drop-shadow(0 3px 2px #15345410);
+}
+.file-cover::after { display: none; }
+.file-cover.tone-green { --paper-bg: #e2f1e8; --paper-fold: #b1d4c2; --paper-mid: #a1ccb6; --paper-front: #7bb194; --paper-ink: #5a9177; background: none; }
+.file-cover.tone-purple { --paper-bg: #eee8f8; --paper-fold: #c8b9e0; --paper-mid: #c1addc; --paper-front: #a28bc3; --paper-ink: #8971ac; background: none; }
+.document-art { display: block; width: 100%; height: 100%; overflow: visible; }
+.paper-back { fill: var(--paper-fold); opacity: .45; }
+.paper-base { fill: var(--paper-bg); stroke: var(--paper-fold); stroke-width: 1; }
+.paper-fold { fill: var(--paper-fold); stroke: var(--paper-ink); stroke-opacity: .2; stroke-width: .7; }
+.paper-sun { fill: #f9e8af; }
+.paper-mountain { fill: var(--paper-mid); }
+.paper-front { fill: var(--paper-front); }
+.paper-line { stroke: var(--paper-ink); stroke-width: 1; fill: none; opacity: .6; }
+.paper-shine { fill: #fff; fill-opacity: .27; }
+.file-cover > span { position: absolute; left: -3px; bottom: 5px; padding: 2px 4px; font-size: 6px; letter-spacing: .6px; background: var(--paper-ink); color: white; border-radius: 2px; box-shadow: 1px 1px 0 #ffffff60; }
+.file-info strong { font-size: 10px; font-weight: 550; }
+.file-info small { font-size: 7px; letter-spacing: .3px; }
+.file-open-mark { width: 25px; height: 25px; display: grid; place-items: center; color: var(--accent); border: 1px solid var(--line); border-radius: 4px 8px 4px 4px; background: var(--wash); flex-shrink: 0; }
+.file-open-mark .file-action { width: 13px; height: 13px; margin: 0; }
+.file-card.is-compact { gap: 9px; padding: 10px; }
+.is-compact .file-cover { width: 30px; height: 39px; flex-basis: 30px; }
+.is-compact .file-cover > span { font-size: 5px; padding: 1px 2px; bottom: 3px; left: -2px; }
+.is-compact .file-open-mark { width: 21px; height: 23px; border: 0; background: transparent; }
+.file-page .file-card { min-height: 84px; }
+
+/* 执行详情使用轻薄的纸面层次和切面节点，不占用额外正文空间。 */
+.goal-card { position: relative; overflow: hidden; padding: 14px; box-shadow: inset 0 1px 0 var(--edge-light); }
+.goal-card > :not(.goal-emblem) { position: relative; }
+.goal-emblem { position: absolute; right: -12px; top: 15px; color: var(--accent); opacity: .13; transform: rotate(-22deg); pointer-events: none; }
+.goal-emblem > .ornament { width: 120px; height: 54px; }
+.goal-card strong { font-size: 13px; font-weight: 550; letter-spacing: .3px; }
+.goal-card .eyebrow { font-size: 6px; letter-spacing: 1.25px; }
+.execution-timeline { border-left-color: color-mix(in srgb, var(--accent-secondary) 40%, var(--line)); }
+.timeline-jewel { width: 8px; height: 10px; border-radius: 1px; top: 5px; background: var(--surface); box-shadow: 0 0 0 3px var(--surface), 0 0 0 4px var(--line); }
+.timeline-jewel::after { content: ''; position: absolute; left: 45%; top: 0; height: 100%; width: 1px; background: var(--edge-light); }
+.execution-title > .icon { width: 19px; height: 19px; }
+.execution-title h4 { font-weight: 550; letter-spacing: .3px; }
+.permission-card { border-radius: 4px 17px 4px 10px; border-color: var(--bevel); box-shadow: inset 0 1px 0 var(--edge-light), 0 6px 16px -12px var(--panel-shadow); }
+.permission-card::before { width: 7px; height: 9px; top: 17px; }
+.permission-card::after { content: ''; position: absolute; right: 9px; top: 8px; width: 22px; height: 8px; border-top: 1px solid var(--accent-secondary); border-right: 1px solid var(--accent-secondary); border-radius: 0 8px 0 0; opacity: .6; pointer-events: none; }
+.permission-title > .icon { width: 23px; height: 23px; }
+.primary-button { position: relative; background: linear-gradient(130deg, var(--button-face), color-mix(in srgb, var(--button-face) 91%, var(--accent-secondary))); border-color: color-mix(in srgb, var(--button-face) 80%, var(--accent-secondary)); box-shadow: inset 0 1px 0 color-mix(in srgb, var(--surface) 28%, transparent), 0 3px 8px var(--panel-shadow); }
+.primary-button, .secondary-button { min-height: 34px; border-radius: 3px 9px 3px 3px; }
+.secondary-button { box-shadow: inset 0 1px 0 var(--edge-light); }
+.task-reaction p { border-radius: 3px 12px 4px 10px; background: var(--panel); }
+.segmented { border-radius: 4px 10px 4px 4px; background: var(--wash); }
+.segmented > button { position: relative; border-radius: 3px 7px 3px 3px; }
+.segmented > .is-active::after { content: ''; position: absolute; bottom: -2px; left: calc(50% - 3px); width: 5px; height: 5px; background: var(--accent-secondary); border: 1px solid var(--surface); transform: rotate(45deg); }
+.memory-card { border-radius: 4px 14px 4px 10px; background: linear-gradient(125deg, var(--wash), var(--surface)); position: relative; }
+.memory-card > .icon { width: 22px; height: 22px; }
+.memory-card blockquote { font-size: 10px; letter-spacing: .2px; }
+.memory-tags span { border: 1px solid color-mix(in srgb, var(--line) 70%, transparent); padding: 2px 5px; }
+.library-art { padding: 10px 0 8px; margin-top: 28px; }
+.library-horizon { display: block; width: 100%; height: 72px; color: var(--accent); opacity: .5; }
+.library-art > .ornament { width: 58px; height: 26px; margin-top: -5px; }
+.library-art p { font-size: 10px; letter-spacing: 2px; color: var(--muted); margin: 5px 0 10px; }
+.library-art small { font-size: 5px; letter-spacing: 1.7px; }
+
+/* 导航采用统一的图标底座和细小的选中铭记，明暗主题保留各自的装饰。 */
+.app-nav { flex-basis: 64px; background: linear-gradient(var(--surface), var(--panel)); box-shadow: 0 -7px 20px -19px var(--accent); }
+.nav-item { gap: 3px; justify-content: center; padding-top: 4px; }
+.nav-symbol { width: 34px; height: 31px; display: grid; place-items: center; position: relative; border: 1px solid transparent; border-radius: 5px 11px 5px 5px; transition: transform .2s, background .2s, border-color .2s; }
+.nav-symbol > .icon { width: 23px; height: 23px; }
+.nav-label { font-size: 8px; letter-spacing: 1px; }
+.nav-item.is-active .nav-symbol { border-color: var(--line); background: linear-gradient(135deg, var(--surface), var(--wash)); box-shadow: inset 0 1px 0 var(--edge-light); color: var(--accent); transform: translateY(-1px); }
+.nav-item.is-active .icon-wash { fill-opacity: .17; }
+.nav-item.is-active::after { left: 25%; right: 25%; background: linear-gradient(90deg, transparent, var(--accent-secondary), transparent); }
+.nav-item .ornament { top: -8px; width: 37px; height: 16px; background: var(--surface); padding: 0 3px; color: var(--accent); }
+.device[data-mode="dark"] .nav-item.is-active { color: var(--accent-secondary); }
+.device[data-mode="dark"] .nav-item .ornament { color: var(--accent-secondary); }
+.device[data-mode="dark"] .nav-symbol { border-radius: 10px 3px 10px 3px; }
+.home-indicator i { height: 3px; opacity: .55; width: 31%; }
+.composer { border-top-color: var(--line); padding-bottom: 10px; box-shadow: 0 -6px 20px -22px var(--accent); }
+.composer-mode button { border-radius: 2px 7px 2px 2px; padding: 4px 7px; }
+.composer-mode button.is-active { border-color: var(--bevel); box-shadow: inset 0 1px 0 var(--edge-light); }
+.composer-input { padding: 6px; border-radius: 5px 14px 5px 9px; background: linear-gradient(115deg, var(--surface), var(--wash)); box-shadow: inset 0 1px 0 var(--edge-light), 0 3px 9px -7px var(--panel-shadow); }
+.composer-input:focus-within { border-color: var(--accent-secondary); box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 5%, transparent); }
+.composer textarea { font-size: 10px; }
+.send-button { width: 31px; height: 31px; border-radius: 5px 10px 5px 5px; background: linear-gradient(135deg, var(--button-face), color-mix(in srgb, var(--button-face) 91%, var(--accent-secondary))); box-shadow: inset 0 1px 0 #ffffff45, 0 2px 5px var(--panel-shadow); }
+.send-button .icon { width: 17px; height: 17px; stroke-width: 1.5; }
+.send-button .icon-detail { stroke: currentColor; opacity: .6; }
+.send-button .icon-jewel { fill: currentColor; }
+.chat-suggestions button { border-radius: 4px 9px 4px 4px; box-shadow: inset 0 1px 0 var(--edge-light); font-size: 8px; }
+.theme-choices button { box-shadow: inset 0 1px 0 var(--edge-light); }
+.theme-choices button.is-selected { background: linear-gradient(135deg, var(--wash), var(--surface)); border-color: var(--bevel); }
+.palette-preview { position: relative; box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--swatch) 15%, transparent); border-radius: 2px 6px 2px 2px; }
+.palette-tile.is-selected { box-shadow: inset 0 -2px 0 var(--accent-secondary); }
+.style-pack-card { box-shadow: inset 0 1px 0 var(--edge-light); }
+
+/* 预览界面和组件册沿用同一套矢量细节。 */
+.component-tile { border-color: #d4dfef; box-shadow: inset 0 1px 0 #fff, 0 6px 18px -17px #5b76a4; }
+.component-tile > h3 { color: #617695; letter-spacing: .7px; }
+.component-sample.device { background: var(--surface); border-radius: 4px 13px 4px 9px; border-color: var(--line); }
+.component-sample .role-message { margin-top: 5px; }
+.component-sample .message-bubble p { font-size: 10px; }
+.component-sample .app-nav { height: 65px; }
+.component-sample .empty-state { padding: 24px 8px; }
+.component-sample .empty-state .icon { width: 32px; height: 32px; color: var(--accent); }
+.component-sample .empty-state p { font-size: 8px; line-height: 1.9; text-align: center; }
+.role-option { border-radius: 4px 12px 4px 8px; box-shadow: inset 0 1px 0 #fff; }
+.role-option.is-active { background: linear-gradient(125deg, #e6effb, #f7f9fe); }
+.studio-button > .icon { width: 13px; height: 13px; margin-left: 12px; color: #6d87ad; }
+.footnote-mark { width: 26px; height: 30px; }
+.desktop-theme-switch button { border-radius: 3px 9px 3px 3px; }
+.palette-showcase > button { box-shadow: inset 0 1px 0 #fff, 0 4px 10px -10px #476c9d; }
+.palette-mini { background-image: linear-gradient(140deg, #ffffff14, transparent); }
+.cg-collection > button { border-radius: 4px 16px 4px 9px; }
+.preview-dialog { background-image: linear-gradient(145deg, #ffffff99, #f2f6ff99); box-shadow: inset 0 1px 0 white, 0 24px 80px #14264133; }
+.preview-dialog.art-dialog { background: #171723; box-shadow: 0 24px 80px #14264155; }
+.dialog-close { border-radius: 3px 8px 3px 3px; }
+.dialog-actions button { border-radius: 3px 9px 3px 3px; }
+.icon-catalog { display: grid; grid-template-columns: repeat(8, minmax(0, 1fr)); gap: 10px; margin: 24px 0; }
+.icon-study { margin: 0; min-width: 0; padding: 16px 6px 10px; text-align: center; border: 1px solid #dce5f1; border-radius: 4px 13px 4px 4px; background: #ffffff70; }
+.icon-study > div { display: flex; justify-content: center; align-items: center; gap: 8px; }
+.icon-study .icon { width: 24px; height: 24px; color: #608cc2; --accent-secondary: #9bbcdf; }
+.icon-study .icon:last-child { color: #bba2df; --accent-secondary: #ce9eb8; background: #252131; padding: 5px; width: 34px; height: 34px; border-radius: 4px 9px 4px 4px; }
+.icon-study figcaption { font-size: 8px; color: #8b99ad; padding-top: 11px; letter-spacing: .4px; }
+.motif-study { display: flex; justify-content: center; align-items: center; gap: 45px; border: 1px solid #dbe4f0; padding: 25px; background: #ffffff65; border-radius: 4px 15px 4px 4px; }
+.motif-study > .ornament { width: 130px; height: 58px; color: #789fca; --accent-secondary: #a1c5e3; }
+.motif-study > .ornament:last-child { color: #a08abf; --accent-secondary: #c69cb7; }
+@media (hover: hover) {
+  .nav-item:hover .nav-symbol { background: var(--wash); transform: translateY(-2px); }
+  .file-card:hover { border-color: var(--bevel); box-shadow: inset 0 1px 0 var(--edge-light), 0 5px 15px -10px var(--panel-shadow); }
+  .file-card:hover .file-cover { transform: rotate(0deg) translateY(-1px); }
+  .resume-card:hover .resume-art { opacity: .68; transform: translateY(-2px); }
+  .palette-showcase > button:hover { border-color: #a8bdd9; }
+  .role-option:hover, .studio-button:hover { border-color: #abc0df; }
+}
+.file-cover, .resume-art { transition: transform .3s, opacity .3s; }
+@media (max-width: 1150px) {
+  .phone-grid { gap: 34px; }
+  .theme-section::after { display: none; }
+  .icon-catalog { grid-template-columns: repeat(6, minmax(0, 1fr)); }
+}
+@media (max-width: 700px) {
+  .studio-header { height: 80px; }
+  .wordmark > img { width: 35px; height: 26px; }
+  .studio-intro { padding-top: 30px; padding-bottom: 25px; }
+  .studio-intro h1 { letter-spacing: 1px; }
+  .board-heading h2 { font-size: 20px; letter-spacing: 2px; }
+  .board-emblem { width: 54px; height: 35px; margin-left: 0; }
+  .board-emblem > .ornament { width: 53px; height: 25px; }
+  .board-heading { gap: 11px; }
+  .phone-grid { gap: 30px; }
+  .message-bubble p { font-size: 12px; }
+  .icon-catalog { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
+  .motif-study { gap: 20px; padding: 15px; }
+  .motif-study > .ornament { width: 105px; height: 48px; }
+}
