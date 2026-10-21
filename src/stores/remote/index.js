@@ -329,12 +329,14 @@ export async function initializeRemote() {
   try { await promise } finally { if (initialization?.promise === promise) { initialization = null; remoteState.initializing = false } }
 }
 export async function performRemote(action, options) {
-  const token = currentToken()
+  const token = options?.token || currentToken()
+  assertToken(token, 'remote')
   try { return (await remoteClient.action(action, { ...options, token })).data }
   finally { await afterRemoteWrite(token) }
 }
 export async function manageRemote(request, options) {
-  const token = currentToken()
+  const token = options?.token || currentToken()
+  assertToken(token, 'remote')
   try { return (await remoteClient.manage(request, { ...options, token })).data }
   finally { await afterRemoteWrite(token) }
 }

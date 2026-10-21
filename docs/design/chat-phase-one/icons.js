@@ -1,0 +1,39 @@
+(() => {
+  // 图标均为设计稿内的固定矢量，不接收外部 SVG 内容。
+  const paths = {
+    chat: '<path class="wash" d="M5 4h13a3 3 0 0 1 3 3v8a3 3 0 0 1-3 3H9l-5 3v-5a3 3 0 0 1-2-3V7a3 3 0 0 1 3-3Z"/><path d="M5 4h13a3 3 0 0 1 3 3v8a3 3 0 0 1-3 3H9l-5 3v-5a3 3 0 0 1-2-3V7a3 3 0 0 1 3-3Zm2 5h9m-9 4h5"/><path class="jewel" d="m17 11 1.5 2-1.5 2-1.5-2Z"/>',
+    thought: '<path class="wash" d="M7 16a5 5 0 0 1-2-9 5 5 0 0 1 9-3 4 4 0 0 1 6 5 4 4 0 0 1-2 7Z"/><path d="M7 16a5 5 0 0 1-2-9 5 5 0 0 1 9-3 4 4 0 0 1 6 5 4 4 0 0 1-2 7Z"/><circle cx="7" cy="20" r="1.2"/><path class="detail" d="m11 7 2 2-2 2-2-2Z"/>',
+    route: '<path d="M5 7v8a4 4 0 0 0 4 4h6M9 5h6a4 4 0 0 1 0 8h-4"/><path class="wash" d="m5 1 4 4-4 4-4-4Zm14 14 4 4-4 4-4-4Z"/><path d="m5 1 4 4-4 4-4-4Zm14 14 4 4-4 4-4-4Z"/>',
+    script: '<path class="wash" d="M4 3h12l4 4v14H4Z"/><path d="M4 3h12l4 4v14H4Zm12 0v4h4m-11 4-3 3 3 3m6-6 3 3-3 3m-3-7-1 8"/>',
+    search: '<circle class="wash" cx="10" cy="10" r="7"/><circle cx="10" cy="10" r="7"/><path d="m15 15 6 6"/><path class="detail" d="M6 10a4 4 0 0 1 4-4m9 13 2 2"/>',
+    globe: '<circle class="wash" cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c6 5 6 13 0 18-6-5-6-13 0-18Z"/><path class="detail" d="M5 7c5 2 9 2 14 0M5 17c5-2 9-2 14 0"/>',
+    file: '<path class="wash" d="M6 2h9l5 5v15H6Z"/><path d="M6 2h9l5 5v15H6Zm9 0v5h5M3 7v14m6-9h7m-7 4h5"/><path class="detail" d="M9 19h3"/>',
+    folder: '<path class="wash" d="M3 5h6l3 3h9v12H3Z"/><path d="M3 10V5h6l3 3h9v12H3Zm0 2h18"/><path class="detail" d="M7 16h5"/>',
+    edit: '<path class="wash" d="m4 16 12-12 4 4L8 20l-5 1Z"/><path d="m4 16 12-12a2 2 0 0 1 3 0l1 1a2 2 0 0 1 0 3L8 20l-5 1Zm10-10 4 4M4 16l4 4"/><path class="detail" d="M13 21h8"/>',
+    queue: '<path class="wash" d="M3 8h18v12H3Z"/><path d="M3 8h18v12H3Zm2-3h14M7 2h10M7 12h7m-7 4h4"/><path class="jewel" d="m17 13 2 2-2 2-2-2Z"/>',
+    clock: '<circle class="wash" cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="9"/><path d="M12 6v6l4 2"/><path class="detail" d="M3 12h1m16 0h1M12 3v1m0 16v1"/>',
+    model: '<path class="wash" d="m12 3 7 9-7 9-7-9Z"/><path d="m12 3 7 9-7 9-7-9Z"/><ellipse class="detail" cx="12" cy="12" rx="11" ry="4" transform="rotate(-25 12 12)"/><path class="jewel" d="m12 8 3 4-3 4-3-4Z"/>',
+    sliders: '<path d="M3 6h7m5 0h6M3 12h12m5 0h1M3 18h3m5 0h10"/><rect class="wash" x="10" y="3" width="5" height="6" rx="2"/><rect x="10" y="3" width="5" height="6" rx="2"/><rect x="15" y="9" width="5" height="6" rx="2"/><rect x="6" y="15" width="5" height="6" rx="2"/>',
+    send: '<path class="wash" d="m3 3 18 8-8 3-3 7Z"/><path d="m3 3 18 8-8 3-3 7Zm0 0 10 11"/><path class="detail" d="m15 8 3 2"/>',
+    stop: '<rect class="wash" x="5" y="5" width="14" height="14" rx="4"/><rect x="5" y="5" width="14" height="14" rx="4"/>',
+    voice: '<rect class="wash" x="9" y="2" width="6" height="13" rx="3"/><rect x="9" y="2" width="6" height="13" rx="3"/><path d="M5 10v2a7 7 0 0 0 14 0v-2m-7 9v3m-4 0h8"/><path class="detail" d="M11 5h2"/>',
+    sound: '<path class="wash" d="m10 4-6 5H2v6h2l6 5Z"/><path d="m10 4-6 5H2v6h2l6 5Zm5 4a6 6 0 0 1 0 8m4-11a10 10 0 0 1 0 14"/>',
+    photo: '<rect class="wash" x="3" y="3" width="18" height="18" rx="4"/><rect x="3" y="3" width="18" height="18" rx="4"/><circle cx="9" cy="8" r="1.5"/><path d="m3 17 5-5 4 4 4-7 5 8"/>',
+    attach: '<path d="m8 14 7-7a3 3 0 0 1 4 4l-8 8a5 5 0 0 1-7-7L14 2a4 4 0 0 1 6 6L8 20a2 2 0 0 1-3-3L15 7"/>',
+    shield: '<path class="wash" d="m12 2 8 4v6c0 5-8 10-8 10S4 17 4 12V6Z"/><path d="m12 2 8 4v6c0 5-8 10-8 10S4 17 4 12V6Zm-4 10 3 3 5-6"/>',
+    refresh: '<path d="M20 7A9 9 0 1 0 21 15M20 2v6h-6"/><path class="detail" d="M6 15a6 6 0 0 0 5 3"/>',
+    rollback: '<path d="m8 3-5 5 5 5M3 8h10a7 7 0 0 1 0 14h-3"/><path class="detail" d="M13 12a3 3 0 0 1 0 6"/>',
+    copy: '<rect class="wash" x="8" y="8" width="13" height="13" rx="3"/><rect x="8" y="8" width="13" height="13" rx="3"/><path d="M16 8V3H3v13h5"/>',
+    download: '<path class="wash" d="M4 17h16v4H4Z"/><path d="M12 2v12m-4-4 4 4 4-4M4 17v4h16v-4"/>',
+    check: '<path d="m5 12 4 4L19 6"/>',
+    plus: '<path d="M12 4v16M4 12h16"/>',
+    close: '<path d="m6 6 12 12M18 6 6 18"/>',
+    back: '<path d="m14 5-7 7 7 7M7 12h13"/>',
+    down: '<path d="m6 9 6 6 6-6"/>',
+    more: '<circle cx="5" cy="12" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/>',
+    sparkle: '<path class="wash" d="m12 2 3 7 7 3-7 3-3 7-3-7-7-3 7-3Z"/><path d="m12 2 3 7 7 3-7 3-3 7-3-7-7-3Z"/>',
+    bow: '<path class="wash" d="m10 10-7-5-1 12 8-3m4-4 7-5 1 12-8-3"/><path d="m10 10-7-5-1 12 8-3m4-4 7-5 1 12-8-3m-2-6 4 4-4 4-4-4Z"/><path class="detail" d="m10 15-3 6 5-2 5 2-3-6"/>',
+  };
+  document.getElementById('symbols').innerHTML = Object.entries(paths).map(([name, markup]) => `<symbol id="i-${name}" viewBox="0 0 24 24">${markup}</symbol>`).join('');
+  window.DesignIcons = Object.keys(paths);
+})();

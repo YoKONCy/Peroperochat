@@ -1,13 +1,13 @@
 <template>
   <aside v-if="items.length || snapshot?.paused || error" class="remote-queue" aria-label="待发送消息队列">
-    <header><strong><RemoteIcon name="chat" />{{ snapshot?.paused ? '队列已暂停' : '消息队列' }}<small>{{ items.length }}</small></strong><button type="button" :disabled="changing || !online" @click="control">{{ snapshot?.paused ? '继续发送' : '暂停队列' }}</button></header>
+    <header><button type="button" class="remote-queue-toggle" :aria-expanded="expanded" @click="expanded = !expanded"><strong><RemoteIcon name="queue" />{{ snapshot?.paused ? '队列已暂停' : '等着说的话' }}<small>{{ items.length }}</small></strong><RemoteIcon :name="expanded ? 'up' : 'down'" /></button><button type="button" :disabled="changing || !online" @click="control"><RemoteIcon :name="snapshot?.paused ? 'play' : 'pause'" />{{ snapshot?.paused ? '继续发送' : '暂停' }}</button></header>
     <p v-if="error" class="remote-help" role="alert">{{ error }}<button type="button" @click="refresh">重新同步</button></p>
     <p v-if="snapshot?.reason" class="remote-help">{{ snapshot.reason }}</p>
-    <div class="remote-queue-items">
+    <div v-show="expanded || editing || error" class="remote-queue-items">
       <article v-for="item in items" :key="item.id"><span>{{ remoteStatus(item.state) }}{{ item.immediate ? ' · 优先' : '' }}</span><p>{{ item.input?.content }}</p><small v-if="item.input?.attachmentIds?.length">{{ item.input.attachmentIds.length }} 个附件</small><p v-if="item.error" class="remote-help">{{ item.error }}</p>
         <p v-if="item.input?.workspaceContext" class="remote-help">工作台引用：{{ item.input.workspaceContext.filePath || '' }}{{ item.input.workspaceContext.terminalId ? ` · 终端 ${item.input.workspaceContext.terminalId}` : '' }}</p>
         <form v-if="editing === item.id" @submit.prevent="change(item, 'edit', edited)"><textarea v-model="edited" rows="2" maxlength="131072" aria-label="编辑队列消息" /><button :disabled="changing || !edited.trim()">保存</button><button type="button" @click="editing = null">保留原文</button></form>
-        <div v-else class="remote-queue-actions"><button v-if="item.state === 'queued'" :disabled="changing || !online" @click="change(item, 'immediate')">立即提交</button><button v-if="item.state === 'queued'" :disabled="changing || !online" @click="editing = item.id; edited = item.input.content">编辑</button><button v-if="['failed', 'interrupted'].includes(item.state)" :disabled="changing || !online" @click="change(item, 'continue')">继续此条</button><button v-if="item.state === 'queued' && !item.immediate" :disabled="changing || !online || ordered[0]?.id === item.id" aria-label="向前移动" @click="move(item, -1)"><RemoteIcon name="up" /></button><button v-if="item.state === 'queued' && !item.immediate" :disabled="changing || !online || ordered.at(-1)?.id === item.id" aria-label="向后移动" @click="move(item, 1)"><RemoteIcon name="down" /></button><button :disabled="changing || !online" @click="change(item, 'cancel')">取消</button></div>
+        <div v-else class="remote-queue-actions"><button v-if="item.state === 'queued'" :disabled="changing || !online" @click="change(item, 'immediate')"><RemoteIcon name="send" />立即提交</button><button v-if="item.state === 'queued'" :disabled="changing || !online" @click="editing = item.id; edited = item.input.content"><RemoteIcon name="edit" />编辑</button><button v-if="['failed', 'interrupted'].includes(item.state)" :disabled="changing || !online" @click="change(item, 'continue')"><RemoteIcon name="refresh" />继续此条</button><button v-if="item.state === 'queued' && !item.immediate" :disabled="changing || !online || ordered[0]?.id === item.id" aria-label="向前移动" @click="move(item, -1)"><RemoteIcon name="up" /></button><button v-if="item.state === 'queued' && !item.immediate" :disabled="changing || !online || ordered.at(-1)?.id === item.id" aria-label="向后移动" @click="move(item, 1)"><RemoteIcon name="down" /></button><button :disabled="changing || !online" @click="change(item, 'cancel')"><RemoteIcon name="close" />取消</button></div>
       </article>
     </div>
   </aside>
@@ -26,6 +26,7 @@ const online = computed(() => remoteState.connection === 'online')
 const items = computed(() => (snapshot.value?.items || []).filter(item => ['queued', 'failed', 'interrupted'].includes(item.state)))
 const ordered = computed(() => items.value.filter(item => item.state === 'queued' && !item.immediate))
 const changing = ref(false), error = ref(''), editing = ref(null), edited = ref('')
+const expanded = ref(false)
 let disposed = false, loading = false, timer = null, previousRun = ''
 function guard() { assertToken(token, 'remote'); if (disposed) throw new Error('队列面板已关闭') }
 async function refresh() {

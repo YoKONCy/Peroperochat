@@ -34,11 +34,12 @@ async fn upload_inner(app:AppHandle,token:Token,request_id:String,thread_id:Stri
     Ok(json!({"modeToken":token,"requestId":request_id,"data":data}))
 }
 
-#[derive(Deserialize,Serialize)]
+#[derive(Clone,Deserialize,Serialize)]
 #[serde(tag="kind",rename_all="snake_case",deny_unknown_fields)]
 pub enum Resource {
     Attachment {id:String},AgentAvatar {id:String},
     Workspace {#[serde(rename="agentId")] agent_id:String,#[serde(rename="threadId")] thread_id:String,path:String,version:String},
+    Reference {#[serde(rename="agentId")] agent_id:String,#[serde(rename="threadId")] thread_id:String,#[serde(default,rename="taskId")] task_id:Option<String>,source:String},
 }
 #[derive(Deserialize)]
 #[serde(rename_all="camelCase",deny_unknown_fields)]
@@ -79,8 +80,76 @@ impl Resource {
                 if path.is_empty() || path.len()>2048 || version.is_empty() || version.len()>256 {return Err(ChatError::new("INVALID_FILE","工作区资源必须指定路径与版本"));}
                 ("/workspace/content".into(),vec![("agentId".into(),agent_id.clone()),("threadId".into(),thread_id.clone()),("path".into(),path.clone()),("version".into(),version.clone())])
             },
+            Self::Reference {agent_id,thread_id,task_id,source}=> {
+                operations::segment(agent_id)?;operations::segment(thread_id)?;
+                if source.is_empty() || source.len()>2048 || source.chars().any(char::is_control) || !source.starts_with("workspace:") {
+                    return Err(ChatError::new("INVALID_FILE","资源引用必须由服务端解析为当前会话工作区文件"));
+                }
+                let mut params=vec![("agentId".into(),agent_id.clone()),("threadId".into(),thread_id.clone()),("source".into(),source.clone())];
+                if let Some(id)=task_id {operations::segment(id)?;params.push(("taskId".into(),id.clone()));}
+                ("/attachments/reference-content".into(),params)
+            },
         })
     }
+}
+
+// 引用解析由 infOS 校验会话与路径权限，移动端不把服务器文件路径当成本机路径。
+#[tauri::command]
+pub async fn remote_resolve_resource(app:AppHandle,token:Token,agent_id:String,thread_id:String,task_id:Option<String>,source:String)->ChatResult<Value> {
+    operations::segment(&agent_id)?;operations::segment(&thread_id)?;
+    if source.is_empty() || source.len()>2048 || source.chars().any(char::is_control) {return Err(ChatError::new("INVALID_FILE","文件引用无效或过长"));}
+    if let Some(id)=&task_id {operations::segment(id)?;}
+    let mode=app.state::<Coordinator>();let mut changes=mode.subscribe();
+    let data=tokio::select! {biased;
+        _=changes.changed()=>return Err(super::inactive()),
+        result=async {
+            let session=super::session(&app,&token).await?;
+            let mut input=json!({"agentId":agent_id,"threadId":thread_id,"source":source});
+            if let Some(id)=task_id {input["taskId"]=json!(id);}
+            let response=session.client.post(format!("{}/api/attachments/resolve-reference",session.profile.endpoint))
+                .bearer_auth(&session.secret).timeout(std::time::Duration::from_secs(35))
+                .json(&input)
+                .send().await.map_err(|_|transport::network())?;
+            let response=super::checked_response(&session,response).await?;
+            transport::envelope(&transport::body(response).await?)
+        }=>result?,
+    };
+    super::validate_token(&app,&token)?;Ok(json!({"modeToken":token,"data":data}))
+}
+
+// HTML 文件使用 infOS 已有的短期预览票据，支持同一工作区内的相对资源，不向页面暴露设备凭据。
+#[tauri::command]
+pub async fn remote_html_preview(app:AppHandle,token:Token,resource:Resource)->ChatResult<Value> {
+    resource.route()?;
+    let encode=|value:&str|value.bytes().map(|byte|if byte.is_ascii_alphanumeric() || b"-._~".contains(&byte) {(byte as char).to_string()} else {format!("%{byte:02X}")}).collect::<String>();
+    let input=match resource {
+        Resource::Attachment {id}=>json!({"id":id}),
+        Resource::Workspace {agent_id,thread_id,path,..}=>json!({"agentId":agent_id,"threadId":thread_id,"source":format!("workspace:{}",encode(&path))}),
+        Resource::Reference {agent_id,thread_id,task_id,source}=> {
+            let mut input=json!({"agentId":agent_id,"threadId":thread_id,"source":source});
+            if let Some(id)=task_id {input["taskId"]=json!(id);}input
+        },
+        _=>return Err(ChatError::new("INVALID_FILE","此资源不支持 HTML 页面预览")),
+    };
+    let mode=app.state::<Coordinator>();let mut changes=mode.subscribe();
+    let url=tokio::select! {biased;
+        _=changes.changed()=>return Err(super::inactive()),
+        result=async {
+            let session=super::session(&app,&token).await?;
+            let response=session.client.post(format!("{}/api/attachments/browser-preview",session.profile.endpoint))
+                .bearer_auth(&session.secret).timeout(std::time::Duration::from_secs(35)).json(&input)
+                .send().await.map_err(|_|transport::network())?;
+            let response=super::checked_response(&session,response).await?;
+            let data=transport::envelope(&transport::body(response).await?)?;
+            let path=data.get("path").and_then(Value::as_str).ok_or_else(||ChatError::new("REMOTE_PROTOCOL","服务端未提供页面预览地址"))?;
+            let ticket=path.strip_prefix("/html-previews/").and_then(|value|value.split('/').next()).unwrap_or("");
+            if path.len()>8192 || ticket.len()!=64 || !ticket.bytes().all(|byte|byte.is_ascii_hexdigit()) || path.contains(['\r','\n','\\']) {
+                return Err(ChatError::new("REMOTE_PROTOCOL","页面预览地址不符合 infOS 票据格式"));
+            }
+            Ok::<_,ChatError>(format!("{}{path}",session.profile.endpoint.trim_end_matches('/')))
+        }=>result?,
+    };
+    super::validate_token(&app,&token)?;Ok(json!({"modeToken":token,"data":{"url":url}}))
 }
 #[tauri::command]
 pub async fn remote_resource_info(app:AppHandle,token:Token,resource:Resource)->ChatResult<Value> {

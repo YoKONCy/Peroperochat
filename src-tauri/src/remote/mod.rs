@@ -8,6 +8,7 @@ mod operations;
 pub mod management;
 pub mod files;
 pub mod downloads;
+pub mod conversation;
 mod context;
 mod gateway;
 pub mod resources;
@@ -191,7 +192,7 @@ async fn action_inner(app:AppHandle,token:Token,request_id:String,action:operati
 
 #[derive(Debug,Clone,Serialize,Deserialize)]
 #[serde(rename_all="camelCase",deny_unknown_fields)]
-pub struct ChatRequest {pub request_id:String,pub thread_id:String,pub agent_id:String,pub content:String,#[serde(default)] pub attachment_ids:Vec<String>,pub image_mode:Option<String>,#[serde(default)] pub workspace_context:Option<context::WorkspaceContext>}
+pub struct ChatRequest {pub request_id:String,pub thread_id:String,pub agent_id:String,pub content:String,#[serde(default)] pub attachment_ids:Vec<String>,pub image_mode:Option<String>,#[serde(default)] pub workspace_context:Option<context::WorkspaceContext>,#[serde(default)] pub generation_type:Option<String>}
 
 #[tauri::command]
 pub async fn remote_chat(app:AppHandle,token:Token,request:ChatRequest)->ChatResult<Value> {
@@ -199,7 +200,8 @@ pub async fn remote_chat(app:AppHandle,token:Token,request:ChatRequest)->ChatRes
 }
 async fn chat_inner(app:AppHandle,token:Token,request:ChatRequest)->ChatResult<Value> {
     if request.content.trim().is_empty() || request.content.len()>128*1024 || request.attachment_ids.len()>5 || request.attachment_ids.iter().any(|id|uuid::Uuid::parse_str(id).is_err())
-        || request.image_mode.as_ref().is_some_and(|mode|!["auto","native","relay"].contains(&mode.as_str())) {return Err(ChatError::new("INVALID_INPUT","远程聊天内容或附件无效"));}
+        || request.image_mode.as_ref().is_some_and(|mode|!["auto","native","relay"].contains(&mode.as_str()))
+        || request.generation_type.as_ref().is_some_and(|kind|!["normal","regenerate"].contains(&kind.as_str())) {return Err(ChatError::new("INVALID_INPUT","远程聊天内容或附件无效"));}
     operations::segment(&request.thread_id)?;operations::segment(&request.agent_id)?;
     if let Some(context)=&request.workspace_context {context.validate()?;}
     let mode=app.state::<Coordinator>();let mut changes=mode.subscribe();validate_token(&app,&token)?;
@@ -208,6 +210,7 @@ async fn chat_inner(app:AppHandle,token:Token,request:ChatRequest)->ChatResult<V
     let mut body=json!({"clientMessageId":request.request_id,"threadId":request.thread_id,"agentId":request.agent_id,"content":request.content,"attachmentIds":request.attachment_ids});
     if let Some(image_mode)=&request.image_mode {body["imageMode"]=json!(image_mode);}
     if let Some(context)=&request.workspace_context {body["workspaceContext"]=json!(context);}
+    if let Some(kind)=&request.generation_type {body["generationType"]=json!(kind);}
     let result=tokio::select! {biased;
         _=changes.changed()=>return Err(inactive().with_outcome("unknown")),
         result=perform(&session,operations::Route {method:reqwest::Method::POST,path:format!("/chat/queue/{}",operations::segment(&request.thread_id)?),params:Vec::new(),body:Some(body)})=>result,

@@ -1,24 +1,75 @@
 <template>
-  <RoomDrawer :title="message ? '消息操作' : '回退会话'" :busy="busy" @close="$emit('close')"><p v-if="error" class="room-error">{{ error }}</p><p v-if="unresolved" class="room-error">操作结果待核对。<button @click="$emit('pending')">前往通知</button></p>
-    <template v-if="message"><form @submit.prevent="operation = 'edit'"><label class="remote-field">消息正文<textarea v-model="content" rows="8" maxlength="131072" required :disabled="busy" /></label><button class="room-primary-button" :disabled="busy || unresolved || !content.trim() || content === message.content">保存编辑</button></form><div class="remote-manager-actions"><button :disabled="busy" @click="copy">复制正文</button><button :disabled="busy || unresolved" @click="operation = 'delete'">删除此消息</button><button :disabled="busy || unresolved" @click="operation = 'pair'">删除此轮对话</button><button :disabled="busy || unresolved" @click="preview">回退到这轮之前</button></div></template>
-    <button v-else-if="!previewData" class="room-secondary-button" :disabled="busy" @click="preview">预览整个会话的回退范围</button>
-    <div v-if="previewData" class="remote-manager-card"><h2>回退预览</h2><p class="remote-help">按服务端清单处理对话和文件；不保证撤销已执行的所有外部操作。</p><RemoteValue :value="previewData" /><button class="room-danger-button" :disabled="busy || unresolved" @click="operation = 'rewind'">确认回退</button></div>
-    <RoomDrawer v-if="operation" title="确认消息操作" :busy="busy" @close="operation = null"><p v-if="error" class="room-error">{{ error }}</p><p>{{ { edit: '保存对这条消息的修改？', delete: '删除这条消息？', pair: '删除此消息所在的整轮对话？', rewind: '按预览范围回退对话与相关文件？' }[operation] }}</p><button class="room-primary-button" :disabled="busy || unresolved" @click="submit">确认</button></RoomDrawer>
+  <RoomDrawer :title="view === 'edit' ? '编辑消息' : plan ? '保存并重新生成' : previewData ? '确认回滚' : message ? '消息操作' : '回滚会话'" :busy="busy" :before-close="beforeClose" @close="emit('close')">
+    <p v-if="error" class="room-error" role="alert">{{ error }}</p><p v-if="notice" class="remote-notice" role="status">{{ notice }}</p>
+    <button v-if="unresolved" class="room-text-button" @click="$emit('pending')">操作结果待核对，前往通知</button>
+    <div v-if="message && view === 'menu'" class="remote-action-menu">
+      <button @click="copy"><RemoteIcon name="copy" /><span>复制正文<small>复制这条消息的文字</small></span></button>
+      <button :disabled="busy || blocked" @click="view = 'edit'"><RemoteIcon name="edit" /><span>编辑消息<small>仅保存，或保存后重新生成</small></span></button>
+      <button :disabled="busy || blocked || unresolved" @click="preview"><RemoteIcon name="refresh" /><span>回滚到此处<small>撤回本轮及后续对话，预览相关文件变更</small></span></button>
+    </div>
+    <form v-if="view === 'edit'" @submit.prevent="saveOnly">
+      <label class="remote-field">消息正文<textarea v-model="content" rows="8" maxlength="131072" required :disabled="busy" /></label>
+      <p class="remote-help">仅保存保留后续记录；重新生成会先保存修订，再确认回滚范围。</p>
+      <div class="remote-purpose-actions"><RemoteAction icon="back" :disabled="busy" @click="view = 'menu'">返回</RemoteAction><RemoteAction icon="check" type="submit" :disabled="busy || blocked || unresolved || !content.trim() || content === message.content">仅保存</RemoteAction><RemoteAction icon="refresh" tone="primary" :disabled="busy || blocked || unresolved || !content.trim()" @click="prepare">保存并重新生成</RemoteAction></div>
+    </form>
+    <RemoteAction v-if="!message && !previewData" icon="refresh" :disabled="busy || blocked" @click="preview">查看会话回滚范围</RemoteAction>
+    <template v-if="previewData"><RemoteRewindPreview :preview="previewData" :regenerating="!!plan" /><div class="remote-purpose-actions"><RemoteAction v-if="!plan" icon="back" :disabled="busy" @click="previewData = null; view = 'menu'">返回</RemoteAction><RemoteAction icon="refresh" :tone="plan ? 'primary' : 'danger'" :disabled="busy || blocked || unresolved" @click="confirm">{{ plan ? phase === 'rewound' ? '重试生成' : '回滚并重新生成' : '回滚并撤回' }}</RemoteAction></div></template>
+    <RemoteAction v-if="plan && !previewData" icon="refresh" :disabled="busy || unresolved" @click="confirm">重新读取回滚预览</RemoteAction>
+    <p v-if="discarding" class="remote-inline-confirm">有未保存的编辑，确认离开？<button @click="emit('close')">放弃编辑</button><button @click="discarding = false">继续编辑</button></p>
   </RoomDrawer>
 </template>
 <script setup>
-import { ref } from 'vue'
+import { ref, onBeforeUnmount } from 'vue'
 import RoomDrawer from '../companion/RoomDrawer.vue'
-import RemoteValue from './RemoteValue.vue'
+import RemoteAction from './RemoteAction.vue'
+import RemoteIcon from './RemoteIcon.vue'
+import RemoteRewindPreview from './RemoteRewindPreview.vue'
 import { useRemoteManagement } from '../../composables/useRemoteManagement'
-import { performRemote } from '../../stores/remote'
-const props = defineProps({ threadId: { type: String, required: true }, message: Object })
+import { performRemote, refreshRemotePendingRequests } from '../../stores/remote'
+import { remoteClient } from '../../services/remote'
+const props = defineProps({ threadId: { type: String, required: true }, agentId: String, message: Object, blocked: Boolean })
 const emit = defineEmits(['close', 'updated', 'pending'])
-const { read, run, guard, busy, error, unresolved, fail } = useRemoteManagement()
-const content = ref(props.message?.content || ''), operation = ref(null), previewData = ref(null)
-async function action(value) { try { const data = await performRemote(value); guard(); return data } catch (failure) { fail(failure); throw failure } }
-function rewind(kind) { const messageId = props.message ? Number(props.message.messageId) : null; if (messageId !== null && (!Number.isSafeInteger(messageId) || messageId <= 0)) throw new Error('消息身份无效，无法回退'); return { kind, id: props.threadId, messageId, wholeThread: !props.message } }
-async function preview() { await run(async () => { const input = rewind('rewind_preview'); previewData.value = await read('thread.rewind_preview', { id: props.threadId, body: { wholeThread: input.wholeThread, ...(input.messageId ? { messageId: input.messageId } : {}) } }) }) }
-async function submit() { await run(async () => { const op = operation.value; if (op === 'rewind') { if (!previewData.value) throw new Error('请先读取回退预览'); await action(rewind('rewind')) } else await action({ kind: op === 'edit' ? 'edit_message' : op === 'pair' ? 'delete_message_pair' : 'delete_message', threadId: props.threadId, id: String(props.message.messageId), ...(op === 'edit' ? { content: content.value, expectedRevision: props.message.revision } : {}) }); emit('updated'); emit('close') }) }
-async function copy() { try { await navigator.clipboard.writeText(content.value) } catch { error.value = '复制未完成，可长按选择正文' } }
+const { token, read, run, guard, busy, error, unresolved, fail } = useRemoteManagement()
+const content = ref(props.message?.content || ''), view = ref('menu'), previewData = ref(null), plan = ref(null), phase = ref(''), notice = ref(''), discarding = ref(false)
+async function action(value) { guard(); try { return await performRemote(value, { token }) } catch (failure) { fail(failure); throw failure } }
+async function refreshPending() { await refreshRemotePendingRequests().catch(() => {}) }
+function target(kind) { const id = props.message ? Number(props.message.messageId) : null; if (id !== null && (!Number.isSafeInteger(id) || id <= 0)) throw new Error('消息身份无效，请刷新后再操作'); return { kind, id: props.threadId, messageId: id, wholeThread: !props.message } }
+async function preview() { await run(async () => { const input = target('rewind'); previewData.value = await read('thread.rewind_preview', { id: props.threadId, body: { wholeThread: input.wholeThread, ...(input.messageId ? { messageId: input.messageId } : {}) } }); view.value = 'review' }) }
+function changed(kind = 'edit') { emit('updated', { kind }); window.dispatchEvent(new CustomEvent('ppc:conversation-changed', { detail: { token, threadId: props.threadId } })) }
+async function saveOnly() { await run(async () => { const input = target('rewind'); await action({ kind: 'edit_message', threadId: props.threadId, id: String(input.messageId), content: content.value, expectedRevision: props.message.revision }); guard(); changed(); emit('close') }) }
+async function prepare() {
+  await run(async () => {
+    try {
+      const input = target('rewind')
+      const result = await remoteClient.prepareRegeneration({ threadId: props.threadId, agentId: props.agentId || '', messageId: input.messageId, content: content.value, revision: props.message.revision }, token)
+      guard(); plan.value = result.data.planId; phase.value = result.data.state; previewData.value = result.data.preview || null; view.value = 'review'; notice.value = result.data.message || '消息修订已保存，请确认重新生成范围。'; changed()
+    } catch (failure) { fail(failure); throw failure }
+    finally { await refreshPending() }
+  })
+}
+async function confirm() {
+  await run(async () => {
+    if (plan.value) {
+      try {
+        const { data } = await remoteClient.commitRegeneration(plan.value, token); guard()
+        phase.value = data.state
+        if (data.state === 'review') { previewData.value = data.preview; notice.value = '回滚清单已更新，请重新确认。'; return }
+        if (data.state === 'rewound') { notice.value = data.message; changed('rewind'); return }
+        plan.value = null; changed('rewind'); emit('close')
+      } catch (failure) { fail(failure); throw failure }
+      finally { await refreshPending() }
+    } else {
+      if (!previewData.value) throw new Error('请先读取回滚清单')
+      try {
+        const { data } = await remoteClient.confirmRewind({ threadId: props.threadId, wholeThread: !props.message, messageId: props.message ? Number(props.message.messageId) : null, expected: previewData.value }, token)
+        guard(); if (data.state === 'review') { previewData.value = data.preview; notice.value = '回滚范围已变化，请重新确认。'; return }
+        changed('rewind'); emit('close')
+      } catch (failure) { fail(failure); throw failure }
+      finally { await refreshPending() }
+    }
+  })
+}
+async function copy() { try { await navigator.clipboard.writeText(props.message?.content || ''); notice.value = '正文已复制' } catch { error.value = '复制未完成，可长按选择正文' } }
+function beforeClose() { if (props.message && !plan.value && content.value !== props.message.content) { discarding.value = true; return false } return true }
+onBeforeUnmount(() => { if (plan.value && ['saved', 'review'].includes(phase.value)) remoteClient.discardRegeneration(plan.value, token).catch(() => {}) })
 </script>

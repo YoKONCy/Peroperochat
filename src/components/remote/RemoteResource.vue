@@ -3,13 +3,13 @@
     <div class="remote-resource remote-file-reader">
       <header class="file-identity">
         <RemoteFileCover :name="fileName" />
-        <div><span class="file-origin"><RemoteIcon :name="resource.kind === 'workspace' ? 'folder' : 'attach'" />{{ resource.kind === 'workspace' ? '会话工作区' : '聊天附件' }}</span><h3 :title="fileName">{{ fileName }}</h3><p><span>{{ typeLabel }}</span><i /><span>{{ info ? formatFileSize(info.size) : '正在连接' }}</span></p></div>
+        <div><span class="file-origin"><RemoteIcon :name="resource.kind === 'external' ? 'globe' : resource.kind === 'attachment' ? 'attach' : 'folder'" />{{ resource.kind === 'external' ? '在线资源' : resource.kind === 'attachment' ? '聊天附件' : '会话工作区' }}</span><h3 :title="fileName">{{ fileName }}</h3><p><span>{{ typeLabel }}</span><i /><span>{{ info ? formatFileSize(info.size) : '正在连接' }}</span></p></div>
         <RemoteIcon class="file-identity-ornament" name="orbit" />
       </header>
       <div ref="readingBody" class="file-reading-body">
         <RemoteFileState v-if="loading" title="把文件轻轻展开…" description="正在读取远程内容" loading />
-        <RemoteFileState v-else-if="error" icon="alert" title="暂时没能展开" :description="error"><span class="file-state-hint">仍可在下方保存原件</span></RemoteFileState>
-        <RemotePdf v-else-if="kind === 'pdf' && info" :resource="resource" :info="info" @page-change="resetReadingScroll" />
+        <RemoteFileState v-else-if="error" icon="alert" title="暂时没能展开" :description="error"><span class="file-state-hint">仍可在下方保存原件</span><button class="file-button secondary" @click="load">重新读取</button></RemoteFileState>
+        <RemotePdf v-else-if="kind === 'pdf' && info && nativeInput" :resource="nativeInput" :info="info" @page-change="resetReadingScroll" />
         <template v-else-if="media && ['image', 'audio', 'video'].includes(kind)">
           <div class="file-view-bar"><span>{{ kind === 'image' ? '画面预览' : kind === 'audio' ? '音频播放' : '视频播放' }}</span><div v-if="kind === 'image'" class="file-zoom-actions"><button :disabled="imageZoom === 1" aria-label="缩小图片" @click="imageZoom = Math.max(1, imageZoom - .5)"><RemoteIcon name="zoom-out" /></button><button @click="imageZoom = 1">{{ Math.round(imageZoom * 100) }}%</button><button :disabled="imageZoom >= 3" aria-label="放大图片" @click="imageZoom += .5"><RemoteIcon name="zoom-in" /></button></div></div>
           <div class="file-media-stage" :class="`is-${kind}`" tabindex="0" :aria-label="`${fileName}预览区`">
@@ -18,6 +18,8 @@
             <video v-else :src="media.url" controls playsinline preload="metadata" @error="playbackError" />
           </div>
         </template>
+        <section v-else-if="(text !== null || htmlTicket) && ['html', 'svg'].includes(kind) && (!notice || htmlTicket)" class="file-web-reader"><RemoteRichBlock :block="webBlock" :context="fileContext" expanded @refresh="load" /></section>
+        <section v-else-if="text !== null && kind === 'markdown'" class="file-markdown-reader"><RemoteRichText :source="text" node-id="file-body" :context="fileContext" @resource="$emit('resource', $event)" /></section>
         <section v-else-if="text !== null" class="file-text-preview">
           <div class="file-view-bar"><span>文本预览</span><button :aria-pressed="wrapText" @click="wrapText = !wrapText"><RemoteIcon name="wrap" />{{ wrapText ? '自动换行' : '保留原行' }}</button></div>
           <pre class="file-code" :class="{ 'is-unwrapped': !wrapText }" tabindex="0" aria-label="文件正文">{{ text }}</pre>
@@ -39,7 +41,7 @@
           <p class="file-reading-caption">仅浏览目录 · 最多显示 600 项</p>
         </section>
         <RemoteFileState v-else title="先把它收进口袋吧" :description="notice || '这个格式适合保存后查看'" icon="download" />
-        <p v-if="notice && (media || sections.length || archive)" class="file-inline-notice"><RemoteIcon name="files" />{{ notice }}</p>
+        <p v-if="notice && (media || text !== null || sections.length || archive)" class="file-inline-notice"><RemoteIcon name="files" />{{ notice }}</p>
       </div>
     </div>
     <template #footer>
@@ -47,45 +49,54 @@
         <p v-if="saveError" class="file-save-message is-error" role="alert"><RemoteIcon name="alert" />{{ saveError }}</p>
         <p v-else-if="saved" class="file-save-message" role="status"><RemoteIcon name="check" />{{ saved }}</p>
         <template v-if="saving"><div class="file-transfer-label"><span role="status">{{ progress.phase === 'saving' ? '选择位置，收好这份文件' : '正在把文件带到身边…' }}</span><strong>{{ progress.phase === 'saving' ? '保存中' : percent === null ? formatFileSize(progress.received) : `${percent}%` }}</strong></div><div class="file-transfer-track" :class="{ indeterminate: percent === null }" role="progressbar" aria-label="下载进度" :aria-valuenow="percent" aria-valuemin="0" aria-valuemax="100"><i :style="{ width: `${percent ?? 24}%` }" /></div></template>
-        <div class="file-save-actions"><span><RemoteIcon :name="saving ? 'download' : 'shield'" />{{ saving ? progress.phase === 'saving' ? '正在交给系统保存' : `${formatFileSize(progress.received)} / ${formatFileSize(progress.total)}` : '保留完整原件' }}</span><button v-if="saving" class="file-button secondary" :disabled="cancelling" @click="cancel">{{ cancelling ? '正在取消…' : '取消保存' }}</button><button v-else class="file-button primary" @click="save"><RemoteIcon name="download" />保存到设备</button></div>
+        <div class="file-save-actions"><span><RemoteIcon :name="saving ? 'download' : 'shield'" />{{ saving ? progress.phase === 'saving' ? '正在交给系统保存' : `${formatFileSize(progress.received)} / ${formatFileSize(progress.total)}` : '保留完整原件' }}</span><button v-if="saving && downloadId" class="file-button secondary" :disabled="cancelling" @click="cancel">{{ cancelling ? '正在取消…' : '取消保存' }}</button><button v-else class="file-button primary" :disabled="saving" @click="save"><RemoteIcon :name="resource.kind === 'external' ? 'open' : 'download'" />{{ resource.kind === 'external' ? '使用系统打开' : '保存到设备' }}</button></div>
       </div>
     </template>
   </RoomDrawer>
 </template>
 <script setup>
-import { ref, computed, watch, onMounted, onBeforeUnmount, defineAsyncComponent } from 'vue'
+import { ref, computed, watch, onMounted, onBeforeUnmount } from 'vue'
+import { open as openSystemUrl } from '@tauri-apps/plugin-shell'
 import RoomDrawer from '../companion/RoomDrawer.vue'
 import RemoteIcon from './RemoteIcon.vue'
 import RemoteFileCover from './RemoteFileCover.vue'
 import RemoteFileState from './RemoteFileState.vue'
 import RemoteSelect from './RemoteSelect.vue'
+import RemotePdf from './RemotePdf.vue'
+import RemoteRichText from './RemoteRichText.vue'
+import RemoteRichBlock from './RemoteRichBlock.vue'
 import '../../styles/remote-files.css'
-import { loadRemoteResource } from '../../services/remoteMedia'
+import '../../styles/remote-rich.css'
 import { remoteClient } from '../../services/remote'
 import { currentToken, assertToken } from '../../stores/mode'
-import { documentKind, formatFileSize, officePreview, csvPreview } from '../../services/remoteDocuments'
-
-const RemotePdf = defineAsyncComponent(() => import('./RemotePdf.vue'))
+import { documentKind, formatFileSize } from '../../services/remoteDocuments'
+import { remoteFileInfo, prepareRemoteFile, remoteFileLabel, mediaKinds } from '../../services/remoteFilePreview'
+import { nativeResource, externalResourceUrl } from '../../services/remoteResources'
 const props = defineProps({ resource: Object, name: String })
-defineEmits(['close'])
+defineEmits(['close', 'resource'])
 const token = currentToken(), info = ref(null), kind = ref(''), media = ref(null), loading = ref(true), error = ref(''), text = ref(null)
 const sections = ref([]), archive = ref(null), notice = ref(''), saving = ref(false), cancelling = ref(false), saveError = ref(''), saved = ref('')
-const fileName = computed(() => props.name || info.value?.name || 'infOS文件')
+const fileName = computed(() => info.value?.name || props.name || 'infOS文件')
+const htmlTicket = ref('')
 const imageZoom = ref(1), wrapText = ref(true), sectionIndex = ref(0), archiveQuery = ref('')
 const readingBody = ref(null), archiveLimit = ref(80)
+const nativeInput = computed(() => props.resource.kind === 'external' ? null : nativeResource(props.resource))
+const fileContext = computed(() => ({ agentId: props.resource.agentId, threadId: props.resource.threadId, taskId: props.resource.taskId }))
+const webBlock = computed(() => ({ kind: 'web', source: text.value || '', language: kind.value === 'svg' ? 'svg' : 'html', previewUrl: htmlTicket.value }))
 const activeSection = computed(() => sections.value[sectionIndex.value] || sections.value[0])
 const sheetColumns = computed(() => Array.from({ length: Math.max(1, ...(activeSection.value?.rows || []).map(row => row.length)) }))
 const archiveMatches = computed(() => (archive.value?.entries || []).filter(entry => entry.name.toLowerCase().includes(archiveQuery.value.trim().toLowerCase())))
 const archiveEntries = computed(() => archiveMatches.value.slice(0, archiveLimit.value))
-const typeLabel = computed(() => ({ pdf: 'PDF 文档', docx: 'Word 文档', xlsx: 'Excel 表格', pptx: '幻灯片', csv: 'CSV 表格', text: '文本文件', image: '图片', audio: '音频', video: '视频', zip: '压缩文件' }[kind.value] || '远程文件'))
+const typeLabel = computed(() => remoteFileLabel(kind.value))
 function columnLabel(index) { return index < 26 ? String.fromCharCode(65 + index) : `A${String.fromCharCode(65 + index - 26)}` }
 function resetReadingScroll() { readingBody.value?.scrollTo({ top: 0, behavior: 'auto' }) }
 watch(sectionIndex, resetReadingScroll)
 watch(archiveQuery, () => { archiveLimit.value = 80 })
 const progress = ref({ phase: 'downloading', received: 0, total: null })
 const percent = computed(() => progress.value.total > 0 ? Math.min(100, Math.floor(progress.value.received / progress.value.total * 100)) : null)
-let disposed = false, worker, stopListen, downloadId, rejectDocument, documentTimer
-function playbackError() { error.value = '手机无法预览此格式，可保存原件后使用其他应用查看' }
+let disposed = false, stopListen, downloadId
+const controller = new AbortController()
+function playbackError() { error.value = '设备无法播放此格式，可保存原件后使用其他应用查看' }
 async function cancel() {
   if (!downloadId || cancelling.value) return
   cancelling.value = true
@@ -95,66 +106,39 @@ async function cancel() {
 async function save() {
   if (saving.value) return
   saving.value = true; cancelling.value = false; saveError.value = ''; saved.value = ''
-  downloadId = crypto.randomUUID(); progress.value = { phase: 'downloading', received: 0, total: info.value?.size }
   try {
-    const result = await remoteClient.downloadResource(props.resource, fileName.value, downloadId, token)
+    assertToken(token, 'remote')
+    if (props.resource.kind === 'external') { await openSystemUrl(externalResourceUrl(props.resource.url)); if (!disposed) saved.value = '已交给系统打开，可在系统中保存原件'; return }
+    downloadId = crypto.randomUUID(); progress.value = { phase: 'downloading', received: 0, total: info.value?.size }
+    const result = await remoteClient.downloadResource(nativeInput.value, fileName.value, downloadId, token)
     if (!disposed) saved.value = result.data?.saved ? result.data.path ? `已保存：${result.data.path}` : '文件已保存' : '已取消保存'
   } catch (failure) { if (!disposed) { if (failure.code === 'DOWNLOAD_CANCELLED') saved.value = '已取消保存'; else saveError.value = failure.message } }
   finally { downloadId = null; if (!disposed) { saving.value = false; cancelling.value = false } }
 }
-function readArchive(bytes) {
-  return new Promise((resolve, reject) => {
-    rejectDocument = reject
-    worker = new Worker(new URL('../../services/remoteDocument.worker.js', import.meta.url), { type: 'module' })
-    documentTimer = setTimeout(() => { worker?.terminate(); worker = null; rejectDocument = null; reject(new Error('文档预览超时，请下载原件查看')) }, 10000)
-    worker.onmessage = ({ data }) => { clearTimeout(documentTimer); worker.terminate(); worker = null; rejectDocument = null; data.error ? reject(new Error(data.error)) : resolve(data) }
-    worker.onerror = () => { clearTimeout(documentTimer); worker?.terminate(); worker = null; rejectDocument = null; reject(new Error('文档无法预览，请下载原件查看')) }
-    worker.postMessage({ bytes, kind: kind.value }, [bytes])
-  })
-}
-onMounted(async () => {
+async function load() {
+  if (disposed) return
+  loading.value = true; error.value = ''; media.value?.release(); media.value = null; text.value = null; sections.value = []; archive.value = null; notice.value = ''; htmlTicket.value = ''
   try {
-    stopListen = await remoteClient.listen(event => { if (event.kind === 'download' && event.data?.id === downloadId) progress.value = event.data })
-    if (disposed) { stopListen(); return }
-    info.value = (await remoteClient.resourceInfo(props.resource, token)).data
+    info.value = await remoteFileInfo(props.resource, token)
     if (disposed) return
-    const mime = info.value.mimeType.split(';')[0].trim().toLowerCase()
-    kind.value = documentKind(fileName.value, mime)
-    if (info.value.size === 0) { kind.value = 'binary'; notice.value = '这是一个空文件。'; return }
-    if (kind.value === 'pdf') {
-      if (info.value.size > 512 * 1024 * 1024) notice.value = 'PDF 超过预览范围，请保存原件查看'
-      else return
-      kind.value = 'binary'; return
+    if (documentKind(fileName.value, info.value.mimeType) === 'html' && nativeInput.value) {
+      try { const response = await remoteClient.htmlPreview(nativeInput.value, token); assertToken(token, 'remote'); if (disposed) return; htmlTicket.value = response.data.url }
+      catch (failure) { assertToken(token, 'remote'); if (disposed) return; notice.value = `会话资源预览暂不可用：${failure.message}` }
     }
-    if (kind.value === 'binary') { notice.value = '此格式暂不支持应用内预览，可直接保存原件。'; return }
-    const isText = ['text', 'csv'].includes(kind.value), size = info.value.size
-    if (size === 0) { notice.value = '这是一个空文件。'; return }
-    if (!isText && (size === null || size > 8 * 1024 * 1024)) { notice.value = '此文件较大，请保存原件后查看。PDF 支持分段预览，其他格式当前预览上限为 8 MiB。'; return }
-    const partial = isText && (size === null || size > 256 * 1024)
-    if (partial && !info.value.ranges) { notice.value = '服务端不支持分段读取，请保存原件查看。'; return }
-    const loaded = await loadRemoteResource(props.resource, { range: partial ? { start: 0, end: 256 * 1024 - 1 } : null })
-    if (disposed) { loaded.release(); return }
-    media.value = loaded
-    if (isText) {
-      const content = (await loaded.blob.text()).slice(0, 256 * 1024)
-      if (disposed) return
-      if (kind.value === 'csv') sections.value = csvPreview(content); else text.value = content
-      if (partial) notice.value = '仅预览前 256 KiB，保存原件可获取完整内容。'
-    } else if (['docx', 'xlsx', 'pptx', 'zip'].includes(kind.value)) {
-      const buffer = await loaded.blob.arrayBuffer(); if (disposed) return
-      const data = await readArchive(buffer)
-      if (disposed) return
-      assertToken(token, 'remote')
-      if (kind.value === 'zip') archive.value = data
-      else { sections.value = officePreview(kind.value, data.files); if (!sections.value.length) notice.value = '未找到可预览的正文，请保存原件查看。' }
-      if (data.truncated) notice.value = '文档内容较多，仅预览前 50 个文档分部；完整内容请保存原件查看。'
-      loaded.release(); media.value = null
-    }
-  } catch (failure) { media.value?.release(); media.value = null; if (!disposed) error.value = failure.message }
+    const content = await prepareRemoteFile(props.resource, { ...info.value, name: fileName.value }, { signal: controller.signal })
+    if (disposed) { content.media?.release(); return }
+    assertToken(token, 'remote')
+    kind.value = content.kind; text.value = content.text; media.value = content.media; sections.value = content.sections; archive.value = content.archive; notice.value = content.notice
+    if (kind.value === 'pdf' && !nativeInput.value) { kind.value = 'binary'; notice.value = '在线 PDF 可通过系统打开；私有附件支持应用内分页阅读' }
+    if (kind.value === 'pdf' && info.value.size > 512 * 1024 * 1024) { kind.value = 'binary'; notice.value = 'PDF 较大，请保存原件查看' }
+  } catch (failure) { if (!disposed) { if (htmlTicket.value) { kind.value = 'html'; notice.value = '源码速览暂不可用，页面预览仍可浏览' } else error.value = failure.message } }
   finally { if (!disposed) loading.value = false }
+}
+function pauseMedia() { if (document.hidden) readingBody.value?.querySelectorAll('audio,video').forEach(element => element.pause()) }
+onMounted(async () => {
+  document.addEventListener('visibilitychange', pauseMedia)
+  try { stopListen = await remoteClient.listen(event => { if (event.kind === 'download' && event.data?.id === downloadId) progress.value = event.data }); if (disposed) { stopListen(); return }; await load() }
+  catch (failure) { if (!disposed) { error.value = failure.message; loading.value = false } }
 })
-onBeforeUnmount(() => {
-  disposed = true; stopListen?.(); clearTimeout(documentTimer); worker?.terminate(); rejectDocument?.(new Error('预览已关闭')); media.value?.release()
-  if (downloadId) remoteClient.cancelDownload(downloadId, token).catch(() => {})
-})
+onBeforeUnmount(() => { disposed = true; controller.abort(); stopListen?.(); media.value?.release(); document.removeEventListener('visibilitychange', pauseMedia); readingBody.value?.querySelectorAll('audio,video').forEach(element => { element.pause(); element.removeAttribute('src'); element.load() }); if (downloadId) remoteClient.cancelDownload(downloadId, token).catch(() => {}) })
 </script>

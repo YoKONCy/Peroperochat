@@ -27,6 +27,12 @@ export const remoteConnections = {
   remove: id => control('remote_delete_profile', { id }),
 }
 export const remoteClient = {
+  modelControls: (threadId, token) => scoped('remote_model_controls', { threadId }, token),
+  prepareRegeneration: (input, token) => scoped('remote_prepare_regeneration', { ...input, requestId: crypto.randomUUID() }, token),
+  commitRegeneration: (id, token) => scoped('remote_commit_regeneration', { id }, token),
+  regenerationRecovery: (threadId, token) => scoped('remote_regeneration_recovery', { threadId }, token),
+  discardRegeneration: (id, token) => scoped('remote_discard_regeneration', { id }, token),
+  confirmRewind: (input, token) => scoped('remote_confirm_rewind', { ...input, requestId: crypto.randomUUID() }, token),
   manage: (request, { requestId = crypto.randomUUID(), token } = {}) => scoped('remote_manage', { request, requestId }, token),
   manageUpload: (kind, id, file, { fields = {}, requestId = crypto.randomUUID(), token } = {}) => scoped('remote_manage_upload', { kind, id, file, fields, requestId }, token),
   tts: (input, { requestId = crypto.randomUUID(), token } = {}) => scoped('remote_voice_tts', { ...input, requestId }, token),
@@ -53,6 +59,8 @@ export const remoteClient = {
   upload: (threadId, file, { requestId = crypto.randomUUID(), token } = {}) => scoped('remote_upload', { threadId, file, requestId }, token),
   resource: (resource, { range = null, token } = {}) => scoped('remote_resource', { resource, range }, token),
   resourceInfo: (resource, token) => scoped('remote_resource_info', { resource }, token),
+  resolveResource: (context, source, token) => scoped('remote_resolve_resource', { agentId: context.agentId, threadId: context.threadId, taskId: context.taskId || null, source }, token),
+  htmlPreview: (resource, token) => scoped('remote_html_preview', { resource }, token),
   downloadResource: (resource, name, id, token) => scoped('remote_download_resource', { resource, name, id }, token),
   cancelDownload: (id, token) => scoped('remote_cancel_download', { id }, token),
   listen: callback => listen('remote-event', ({ payload }) => {

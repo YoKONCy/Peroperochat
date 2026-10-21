@@ -1,6 +1,7 @@
 <template>
-  <section class="remote-pdf" aria-label="PDF 预览">
-    <form v-if="unlock" class="file-unlock-card" @submit.prevent="submitPassword">
+  <section class="remote-pdf" :class="{ 'is-compact': compact }" :inert="compact ? true : undefined" aria-label="PDF 预览">
+    <p v-if="unlock && compact" class="remote-help"><RemoteIcon name="shield" />文档已加密，展开后输入密码</p>
+    <form v-if="unlock && !compact" class="file-unlock-card" @submit.prevent="submitPassword">
       <RemoteIcon name="shield" /><h3>这份文件上了锁</h3><p>{{ passwordWrong ? '密码没有对上，再试一次吧' : '输入文档密码，继续阅读' }}</p>
       <label class="file-sr-only" for="remote-pdf-password">文档密码</label><input id="remote-pdf-password" v-model="password" type="password" autocomplete="off" placeholder="文档密码" />
       <button class="file-button primary" type="submit">打开文档<RemoteIcon name="next" /></button>
@@ -11,7 +12,7 @@
       <span v-if="busy" class="file-page-loading" role="status">正在绘制…</span>
       <canvas ref="canvas" :aria-label="`PDF 第 ${page} 页`" />
     </div>
-    <nav v-if="pages && !error" class="file-pdf-controls" aria-label="PDF 阅读控制">
+    <nav v-if="pages && !error && !compact" class="file-pdf-controls" aria-label="PDF 阅读控制">
       <button aria-label="上一页" :disabled="page <= 1 || busy" @click="page--"><RemoteIcon name="back" /></button>
       <label class="file-page-counter"><span class="file-sr-only">跳转到页码</span><input :value="page" inputmode="numeric" pattern="[0-9]*" :disabled="busy" aria-label="当前页，输入页码跳转" @change="jumpTo" @keydown.enter.prevent="jumpTo" /><span>/ {{ pages }}</span></label>
       <button aria-label="下一页" :disabled="page >= pages || busy" @click="page++"><RemoteIcon name="next" /></button>
@@ -20,7 +21,7 @@
       <button class="file-fit-page" :disabled="busy" :aria-label="`当前缩放 ${Math.round(zoom * 100)}%，点击适应宽度`" @click="zoom = 1">{{ zoom === 1 ? '适宽' : `${Math.round(zoom * 100)}%` }}</button>
       <button :disabled="busy || zoom >= 2" aria-label="放大页面" @click="zoom += .25"><RemoteIcon name="zoom-in" /></button>
     </nav>
-    <p v-if="pages && !error" class="file-reading-caption">{{ pages }} 页文档 · 输入页码可跳转</p>
+    <p v-if="pages && !error && !compact" class="file-reading-caption">{{ pages }} 页文档 · 输入页码可跳转</p>
   </section>
 </template>
 <script setup>
@@ -30,8 +31,8 @@ import { currentToken, assertToken } from '../../stores/mode'
 import RemoteIcon from './RemoteIcon.vue'
 import RemoteFileState from './RemoteFileState.vue'
 
-const props = defineProps({ resource: Object, info: Object })
-const emit = defineEmits(['page-change'])
+const props = defineProps({ resource: Object, info: Object, compact: Boolean })
+const emit = defineEmits(['page-change', 'ready'])
 const canvas = ref(null), viewport = ref(null), page = ref(1), pages = ref(0), zoom = ref(1), busy = ref(true), error = ref('')
 const unlock = ref(false), password = ref(''), passwordWrong = ref(false)
 const token = currentToken()
@@ -51,7 +52,7 @@ async function draw() {
     const base = pdfPage.getViewport({ scale: 1 }), width = Math.max(160, (viewport.value?.clientWidth || 320) - 32)
     const screen = pdfPage.getViewport({ scale: width / base.width * zoom.value })
     // 每次只保留一页画布，限制像素总量，避免手机上的超大扫描页耗尽内存。
-    const density = Math.min(window.devicePixelRatio || 1, 2, Math.sqrt(4_000_000 / (screen.width * screen.height)))
+    const density = Math.min(window.devicePixelRatio || 1, props.compact ? 1 : 2, Math.sqrt((props.compact ? 700_000 : 4_000_000) / (screen.width * screen.height)))
     const target = canvas.value
     target.width = Math.max(1, Math.floor(screen.width * density)); target.height = Math.max(1, Math.floor(screen.height * density))
     target.style.width = `${screen.width}px`; target.style.height = `${screen.height}px`
@@ -104,7 +105,7 @@ onMounted(async () => {
     task.onPassword = (callback, reason) => { updatePassword = callback; passwordWrong.value = reason === 2; unlock.value = true; busy.value = false }
     pdf = await task.promise
     if (disposed) { await pdf.destroy(); return }
-    pages.value = pdf.numPages; await draw()
+    pages.value = pdf.numPages; emit('ready', pdf.numPages); await draw()
     if (disposed) return
     observer = new ResizeObserver(() => { clearTimeout(timer); timer = setTimeout(draw, 180) }); observer.observe(viewport.value)
   } catch { if (!disposed) { error.value ||= 'PDF 无法预览，可下载原件查看'; busy.value = false } }

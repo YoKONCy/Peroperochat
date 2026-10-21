@@ -108,10 +108,8 @@ pub enum Action {
     InteractionMode {id:String,mode:String},ExecutionMode {id:String,mode:String},
     ThreadTools {id:String,#[serde(rename="disabledTools")] disabled_tools:Vec<String>},
     EditMessage {#[serde(rename="threadId")] thread_id:String,id:String,content:String,#[serde(default,rename="expectedRevision")] expected_revision:Option<u64>},
-    DeleteMessagePair {#[serde(rename="threadId")] thread_id:String,id:String},
-    DeleteMessage {#[serde(rename="threadId")] thread_id:String,id:String},
     RewindPreview {id:String,#[serde(rename="messageId")] message_id:Option<u64>,#[serde(rename="wholeThread")] whole_thread:bool},
-    Rewind {id:String,#[serde(rename="messageId")] message_id:Option<u64>,#[serde(rename="wholeThread")] whole_thread:bool},
+    Rewind {id:String,#[serde(rename="messageId")] message_id:Option<u64>,#[serde(rename="wholeThread")] whole_thread:bool,#[serde(default,rename="preserveInputAttachments")] preserve_input_attachments:bool},
     TaskControl {id:String,action:String},
     DispatchTask {#[serde(rename="agentId")] agent_id:String,instruction:String,title:Option<String>,#[serde(rename="targetThreadId")] target_thread_id:Option<String>},
     RoomMessage {id:String,content:String,mentions:Vec<String>},
@@ -142,13 +140,15 @@ impl Action {
             Self::InteractionMode {id,mode}=> {if !["minimal","chat","work"].contains(&mode.as_str()) {return Err(invalid());}("PUT",format!("/chat/threads/{}/interaction-mode",segment(id)?),json!({"interactionMode":mode}))},
             Self::ExecutionMode {id,mode}=> {if !["manual","auto","auto_approve","full"].contains(&mode.as_str()) {return Err(invalid());}("PUT",format!("/chat/threads/{}/execution-mode",segment(id)?),json!({"executionMode":mode}))},
             Self::ThreadTools {id,disabled_tools}=> {if disabled_tools.len()>500 {return Err(invalid());}("PUT",format!("/chat/threads/{}/tools",segment(id)?),json!({"disabledTools":disabled_tools}))},
-            Self::EditMessage {thread_id,id,content,expected_revision}=> ("PATCH",format!("/chat/threads/{}/messages/{}",segment(thread_id)?,segment(id)?),{let mut body=json!({"content":content});if let Some(revision)=expected_revision {body["expectedRevision"]=json!(revision);}body}),
-            Self::DeleteMessagePair {thread_id,id}=> ("DELETE",format!("/chat/threads/{}/messages/{}/pair",segment(thread_id)?,segment(id)?),Value::Null),
-            Self::DeleteMessage {thread_id,id}=> ("DELETE",format!("/chat/threads/{}/messages/{}",segment(thread_id)?,segment(id)?),json!({})),
-            Self::RewindPreview {id,message_id,whole_thread}|Self::Rewind {id,message_id,whole_thread}=> {
+            Self::EditMessage {thread_id,id,content,expected_revision}=> {
+                if content.trim().is_empty() || content.len()>128*1024 || expected_revision.is_none_or(|revision|revision==0) {return Err(ChatError::new("INVALID_INPUT","消息正文或修订无效，请刷新会话后重试"));}
+                ("PATCH",format!("/chat/threads/{}/messages/{}",segment(thread_id)?,segment(id)?),json!({"content":content,"expectedRevision":expected_revision}))
+            },
+            Self::RewindPreview {id,message_id,whole_thread}|Self::Rewind {id,message_id,whole_thread,..}=> {
                 if !*whole_thread && message_id.is_none_or(|id|id==0) {return Err(invalid());}
                 let name=if matches!(self,Self::Rewind {..}) {"rewind"} else {"rewind-preview"};
                 let mut body=json!({"wholeThread":whole_thread});if let Some(id)=message_id {body["messageId"]=json!(id);}
+                if let Self::Rewind {preserve_input_attachments,..}=self {body["preserveInputAttachments"]=json!(preserve_input_attachments);}
                 ("POST",format!("/chat/threads/{}/{name}",segment(id)?),body)
             },
             Self::TaskControl {id,action}=> {if !["pause","resume","resume-interrupted","retry","cancel","read"].contains(&action.as_str()) {return Err(invalid());}("POST",format!("/background-tasks/{}/{}",segment(id)?,action),json!({}))},
@@ -175,7 +175,13 @@ mod tests {
         assert_eq!(segment("a/b?#").unwrap(),"a%2Fb%3F%23");
         assert!(Query::Threads {agent_id:"pero".into(),page:0,page_size:20}.route().is_err());
         assert!(Action::TaskControl {id:"t".into(),action:"reset".into()}.route().is_err());
-        assert!(Action::Rewind {id:"t".into(),message_id:None,whole_thread:false}.route().is_err());
+        assert!(Action::Rewind {id:"t".into(),message_id:None,whole_thread:false,preserve_input_attachments:false}.route().is_err());
+        assert!(serde_json::from_value::<Action>(json!({"kind":"delete_message","threadId":"t","id":"1"})).is_err());
+        assert!(serde_json::from_value::<Action>(json!({"kind":"delete_message_pair","threadId":"t","id":"1"})).is_err());
+        let rewind=Action::Rewind {id:"t".into(),message_id:Some(1),whole_thread:false,preserve_input_attachments:true}.route().unwrap();
+        assert_eq!(rewind.body.unwrap()["preserveInputAttachments"],true);
+        assert!(Action::EditMessage {thread_id:"t".into(),id:"1".into(),content:"新正文".into(),expected_revision:None}.route().is_err());
+        assert!(Action::EditMessage {thread_id:"t".into(),id:"1".into(),content:" ".into(),expected_revision:Some(1)}.route().is_err());
     }
     #[test]
     fn state_and_queue_routes_preserve_thread_identity_and_revisions() {

@@ -27,7 +27,7 @@ import RoomAccent from './RoomAccent.vue'
 import CompanionEmblem from './CompanionEmblem.vue'
 import RemoteIcon from '../remote/RemoteIcon.vue'
 import { useRoomViewport } from '../../composables/useRoomViewport'
-const props = defineProps({ title: { type: String, required: true }, subtitle: { type: String, default: '' }, tone: { type: String, default: 'pero' }, variant: { type: String, default: 'default' }, busy: Boolean })
+const props = defineProps({ title: { type: String, required: true }, subtitle: { type: String, default: '' }, tone: { type: String, default: 'pero' }, variant: { type: String, default: 'default' }, busy: Boolean, beforeClose: Function })
 defineEmits(['close'])
 const panel = ref(null)
 const visible = ref(true)
@@ -35,7 +35,7 @@ const { viewportStyle } = useRoomViewport()
 const remoteTheme = inject(REMOTE_THEME, null)
 const localTheme = inject(LOCAL_APPEARANCE, null)
 let previousFocus = null
-function requestClose() { if (!props.busy) visible.value = false }
+function requestClose() { if (!props.busy && props.beforeClose?.() !== false) visible.value = false }
 function handleKeydown(event) {
   if (event.key === 'Escape') { event.stopPropagation(); requestClose(); return }
   if (event.key !== 'Tab') return

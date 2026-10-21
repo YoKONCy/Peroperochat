@@ -9,7 +9,9 @@ self.onmessage = ({ data: { bytes, kind } }) => {
       if (entries.length < 600) entries.push({ name: file.name, size: file.originalSize, directory: file.name.endsWith('/') })
       const wanted = kind === 'docx' ? file.name === 'word/document.xml'
         : kind === 'xlsx' ? /^(xl\/(sharedStrings|workbook)\.xml|xl\/_rels\/workbook\.xml\.rels|xl\/worksheets\/sheet\d+\.xml)$/.test(file.name)
-          : kind === 'pptx' ? /^ppt\/slides\/slide\d+\.xml$/.test(file.name) : false
+          : kind === 'pptx' ? /^ppt\/slides\/slide\d+\.xml$/.test(file.name)
+            : ['odt', 'ods', 'odp'].includes(kind) ? file.name === 'content.xml'
+              : kind === 'epub' ? /\.(xhtml|html|htm)$/i.test(file.name) : false
       if (!wanted) return false
       if (++selected > 50) { truncated = true; return false }
       expanded += file.originalSize

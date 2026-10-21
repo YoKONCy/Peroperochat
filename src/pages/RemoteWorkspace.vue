@@ -22,16 +22,17 @@
           <p v-if="loading && !rows.length" class="room-empty">正在恢复对话…</p>
           <p v-else-if="!rows.length" class="room-empty">{{ online ? '对话从这一句开始。' : '此会话尚无可用缓存，连接恢复后会继续读取。' }}</p>
           <article v-for="row in rows" :key="row.surface.surfaceId" class="remote-message" :class="{ 'is-user': row.role === 'user', 'is-panel': !row.surface.messageId && row.surface.state !== 'open' }" :data-anchor="row.surface.surfaceId" :data-cursor="row.cursor || ''">
-            <div class="remote-message-label"><span>{{ row.role === 'user' ? '你' : agent?.name || '角色' }}<RoomIcon v-if="row.role !== 'user' && theme.decoration !== 'none'" :name="theme.decoration" artwork /></span><time v-if="row.timestamp">{{ time(row.timestamp) }}</time><button v-if="row.message && row.surface.state !== 'open'" class="remote-message-tools" aria-label="编辑、删除或回退此消息" :disabled="!online || busy" @click="messageAction = row.message; drawer = 'message'"><RoomIcon name="more" /></button></div>
-            <RemoteSurface :surface="row.surface" :disabled="!online" @resource="openResource" @updated="refreshConversation" />
+            <div class="remote-message-label"><RemoteAvatar class="remote-message-avatar" v-if="row.role !== 'user'" :id="row.surface.principalId || agent?.id" :label="agent?.name" /><span>{{ row.role === 'user' ? '你' : agent?.name || '角色' }}<RoomIcon v-if="row.role !== 'user' && theme.decoration !== 'none'" name="bow" /></span><time v-if="row.timestamp">{{ time(row.timestamp) }}</time><button v-if="row.message && row.surface.state !== 'open'" class="remote-message-tools" aria-label="编辑或回滚消息" :disabled="!online || busy" @click="messageAction = row.message; drawer = 'message'"><RoomIcon name="more" /></button></div>
+            <RemoteSurface :surface="row.surface" :disabled="!online" @resource="openResource" @updated="refreshConversation" @resize="contentResized" />
           </article>
 
           <div v-if="pendingForThread.length" class="remote-pending-summary"><RoomIcon name="help" /><span>有 {{ pendingForThread.length }} 项发送结果待核对</span><button @click="pending = pendingForThread[0]; drawer = 'pending'">查看</button></div>
         </template>
       </div>
-      <button v-if="selection && (!atEnd || historyWindow)" class="remote-jump-latest" @click="latest"><RoomIcon name="down" />回到最新</button>
+      <button v-if="selection && (!atEnd || historyWindow)" class="remote-jump-latest" @click="latest"><RoomIcon name="down" />{{ busy && !historyWindow ? '回复还在继续 · 回到底部' : '回到最新' }}</button>
       <form v-if="selection" class="remote-composer" @submit.prevent="send">
-        <div class="remote-composer-modes"><button v-for="item in interactionModes" :key="item.id" type="button" :class="{ selected: interactionMode === item.id }" :disabled="!online || !verified || busy || changingInteraction" @click="setInteraction(item.id)"><RoomIcon :name="item.icon" />{{ item.label }}</button><button type="button" :disabled="uploading || !!sending" @click="drawer = 'image-mode'">{{ imageModeOptions.find(item => item.value === imageMode)?.label || '自动识图' }}<RoomIcon name="down" /></button></div>
+        <RemoteComposerTools ref="composerTools" :key="selection.threadId" :thread-id="selection.threadId" :agent-id="selection.agentId" :content="draft" :blocked="!online || !verified || uploading || !!sending" :running="busy" @settings="drawer = 'thread-settings'" @voice="drawer = 'voice-input'" @new-thread="quickNewConversation" @clear="draft = ''; draftChanged()" @workbench="openManagement('workbench')" @changed="refreshConversation" @capabilities="inputCapabilities = $event" @busy="controlsBusy = $event" @pending="showManagementPending" @restore="restoreRegeneration" />
+        <div class="remote-composer-modes"><button v-for="item in interactionModes" :key="item.id" type="button" :class="{ selected: interactionMode === item.id }" :disabled="!online || !verified || busy || controlsBusy || changingInteraction" @click="setInteraction(item.id)"><RoomIcon :name="item.icon" />{{ item.label }}</button><button type="button" :disabled="uploading || !!sending" @click="drawer = 'image-mode'">{{ imageModeOptions.find(item => item.value === imageMode)?.label || '自动识图' }}<RoomIcon name="down" /></button></div>
         <div v-if="workspaceContext" class="remote-draft-attachments"><span><RoomIcon name="files" />工作台 · {{ workspaceContextLabel }}<button type="button" aria-label="移除工作台引用" @click="workspaceContext = null; draftChanged()"><RoomIcon name="close" /></button></span></div>
         <div v-if="attachments.length" class="remote-draft-attachments"><span v-for="(file, index) in attachments" :key="file.id"><RoomIcon name="document" />{{ file.name }}<button type="button" :aria-label="`移除附件 ${file.name}`" @click="attachments.splice(index, 1); draftChanged()"><RoomIcon name="close" /></button></span></div>
         <div class="remote-composer-line"><button type="button" class="room-icon-button" :disabled="!online || !verified || uploading || attachments.length >= 5" aria-label="添加附件" @click="fileInput.click()"><RoomIcon name="plus" /></button><textarea ref="composer" v-model="draft" :disabled="!sessionReady" rows="1" maxlength="131072" :placeholder="`和 ${agent?.name || '伙伴'} 接着聊…`" @input="draftChanged" @keydown="composeKey" /><button v-if="busy" type="button" class="remote-send" aria-label="停止远程回复" :disabled="stopping || !online || sending?.phase === 'preparing'" @click="stop"><RoomIcon name="stop" /></button><button type="submit" class="remote-send" :disabled="!canSend" :aria-label="busy ? '加入消息队列' : '发送消息'"><RoomIcon name="send" /></button></div>
@@ -60,9 +61,10 @@
     <RoomDrawer v-if="drawer === 'image-mode'" title="图片识别方式" subtitle="用于接下来发送的图片" :tone="tone" @close="drawer = null"><RemoteSelect v-model="imageMode" label="图片识别方式" :options="imageModeOptions" /></RoomDrawer>
     <RemoteConnections v-if="drawer === 'connections'" :prepare-switch="prepareModeSwitch" @close="drawer = null" />
     <RemoteThreadSettings v-if="drawer === 'thread-settings' && selection" :key="selection.threadId" :thread-id="selection.threadId" :agent-id="selection.agentId" @close="drawer = null" @updated="refreshConversation" @pending="showManagementPending" />
-    <RemoteMessageActions v-if="(drawer === 'message' || drawer === 'rewind') && selection" :key="`${selection.threadId}:${messageAction?.messageId || 'all'}`" :thread-id="selection.threadId" :message="drawer === 'rewind' ? null : messageAction" @close="drawer = null" @updated="latest" @pending="showManagementPending" />
+    <RemoteMessageActions v-if="(drawer === 'message' || drawer === 'rewind') && selection" :key="`${selection.threadId}:${messageAction?.messageId || 'all'}`" :thread-id="selection.threadId" :agent-id="selection.agentId" :blocked="busy || !online" :message="drawer === 'rewind' ? null : messageAction" @close="drawer = null" @updated="conversationUpdated" @pending="showManagementPending" />
+    <RemoteVoiceInput v-if="drawer === 'voice-input' && selection" :key="selection.threadId" :blocked="!online || !verified" @close="drawer = null" @transcript="applyTranscript" @pending="showManagementPending" @configure="drawer = null; openManagement('voice')" />
     <RemoteDetail v-if="detail" :key="JSON.stringify(detail.query)" :detail="detail" @close="detail = null" @resource="openResource" @thread="fromReference" />
-    <RemoteResource v-if="resource" :key="JSON.stringify(resource)" :resource="resourceInput" :name="resource.name" @close="resource = null" />
+    <RemoteResource v-if="resource" :key="JSON.stringify(resource)" :resource="resourceInput" :name="resource.name" @close="resource = null" @resource="openResource" />
   </main>
 </template>
 
@@ -84,6 +86,8 @@ import RemoteAppearance from '../components/remote/RemoteAppearance.vue'
 import RemoteManager from '../components/remote/RemoteManager.vue'
 import RemoteThreadSettings from '../components/remote/RemoteThreadSettings.vue'
 import RemoteMessageActions from '../components/remote/RemoteMessageActions.vue'
+import RemoteComposerTools from '../components/remote/RemoteComposerTools.vue'
+import RemoteVoiceInput from '../components/remote/RemoteVoiceInput.vue'
 import RemoteSelect from '../components/remote/RemoteSelect.vue'
 import { useRemoteTheme, defaultCharacterAppearance, characterCg } from '../services/remoteTheme'
 import { useRoomViewport } from '../composables/useRoomViewport'
@@ -91,19 +95,23 @@ import { currentToken, assertToken } from '../stores/mode'
 import { remoteClient, remoteConnections } from '../services/remote'
 import { readPresentation, writePresentation } from '../services/remotePresentation'
 import { uploadRemoteFile } from '../services/remoteMedia'
-import { remoteState, remoteViews, remoteExecutions, remotePendingRequests, remoteNotifications, readRemote, sendRemoteChat, performRemote, initializeRemote, reconnectRemote, resumeRemote, reconcileRemotePendingRequests, reviewRemoteRequest, refreshRemoteNotifications } from '../stores/remote'
+import { remoteState, remoteViews, remoteExecutions, remotePendingRequests, remoteNotifications, readRemote, sendRemoteChat, performRemote, initializeRemote, reconnectRemote, resumeRemote, reconcileRemotePendingRequests, reviewRemoteRequest, refreshRemoteNotifications, refreshRemotePendingRequests } from '../stores/remote'
 import { remoteItems } from '../utils/remoteMarkdown'
 import { managementOperationLabel } from '../services/remoteManagement'
 import '../styles/remote.css'
 import '../styles/remote-theme.css'
 import '../styles/remote-management.css'
+import '../styles/remote-interactions.css'
+import '../styles/remote-conversation.css'
+import { resolveRemoteResource } from '../services/remoteResources'
 
 const token = currentToken()
 const managementSection = ref(null), messageAction = ref(null), manager = ref(null)
 const imageMode = ref('auto')
+const inputCapabilities = ref(null), composerTools = ref(null), controlsBusy = ref(false)
 const workspaceContext = ref(null)
 const workspaceContextLabel = computed(() => [workspaceContext.value?.filePath, workspaceContext.value?.terminalId ? `终端 ${workspaceContext.value.terminalId}` : null].filter(Boolean).join(' · ').slice(-90))
-const imageModeOptions = [{ value: 'auto', label: '自动识图', description: '由 infOS 选择合适的图片处理方式' }, { value: 'native', label: '原生视觉', description: '使用当前模型的视觉能力' }, { value: 'relay', label: '图片转述', description: '使用 infOS 配置的多模态转述模型' }]
+const imageModeOptions = computed(() => [{ value: 'auto', label: '自动识图', description: '由 infOS 按当前模型与服务配置处理' }, { value: 'native', label: '原生视觉', description: inputCapabilities.value?.effective?.enableVision ? '当前模型支持视觉' : '当前模型未声明视觉能力', disabled: !!inputCapabilities.value && !inputCapabilities.value.effective?.enableVision }, { value: 'relay', label: '图片转述', description: inputCapabilities.value?.relayAvailable ? '转述服务已配置' : '尚未确认有可用的转述服务', disabled: inputCapabilities.value?.relayAvailable === false }])
 const { keyboardOpen, viewportStyle } = useRoomViewport()
 const selection = ref(null), tab = ref('chat'), drawer = ref(null), detail = ref(null), resource = ref(null), profile = ref(null)
 const draft = ref(''), attachments = ref([]), pages = ref([]), loading = ref(false), loadingHistory = ref(false), verified = ref(false), sending = ref(null), sessionReady = ref(false)
@@ -138,7 +146,7 @@ const oldestSnapshot = computed(() => snapshots.value[0]?.data)
 const isCached = computed(() => pages.value.some(page => { const view = remoteViews.get(JSON.stringify(page.query)); return view?.cached || !view && page.snapshot }))
 const serverExecution = computed(() => remoteItems(remoteViews.get(JSON.stringify({ kind: 'active_executions' }))?.data).find(item => item.threadId === selection.value?.threadId && ['running', 'paused'].includes(item.state)))
 const busy = computed(() => !!selection.value && (!!serverExecution.value || sending.value?.threadId === selection.value.threadId || [...remoteExecutions.values()].some(item => item.threadId === selection.value.threadId && item.state === 'observing')))
-const canSend = computed(() => online.value && verified.value && agent.value?.isEnabled !== false && !sending.value && !changingInteraction.value && !uploading.value && !loading.value && !!draft.value.trim())
+const canSend = computed(() => online.value && verified.value && agent.value?.isEnabled !== false && !controlsBusy.value && !sending.value && !changingInteraction.value && !uploading.value && !loading.value && !!draft.value.trim())
 const visibleAgents = computed(() => { const keyword = agentSearch.value.trim().toLowerCase(); return remoteState.agents.filter(item => !keyword || `${item.name} ${item.id}`.toLowerCase().includes(keyword)).slice(0, 24) })
 const threads = computed(() => remoteItems(threadQuery.value && remoteViews.get(JSON.stringify(threadQuery.value))?.data))
 const moreThreads = computed(() => { const data = threadQuery.value && remoteViews.get(JSON.stringify(threadQuery.value))?.data; return typeof data?.total === 'number' ? threadPage.value * 30 < data.total : threads.value.length >= 30 })
@@ -146,7 +154,7 @@ const pendingForThread = computed(() => [...remotePendingRequests.values()].filt
 const inboxCount = computed(() => remoteNotifications.size + [...remotePendingRequests.values()].filter(item => item.state === 'unknown').length + ['approvals', 'questions'].reduce((sum, kind) => sum + remoteItems(remoteViews.get(JSON.stringify({ kind }))?.data).length, 0))
 const needsConnectionSettings = computed(() => ['auth_required', 'incompatible'].includes(remoteState.connection))
 const connectionLabel = computed(() => ({ auth_required: '设备授权需要更新', incompatible: '当前实例或协议需要处理', reconnecting: '正在重新连接 infOS', connecting: '正在连接你的 infOS', offline: '暂时离线，当前空间仍保留', online: '正在同步角色与会话' }[remoteState.connection] || '正在连接 infOS'))
-const resourceInput = computed(() => { if (!resource.value) return null; const input = { ...resource.value }; delete input.name; return input })
+const resourceInput = computed(() => resource.value)
 const rows = computed(() => {
   const messages = new Map(), descriptors = new Map(), cursors = new Map()
   for (const page of snapshots.value) {
@@ -268,6 +276,7 @@ async function selectConversation(item) {
   if (!item.threadId || !item.agentId) return
   try { await manager.value?.prepareLeave?.() } catch (failure) { error.value = failure.message; return }
   if (uploading.value) { error.value = '附件正在上传，完成后再切换会话'; return }
+  inputCapabilities.value = null
   const request = ++version
   const promise = (async () => {
     if (selection.value) await persistCurrent()
@@ -356,6 +365,20 @@ async function useWorkbenchContext(input) {
     draftChanged(); await persistCurrent(); guard(request); await changeTab('chat')
   } catch (failure) { if (!disposed) error.value = failure.message }
 }
+async function quickNewConversation() { pickerAgent.value = selection.value?.agentId || remoteState.activeAgentId; await createConversation(); if (threadError.value) error.value = threadError.value }
+async function conversationUpdated(change) { if (change?.kind === 'rewind') await latest(); else await refreshConversation(); await composerTools.value?.refresh?.() }
+function applyTranscript(text) { if (!selection.value || !sessionReady.value) return; const next = [draft.value.trimEnd(), String(text).trim()].filter(Boolean).join('\n'); if (next.length > 131072) { error.value = '文字过长，请缩短后再加入'; return }; draft.value = next; draftChanged(); drawer.value = null }
+async function restoreRegeneration(recovery) {
+  const request = version
+  try {
+    guard(request)
+    if (recovery.threadId !== selection.value?.threadId || recovery.agentId !== selection.value?.agentId) throw new Error('恢复记录不属于当前会话')
+    if (draft.value.trim() || attachments.value.length) throw new Error('输入框已有草稿，请先发送或清空，避免覆盖')
+    draft.value = recovery.input.content
+    attachments.value = (recovery.input.attachments || []).map(file => ({ id: file.id, name: file.name || file.originalName || '附件' }))
+    workspaceContext.value = null; draftChanged(); await persistCurrent(); guard(request); await composerTools.value?.clearRecovery?.()
+  } catch (failure) { if (!disposed && request === version) error.value = failure.message }
+}
 async function showManagementPending() {
   try { await refreshRemotePendingRequests(); guard(); const item = [...remotePendingRequests.values()].find(item => item.state === 'unknown'); if (item) { pending.value = item; drawer.value = 'pending' } else error.value = '暂无待核对操作，可刷新对应管理页面查看服务端状态' }
   catch (failure) { if (!disposed) error.value = failure.message }
@@ -387,7 +410,29 @@ async function attach(event) {
   try { const result = await uploadRemoteFile(item.threadId, file); guard(request); if (!result?.id) throw new Error('服务端未返回附件身份'); attachments.value.push({ id: result.id, name: file.name }); reading.editId = crypto.randomUUID(); reading.sendRequestId = null; await persistCurrent() }
   catch (failure) { if (!disposed && request === version) error.value = failure.message } finally { if (!disposed && request === version) uploading.value = false }
 }
-function openResource(value) { resource.value = value }
+async function openResource(value) {
+  const request = version
+  try {
+    const file = await resolveRemoteResource(value, { agentId: selection.value?.agentId, threadId: selection.value?.threadId }, token)
+    guard(request)
+    if (file.kind === 'knowledge') { detail.value = { kind: 'document', query: { kind: 'document', id: file.id }, title: file.name || '文档' }; return }
+    resource.value = { ...file, agentId: file.agentId || selection.value?.agentId, threadId: file.threadId || selection.value?.threadId }
+  } catch (failure) { if (!disposed && request === version) error.value = failure.message }
+}
+let contentFrame = null
+function contentResized() {
+  if (contentFrame !== null || disposed || tab.value !== 'chat') return
+  contentFrame = requestAnimationFrame(() => {
+    contentFrame = null
+    if (disposed || tab.value !== 'chat' || loading.value || !transcript.value) return
+    // 异步排版与媒体加载也遵循阅读位置；不能在用户翻历史时抢走滚动。
+    if (atEnd.value && !historyWindow.value) transcript.value.scrollTop = transcript.value.scrollHeight
+    else if (reading.anchor) {
+      const anchor = [...transcript.value.querySelectorAll('[data-anchor]')].find(element => element.dataset.anchor === reading.anchor)
+      if (anchor) transcript.value.scrollTop += anchor.getBoundingClientRect().top - transcript.value.getBoundingClientRect().top - reading.offset
+    }
+  })
+}
 async function fromReference(value) { if (!value.threadId || !value.agentId) { error.value = '此事项没有可打开的会话'; return }; detail.value = null; await selectConversation(value) }
 async function renameConversation() { if (!selection.value || mutating.value) return; const request = version, item = { ...selection.value }, title = renameTitle.value.trim(); mutating.value = true; try { await performRemote({ kind: 'rename_thread', id: item.threadId, title }); guard(request); selection.value.title = title; await writePresentation({ kind: 'home' }, selection.value, token); guard(request); drawer.value = null } catch (failure) { if (!disposed && request === version) error.value = failure.message } finally { if (!disposed) mutating.value = false } }
 async function deleteConversation() { if (!selection.value || mutating.value) return; const request = version, item = { ...selection.value }; mutating.value = true; try { await persistCurrent(); guard(request); await performRemote({ kind: 'delete_thread', id: item.threadId }); guard(request); await writePresentation({ kind: 'home' }, null, token); guard(request); selection.value = null; sessionReady.value = false; pages.value = []; draft.value = ''; attachments.value = []; workspaceContext.value = null; drawer.value = null; await showThreads() } catch (failure) { if (!disposed && request === version) error.value = failure.message } finally { if (!disposed) mutating.value = false } }
@@ -438,6 +483,7 @@ function visibility() { if (document.hidden) saveOnHide(); else resume() }
 async function warmInbox() { try { guard(); await Promise.allSettled(['approvals', 'questions', 'tools', 'active_executions'].map(kind => readRemote({ kind }))) } catch { /* 连接提示保留在主界面，列表本身保留各自的读取错误。 */ } }
 
 watch(() => remoteState.activeAgentId, () => { if (!selection.value && themeReady.value) loadCharacterAppearance() })
+watch(imageModeOptions, options => { if (options.find(item => item.value === imageMode.value)?.disabled) imageMode.value = 'auto' })
 watch(() => pending.value?.requestId, () => { reviewed.value = false; reviewNote.value = '' })
 watch(drawer, value => { if (value !== 'pending') { reviewed.value = false; reviewNote.value = '' } })
 watch(() => [...remotePendingRequests.keys()].join('|'), async () => {
@@ -501,6 +547,7 @@ onMounted(async () => {
   finally { if (!disposed) { remoteState.restoringView = false; consumeNotificationOpen() } }
 })
 onBeforeUnmount(() => {
+  if (contentFrame !== null) cancelAnimationFrame(contentFrame)
   clearTimeout(draftTimer); clearTimeout(scrollTimer); clearTimeout(verificationTimer); clearTimeout(projectionTimer)
   if (selection.value && sessionReady.value) { captureReading(); writePresentation(sessionScope(), { ...reading, workspaceContext: workspaceContext.value, draft: draft.value, attachments: attachments.value.map(file => ({ id: file.id, name: file.name })) }, token).catch(() => {}) }
   disposed = true; version++; listVersion++; document.removeEventListener('visibilitychange', visibility)

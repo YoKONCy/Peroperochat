@@ -2,14 +2,19 @@
 export function documentKind(name, mime = '') {
   const extension = String(name || '').split('.').pop().toLowerCase()
   if (mime === 'application/pdf' || extension === 'pdf') return 'pdf'
-  if (['docx', 'xlsx', 'pptx', 'zip'].includes(extension)) return extension
+  if (['doc', 'docx', 'xlsx', 'pptx', 'zip', 'odt', 'ods', 'odp', 'epub', 'rtf'].includes(extension)) return extension
+  if (['docm', 'xlsm', 'pptm'].includes(extension)) return { docm: 'docx', xlsm: 'xlsx', pptm: 'pptx' }[extension]
   const office = { 'application/vnd.openxmlformats-officedocument.wordprocessingml.document': 'docx', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': 'xlsx', 'application/vnd.openxmlformats-officedocument.presentationml.presentation': 'pptx', 'application/zip': 'zip' }
   if (office[mime]) return office[mime]
+  if (mime === 'application/msword') return 'doc'
+  if (['md', 'markdown', 'mdown'].includes(extension) || mime === 'text/markdown') return 'markdown'
+  if (['html', 'htm'].includes(extension) || ['text/html', 'application/xhtml+xml'].includes(mime)) return 'html'
+  if (extension === 'svg' || ['image/svg+xml', 'application/svg+xml'].includes(mime)) return 'svg'
   if (extension === 'csv' || mime === 'text/csv') return 'csv'
   if (mime.startsWith('text/') || /^(application\/(json|xml|javascript|x-yaml)|image\/svg\+xml)$/.test(mime) || ['txt', 'md', 'json', 'xml', 'html', 'svg', 'yaml', 'yml', 'toml', 'log', 'js', 'ts', 'py', 'rs', 'css', 'sh', 'sql', 'ini'].includes(extension)) return 'text'
-  if (/^image\/(png|jpeg|webp|gif|avif|bmp|x-icon)$/.test(mime)) return 'image'
-  if (/^audio\//.test(mime)) return 'audio'
-  if (/^video\//.test(mime)) return 'video'
+  if (/^image\/(png|jpeg|webp|gif|avif|bmp|x-icon)$/.test(mime) || /^(png|jpe?g|webp|gif|avif|bmp|ico)$/.test(extension)) return 'image'
+  if (/^audio\//.test(mime) || /^(mp3|wav|ogg|oga|opus|m4a|aac|flac)$/.test(extension)) return 'audio'
+  if (/^video\//.test(mime) || /^(mp4|webm|mov|m4v|ogv|mkv)$/.test(extension)) return 'video'
   return 'binary'
 }
 export function formatFileSize(size) {
@@ -29,6 +34,8 @@ const attribute = (node, name) => Array.from(node.attributes).find(item => item.
 const textRuns = node => elements(node, 't').map(item => item.textContent).join('')
 const paragraphs = doc => elements(doc, 'p').slice(0, 2000).map(node => textRuns(node)).filter(Boolean).join('\n\n').slice(0, 256 * 1024)
 export function officePreview(kind, files) {
+  if (['odt', 'ods', 'odp'].includes(kind)) return [{ title: '文档正文', text: Array.from(xml(files['content.xml']).getElementsByTagNameNS('*', 'p')).slice(0, 2000).map(node => node.textContent).join('\n\n').slice(0, 256 * 1024) }]
+  if (kind === 'epub') return Object.entries(files).filter(([name]) => /\.(xhtml|html|htm)$/i.test(name)).slice(0, 50).map(([name, source]) => { const doc = new DOMParser().parseFromString(source, 'text/html'); for (const element of doc.querySelectorAll('script,style,nav')) element.remove(); return { title: doc.querySelector('title,h1,h2')?.textContent || name.split('/').pop(), text: doc.body.textContent.slice(0, 256 * 1024) } })
   if (kind === 'docx') return [{ title: '正文', text: paragraphs(xml(files['word/document.xml'])) || '文档中没有可预览的正文' }]
   if (kind === 'pptx') return Object.keys(files).filter(name => /^ppt\/slides\/slide\d+\.xml$/.test(name)).sort((a, b) => a.localeCompare(b, undefined, { numeric: true })).map((name, i) => ({ title: `第 ${i + 1} 页`, text: paragraphs(xml(files[name])) || '此页没有可预览的文字' }))
   const shared = files['xl/sharedStrings.xml'] ? elements(xml(files['xl/sharedStrings.xml']), 'si').slice(0, 50000).map(textRuns) : []

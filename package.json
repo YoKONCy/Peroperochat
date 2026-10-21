@@ -1,6 +1,6 @@
 {
   "name": "ai-smart-buddy",
-  "version": "1.4.4",
+  "version": "1.4.5",
   "private": true,
   "license": "GPL-3.0",
   "type": "module",
@@ -27,8 +27,11 @@
     "dompurify": "^3.3.0",
     "element-plus": "^2.11.8",
     "fflate": "0.8.2",
+    "highlight.js": "11.11.1",
     "html5-qrcode": "^2.3.8",
+    "katex": "0.18.4",
     "marked": "^17.0.1",
+    "mermaid": "11.16.1",
     "pdfjs-dist": "6.4.299",
     "vue": "^3.5.12",
     "vue-router": "^4.4.5"

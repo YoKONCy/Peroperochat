@@ -1,5 +1,6 @@
 // 来自定稿原型的受信任矢量源码；不接收服务端传入的 SVG。
 export const remoteIconPaths = {
+    brain: '<path class="icon-wash" d="M12 4a4 4 0 0 0-7-1 4 4 0 0 0-2 7 4 4 0 0 0 1 7 4 4 0 0 0 8 3 4 4 0 0 0 8-3 4 4 0 0 0 1-7 4 4 0 0 0-2-7 4 4 0 0 0-7 1Z"/><path d="M12 4a4 4 0 0 0-7-1 4 4 0 0 0-2 7 4 4 0 0 0 1 7 4 4 0 0 0 8 3 4 4 0 0 0 8-3 4 4 0 0 0 1-7 4 4 0 0 0-2-7 4 4 0 0 0-7 1Zm0 0v16M6 7c3 0 4 3 2 5m10-5c-3 0-4 3-2 5M5 17c0-3 3-4 5-2m9 2c0-3-3-4-5-2"/>',
     audio: '<path class="icon-wash" d="M10 5 5 9H2v6h3l5 4Z"/><path d="M10 5 5 9H2v6h3l5 4Zm4 3a6 6 0 0 1 0 8m3-11a10 10 0 0 1 0 14"/><path class="icon-detail" d="M13 11v2"/>',
     terminal: '<path class="icon-wash" d="M2.5 4h19v16h-19Z"/><path d="M2.5 4h19v16h-19ZM3 8h18m-15 3 3 3-3 3m6 0h5"/><path class="icon-detail" d="M5 6h.5m2 0H8"/>',
     code: '<path class="icon-wash" d="m12 2 10 10-10 10L2 12Z"/><path d="m8 8-4 4 4 4m8-8 4 4-4 4m-3-11-2 14"/><path class="icon-detail" d="m3 5 2-2m14 18 2-2"/>',

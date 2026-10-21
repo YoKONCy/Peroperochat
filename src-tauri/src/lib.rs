@@ -109,6 +109,7 @@ pub fn run() {
         Ok(())
     })
     .manage(remote::Runtime::default())
+    .manage(remote::conversation::Workflows::default())
     .plugin(tauri_plugin_shell::init())
     .plugin(tauri_plugin_notification::init())
     .plugin(tauri_plugin_haptics::init())
@@ -128,6 +129,12 @@ pub fn run() {
         remote::management::remote_manage_upload,
         remote::management::remote_voice_tts,
         remote::files::remote_export_text,
+        remote::conversation::remote_prepare_regeneration,
+        remote::conversation::remote_commit_regeneration,
+        remote::conversation::remote_regeneration_recovery,
+        remote::conversation::remote_discard_regeneration,
+        remote::conversation::remote_model_controls,
+        remote::conversation::remote_confirm_rewind,
         remote::downloads::remote_download_resource,
         remote::downloads::remote_cancel_download,
         remote::remote_action,
@@ -151,6 +158,8 @@ pub fn run() {
         remote::resources::remote_upload,
         remote::resources::remote_resource,
         remote::resources::remote_resource_info,
+        remote::resources::remote_resolve_resource,
+        remote::resources::remote_html_preview,
         db::get_memories,
         db::delete_memory,
         local::reminders::local_reminder_query,
