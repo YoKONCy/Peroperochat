@@ -41,15 +41,15 @@
       <div class="room-menu-list">
         <button v-if="loadError" @click="loadRoomData(); drawer = null"><RoomIcon name="refresh" /><span><strong>重新加载房间</strong><small>再取一次对话与角色状态</small></span><RoomIcon name="arrow" /></button>
         <button @click="openFullChat"><RoomIcon name="chat" /><span><strong>聊天记录</strong><small>查看完整对话</small></span><RoomIcon name="arrow" /></button>
+        <button @click="navigate('/group')"><RoomIcon name="group" /><span><strong>家庭群聊</strong><small>和伙伴们一起聊</small></span><RoomIcon name="arrow" /></button>
+        <button @click="navigate('/game/blackjack')"><RoomIcon name="game" /><span><strong>21 点小游戏</strong><small>来玩一局吧</small></span><RoomIcon name="arrow" /></button>
         <button @click="drawer = 'journal'"><RoomIcon name="diary" /><span><strong>日记</strong><small>查看和管理记忆</small></span><RoomIcon name="arrow" /></button>
         <button @click="drawer = 'reminders'"><RoomIcon name="bell" /><span><strong>提醒</strong><small>{{ reminderTotal ? `${reminderTotal} 件待办的小事` : '安排时间，查看或取消提醒' }}</small></span><RoomIcon name="arrow" /></button>
         <button @click="drawer = 'profile'"><RoomIcon name="profile" /><span><strong>关于 {{ agent.name }}</strong><small>此刻的心情与角色资料</small></span><RoomIcon name="arrow" /></button>
         <button @click="drawer = 'wardrobe'"><RoomIcon name="hanger" /><span><strong>衣柜</strong><small>更换角色服装</small></span><RoomIcon name="arrow" /></button>
         <button @click="drawer = 'appearance'"><RoomIcon name="palette" /><span><strong>显示与主题</strong><small>Live2D、静态立绘与玻璃配色</small></span><RoomIcon name="arrow" /></button>
-        <button @click="drawer = 'remote'"><RoomIcon name="remote" /><span><strong>infOS 客户端</strong><small>连接远程实例 · 切换运行模式</small></span><RoomIcon name="arrow" /></button>
         <button @click="navigate('/settings')"><RoomIcon name="settings" /><span><strong>设置</strong><small>模型连接与聊天偏好</small></span><RoomIcon name="arrow" /></button>
       </div>
-      <details class="room-other-spaces"><summary>其他空间</summary><div class="room-secondary-links"><button @click="navigate('/group')"><RoomIcon name="group" />家庭群聊</button><button @click="navigate('/game/blackjack')"><RoomIcon name="game" />21 点小游戏</button></div></details>
     </RoomDrawer>
 
     <RoomDrawer v-if="drawer === 'profile'" :title="`关于 ${agent.name}`" subtitle="角色资料" :tone="tone" @close="drawer = null">
@@ -390,15 +390,6 @@ onBeforeUnmount(() => {
 .room-menu-list strong { font-weight: 500; font-size: 14px; }
 .room-menu-list small { color: var(--room-muted); font-size: 11px; }
 .room-menu-list > button > svg:last-child { width: 14px; height: 14px; color: var(--room-muted); }
-.room-other-spaces { margin-top: 26px; font-size: 12px; color: var(--room-muted); }
-.room-other-spaces summary { padding: 10px 0; cursor: pointer; }
-.room-secondary-links { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 12px; }
-.room-secondary-links button { display: flex; align-items: center; gap: 9px; padding: 14px 10px; border: 1px solid var(--room-line); border-radius: 12px; background: transparent; font-size: 12px; }
-.room-secondary-links svg { width: 17px; height: 17px; }
-.room-secondary-links button > span { margin-left: auto; }
-.room-secondary-links .room-remote-unavailable { opacity: 1; color: var(--room-muted); background: var(--room-subtle); }
-.room-secondary-links .room-remote-unavailable > span { margin-left: 0; display: flex; flex-direction: column; gap: 4px; }
-.room-remote-unavailable small { font-size: 10px; color: var(--room-muted); }
 .room-profile-identity { display: flex; align-items: center; gap: 20px; padding: 8px 0 25px; }
 .profile-avatar { width: 82px; height: 100px; border-radius: 3px 12px 3px 3px; }
 .room-profile-identity h3 { font-size: 25px; font-weight: 500; margin: 0 0 8px; }

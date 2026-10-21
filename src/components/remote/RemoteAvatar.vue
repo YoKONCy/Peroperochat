@@ -1,9 +1,9 @@
-<template><CharacterAvatar :src="source" :label="label" /></template>
+<template><CharacterAvatar :src="source" :label="label" :fit="fit" /></template>
 <script setup>
 import { ref, watch, onBeforeUnmount } from 'vue'
 import CharacterAvatar from '../companion/CharacterAvatar.vue'
 import { acquireRemoteAvatar, remoteAvatarRevisions } from '../../services/remoteMedia'
-const props = defineProps({ id: String, label: String })
+const props = defineProps({ id: String, label: String, fit: { type: String, default: 'cover' } })
 const source = ref('')
 let version = 0
 let resource = null

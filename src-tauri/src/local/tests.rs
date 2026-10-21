@@ -289,10 +289,13 @@ fn builtin_persona_update_only_changes_requested_roles_once() {
     let before=json!({"pero":{"name":"自定义显示名","persona_prompt":"旧 Pero 人设","avatar":"我的头像","system_prompt":"保留系统设定"},
         "nana":{"name":"Nana","persona_prompt":"旧 Nana 人设"},"custom":{"name":"其他角色","persona_prompt":"保留自定义人设"}});
     identity::set_value_in(&conn,"ppc.agents",&json!(before.to_string())).unwrap();
+    // 已执行过上一版人设同步的安装，也应收到本次更新。
+    conn.execute_batch("CREATE TABLE IF NOT EXISTS local_config_migrations(version INTEGER PRIMARY KEY); INSERT INTO local_config_migrations(version) VALUES(2);").unwrap();
     identity::update_builtin_personas(&mut conn).unwrap();
     let mut updated=identity::agents_from(&identity::snapshot_in(&conn).unwrap()).unwrap();
-    assert!(updated["pero"]["persona_prompt"].as_str().unwrap().contains("可爱但克制"));
-    assert!(updated["nana"]["persona_prompt"].as_str().unwrap().contains("不禁夸"));
+    let defaults:Value=serde_json::from_str(include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/../shared/defaultAgents.json"))).unwrap();
+    assert_eq!(updated["pero"]["persona_prompt"],defaults["pero"]["persona_prompt"]);
+    assert_eq!(updated["nana"]["persona_prompt"],defaults["nana"]["persona_prompt"]);
     assert!(!updated.to_string().contains("owner_appellation"));assert!(!updated.to_string().contains("owner_name"));
     assert_eq!(updated["pero"]["name"],before["pero"]["name"]);assert_eq!(updated["pero"]["avatar"],"我的头像");
     assert_eq!(updated["pero"]["system_prompt"],"保留系统设定");assert_eq!(updated["custom"]["persona_prompt"],"保留自定义人设");

@@ -1,24 +1,28 @@
 <template>
   <main class="remote-workspace remote-themed" :class="{ 'is-chat-room': tab === 'chat' }" :data-keyboard-open="keyboardOpen" :data-remote-theme="theme.mode" :data-decoration="theme.decoration" :data-bubble="theme.bubble" :data-reduce-motion="theme.reduceMotion" :style="[viewportStyle, theme.style]" :inert="drawer || detail || resource ? true : undefined">
     <header v-if="tab === 'chat'" class="chat-room-header">
-      <button type="button" class="chat-header-back" aria-label="返回首页" @click="changeTab('home')"><RoomIcon name="back" /></button>
+      <button type="button" class="chat-header-back" aria-label="返回上一页" @click="returnFromChat"><RoomIcon name="back" /></button>
       <button type="button" class="chat-header-avatar" :aria-label="`${agent?.name || '角色'}资料`" @click="drawer = 'character'"><RemoteAvatar :id="agent?.id" :label="agent?.name" /></button>
       <div class="chat-header-heading"><button type="button" class="chat-header-name" aria-label="选择角色与会话" @click="showThreads">{{ agent?.name || '选择会话' }}<RoomIcon v-if="theme.decoration !== 'none'" name="bow" /></button><button type="button" class="chat-header-topic" @click="showThreads"><i :data-online="online" /><span>{{ selection?.title || '选一段对话，接着聊' }}</span><RoomIcon name="down" /></button></div>
-      <button type="button" class="chat-header-more" aria-label="会话与其他功能" @click="drawer = 'actions'"><RoomIcon name="more" /><i v-if="inboxCount" /></button>
+      <button type="button" class="chat-header-more" aria-label="当前会话操作" @click="drawer = 'actions'"><RoomIcon name="more" /></button>
     </header>
-    <header v-else-if="tab !== 'home'" class="remote-header">
+    <header v-else-if="!['home', 'conversations'].includes(tab)" class="remote-header phase-global-header">
       <button class="remote-avatar-button" :aria-label="`${agent?.name || '角色'}资料`" @click="drawer = 'character'"><RemoteAvatar :id="agent?.id" :label="agent?.name" /><span class="remote-presence" :class="{ online }" /></button>
       <div class="remote-heading"><button class="remote-server" @click="drawer = 'connections'">infOS<span>/ {{ profile?.displayName || '远程连接' }}</span><RoomIcon name="down" /></button><button class="remote-thread-title" @click="showThreads">{{ selection?.title || agent?.name || '选择会话' }}<RoomIcon name="down" /></button></div>
       <button class="room-icon-button" aria-label="展开角色 CG" @click="drawer = 'art'"><RoomIcon name="expand" /></button>
       <button class="room-icon-button remote-inbox-button" :aria-label="`通知与待处理事项${inboxCount ? `，${inboxCount} 项` : ''}`" @click="changeTab('inbox')"><RoomIcon name="bell" /><i v-if="inboxCount">{{ inboxCount > 99 ? '99+' : inboxCount }}</i></button>
-      <button class="room-icon-button" aria-label="会话操作" @click="drawer = 'actions'"><RoomIcon name="more" /></button>
+      <button class="room-icon-button" aria-label="切换空间与连接" @click="drawer = 'connections'"><RoomIcon name="connection" /></button>
     </header>
     <RemoteFeedback :message="!online || !remoteState.ready ? connectionLabel : ''" :tone="needsConnectionSettings ? 'warning' : 'info'" :action-label="needsConnectionSettings ? '连接设置' : !reconnecting && !remoteState.initializing ? '重试' : undefined" @action="needsConnectionSettings ? drawer = 'connections' : reconnect()" />
     <RemoteFeedback v-if="!drawer && !detail && !resource" :message="error" @dismiss="error = ''" />
+    <RemoteFeedback :message="recoveryError" :action-label="t('重试')" @action="loadDraftRecoveries" />
     <RemoteFeedback :message="storageError" action-label="重试" @action="retryPersist" />
 
-    <RemoteHome v-if="tab === 'home'" :agent="agent" :state="characterState" :profile="profile" :selection="selection" :image="cg" :show-cg="display.showCg" :decoration="theme.decoration" :inbox-count="inboxCount" @art="drawer = 'art'" @connections="drawer = 'connections'" @appearance="drawer = 'appearance'" @resume="changeTab('chat')" @threads="showThreads" @tasks="changeTab('tasks')" @library="changeTab('library')" @inbox="changeTab('inbox')" @detail="detail = $event" />
-    <section v-show="tab === 'chat'" class="remote-conversation">
+    <div class="remote-page-stage" :data-direction="navDirection" :aria-busy="navigationPending">
+    <Transition name="workspace-page" @before-leave="deactivatePage" @before-enter="activatePage"><section v-show="tab === 'home'" class="workspace-page" data-page="home" :inert="tab !== 'home' ? true : undefined">
+    <RemoteHome v-if="visitedPages.includes('home')" :agent="agent" :state="characterState" :profile="profile" :selection="selection" :image="cg" :show-cg="display.showCg" :decoration="theme.decoration" :inbox-count="inboxCount" @art="drawer = 'art'" @connections="drawer = 'connections'" @appearance="drawer = 'appearance'" @resume="changeTab('chat')" @threads="showThreads" @tasks="changeTab('tasks')" @library="changeTab('library')" @inbox="changeTab('inbox')" @detail="detail = $event" />
+    </section></Transition>
+    <Transition name="workspace-page" @before-leave="deactivatePage" @before-enter="activatePage"><section v-show="tab === 'chat'" class="remote-conversation workspace-page" data-page="chat" :inert="tab !== 'chat' ? true : undefined">
       <div v-if="selection && isCached && !online" class="remote-cache-note">离线中，先看看上次的对话。</div>
       <div ref="chatStage" class="chat-stage">
       <div ref="transcript" class="remote-transcript" aria-label="会话消息" @scroll.passive="onScroll" @click="openLink">
@@ -26,7 +30,7 @@
         <template v-else>
           <button v-if="oldestSnapshot?.hasMoreBefore" class="remote-load-history" :disabled="loadingHistory" @click="older">{{ loadingHistory ? '正在读取…' : '查看更早的消息' }}</button>
           <p v-if="loading && !rows.length" class="room-empty">正在恢复对话…</p>
-          <p v-else-if="!rows.length && !conversationReady" class="room-empty">{{ conversationSyncing ? '正在同步对话…' : online ? '暂时没能载入对话。' : '连上 infOS 后，就能看到这段对话。' }}<button v-if="online && !conversationSyncing" class="room-text-button" @click="refreshConversation">重新加载</button></p>
+          <p v-else-if="!rows.length && !conversationReady" class="room-empty">{{ conversationSyncing ? '正在同步对话…' : online ? '暂时没能载入对话。' : '连上 infOS 后，就能看到这段对话。' }}<button v-if="online && !conversationSyncing" class="room-text-button" @click="refreshConversation({ retryUnavailable: true })">重新加载</button></p>
           <p v-else-if="!rows.length" class="room-empty">对话从这一句开始。</p>
           <template v-for="(row, index) in rows" :key="row.surface.surfaceId">
             <div v-if="row.timestamp && (!index || dayKey(row.timestamp) !== dayKey(rows[index - 1].timestamp))" class="chat-date-divider"><span>{{ dayLabel(row.timestamp) }}</span></div>
@@ -44,7 +48,7 @@
       <button v-if="selection && (!atEnd || historyWindow)" class="remote-jump-latest" @click="latest"><RoomIcon name="down" />{{ busy && !historyWindow ? '回复还在继续 · 回到底部' : '回到最新' }}</button>
       </div>
       <div v-if="selection" class="chat-composer-dock">
-      <RemoteQueue ref="queuePanel" :key="selection.threadId" :thread-id="selection.threadId" :agent-id="selection.agentId" :visible="tab === 'chat'" @updated="refreshConversation" @pending="showManagementPending" />
+      <RemoteQueue v-if="queueReady" ref="queuePanel" :key="selection.threadId" :thread-id="selection.threadId" :agent-id="selection.agentId" :visible="tab === 'chat'" @updated="refreshConversation" @pending="showManagementPending" />
       <form class="chat-composer" @submit.prevent="send">
         <RemoteComposerTools ref="composerTools" :key="selection.threadId" :thread-id="selection.threadId" :agent-id="selection.agentId" :content="draft" :blocked="!online || !verified || uploading || !!sending" :running="busy" :interaction-mode="interactionMode" :mode-disabled="!online || !verified || busy || controlsBusy || changingInteraction" :image-label="imageModeOptions.find(item => item.value === imageMode)?.label" @interaction="setInteraction" @image-mode="drawer = 'image-mode'" @settings="drawer = 'thread-settings'" @voice="drawer = 'voice-input'" @new-thread="quickNewConversation" @clear="draft = ''; draftChanged()" @workbench="openManagement('workbench')" @changed="refreshConversation" @capabilities="inputCapabilities = $event" @busy="controlsBusy = $event" @pending="showManagementPending" @restore="restoreRegeneration">
         <div v-if="workspaceContext" class="remote-draft-attachments"><span><RoomIcon name="files" />工作台 · {{ workspaceContextLabel }}<button type="button" aria-label="移除工作台引用" @click="workspaceContext = null; draftChanged()"><RoomIcon name="close" /></button></span></div>
@@ -56,21 +60,29 @@
         <input ref="fileInput" type="file" hidden @change="attach" />
       </form>
       </div>
-    </section>
+    </section></Transition>
 
-    <div v-if="tab === 'manage'" class="remote-section-body"><RemoteManager ref="manager" :key="`${selection?.agentId || remoteState.activeAgentId}:${selection?.threadId}`" :agent-id="selection?.agentId || remoteState.activeAgentId" :thread-id="selection?.threadId" :initial-section="managementSection" @pending="showManagementPending" @resource="openResource" @thread="fromReference" @context="useWorkbenchContext" /></div>
-    <div v-if="!['chat', 'home', 'manage'].includes(tab)" class="remote-section-body"><button v-if="tab === 'library'" class="room-text-button" @click="openManagement('memories')"><RoomIcon name="edit" />资料管理、导入与编辑</button><RemoteCollection :key="tab" :kind="tab" :agent-id="selection?.agentId || remoteState.activeAgentId" :thread-id="selection?.threadId" @resource="openResource" @detail="detail = $event" @thread="fromReference" @pending="pending = $event; drawer = 'pending'" @create-task="drawer = 'dispatch'" /></div>
-    <nav v-if="!keyboardOpen && tab !== 'chat'" class="remote-navigation" aria-label="远程客户端导航"><button v-for="item in tabs" :key="item.id" :aria-current="tab === item.id ? 'page' : undefined" :class="{ selected: tab === item.id }" @click="changeTab(item.id)"><RoomIcon v-if="tab === item.id && theme.decoration !== 'none'" class="remote-nav-ornament" :name="theme.decoration" artwork /><span><RoomIcon :name="item.icon" /></span>{{ item.label }}</button></nav>
+    <Transition name="workspace-page" @before-leave="deactivatePage" @before-enter="activatePage" @after-enter="restorePagePosition"><section v-if="visitedPages.includes('conversations')" v-show="tab === 'conversations'" class="remote-section-body workspace-page phase-conversation-page" data-page="conversations" :inert="tab !== 'conversations' ? true : undefined"><RemoteConversationHub ref="conversationHub" :active="tab === 'conversations'" :agent-id="selection?.agentId || remoteState.activeAgentId" @single="prepareSingleList" @create="createConversation" @pending="showManagementPending" @resource="openResource"><template #single><button v-if="recoveredDrafts.length" class="room-secondary-button" @click="recoveryPreview = null; recoveryNotice = ''; drawer = 'draft-recoveries'"><RoomIcon name="edit" />{{ t('保留的草稿') }} · {{ recoveredDrafts.length }}</button><label v-if="remoteState.agents.length > 8" class="phase-search"><RoomIcon name="search" /><input v-model="agentSearch" :placeholder="t('查找角色')" :aria-label="t('查找角色')" /></label><div class="phase-agent-picker"><button v-for="item in visibleAgents" :key="item.id" :class="{ selected: pickerAgent === item.id }" :aria-pressed="pickerAgent === item.id" @click="pickerAgent = item.id; threadPage = 1; loadThreads()"><RemoteAvatar :id="item.id" :label="item.name" fit="contain" /><span>{{ item.name }}</span></button></div><div class="remote-list-toolbar"><button v-if="selection" class="room-text-button" @click="drawer = 'thread-manage'"><RoomIcon name="more" />{{ t('会话管理') }}</button><button class="room-text-button" :disabled="!online || creating || !pickerAgent" @click="createConversation"><RoomIcon name="plus" />{{ t('新建会话') }}</button><button class="room-icon-button" :disabled="threadLoading" :aria-label="t('刷新')" @click="loadThreads"><RoomIcon name="refresh" /></button></div><RemoteFeedback :message="threadError" /><p v-if="threadLoading && !threads.length" class="phase-empty">{{ t('正在读取…') }}</p><p v-else-if="!threads.length" class="phase-empty">{{ t('这里还没有消息') }}</p><div class="phase-thread-list"><button v-for="item in threads" :key="item.id" @click="selectConversation({ threadId: item.id, agentId: item.agentId || pickerAgent, title: item.title || t('新的对话') })"><RemoteAvatar :id="item.agentId || pickerAgent" :label="remoteState.agents.find(agent => agent.id === (item.agentId || pickerAgent))?.name" /><span><strong>{{ item.title || t('新的对话') }}</strong><small>{{ time(item.updatedAt || item.createdAt) }}</small></span><RoomIcon name="next" /></button></div><div class="remote-pagination"><button :disabled="threadLoading || threadPage === 1" @click="threadPage--; loadThreads()">{{ t('上一页') }}</button><span>{{ threadPage }}</span><button :disabled="threadLoading || !moreThreads" @click="threadPage++; loadThreads()">{{ t('下一页') }}</button></div></template></RemoteConversationHub></section></Transition>
+<Transition name="workspace-page" @before-leave="deactivatePage" @before-enter="activatePage" @after-enter="restorePagePosition">    <div v-if="tab === 'manage'" class="remote-section-body workspace-page" data-page="manage"><RemoteManager ref="manager" :key="`${selection?.agentId || remoteState.activeAgentId}:${selection?.threadId}`" :agent-id="selection?.agentId || remoteState.activeAgentId" :thread-id="selection?.threadId" :initial-section="managementSection" @section-change="managementSection = $event" @ready="restoreManagementPosition" @pending="showManagementPending" @resource="openResource" @thread="fromReference" @context="useWorkbenchContext" @appearance="drawer = 'appearance'" /></div></Transition>
+    <Transition v-for="pageId in ['tasks', 'library', 'inbox']" :key="pageId" name="workspace-page" @before-leave="deactivatePage" @before-enter="activatePage"><section v-if="visitedPages.includes(pageId)" v-show="tab === pageId" class="remote-section-body workspace-page" :data-page="pageId" :inert="tab !== pageId ? true : undefined"><RemoteTaskHub v-if="pageId === 'tasks'" :ref="setTaskHub" :active="tab === 'tasks'" :agent-id="selection?.agentId || remoteState.activeAgentId" :thread-id="selection?.threadId" @manage="openManagement" @detail="detail = $event" @thread="fromReference" @pending="taskPending" @create-task="drawer = 'dispatch'" /><RemoteCollection v-else :active="tab === pageId" :kind="pageId" :agent-id="selection?.agentId || remoteState.activeAgentId" :thread-id="selection?.threadId" @manage="openManagement" @resource="openResource" @detail="detail = $event" @thread="fromReference" @pending="pending = $event; drawer = 'pending'" @create-task="drawer = 'dispatch'" /></section></Transition>
+    </div>
+    <nav v-if="!keyboardOpen" class="remote-navigation" aria-label="远程客户端导航"><button v-for="item in tabs" :key="item.id" :disabled="navigationPending" :aria-current="(tab === item.id || item.id === 'chat' && tab === 'conversations') ? 'page' : undefined" :class="{ selected: tab === item.id || item.id === 'chat' && tab === 'conversations' }" @click="item.id === 'chat' ? showThreads() : changeTab(item.id)"><RoomIcon v-if="tab === item.id && theme.decoration !== 'none'" class="remote-nav-ornament" :name="theme.decoration" artwork /><span><RoomIcon :name="item.icon" /></span>{{ t(item.label) }}</button></nav>
 
     <RoomDrawer v-if="drawer === 'appearance'" title="显示偏好" subtitle="主题、配色与本机角色外观" :tone="tone" @close="drawer = null"><RemoteAppearance :display="display" :character="appearance" :agent="agent" :ready="themeReady" :saving="themeSaving" :save-error="themeError" :save-character="saveCharacter" @change="changeDisplay" @save="persistTheme" /></RoomDrawer>
+    <RoomDrawer v-if="drawer === 'draft-recoveries'" :title="recoveryPreview?.title || t('保留的草稿')" :tone="tone" :busy="recoveryBusy" @close="drawer = null; recoveryPreview = null; recoveryNotice = ''; error = ''">
+      <RemoteFeedback :message="error" /><RemoteFeedback :message="recoveryNotice" tone="success" />
+      <template v-if="!recoveryPreview"><p class="remote-help">{{ t('原会话已不可用，未发送的内容留在这里。') }}</p><div class="remote-record-list"><button v-for="item in recoveredDrafts" :key="JSON.stringify([item.agentId, item.threadId])" class="remote-record" :disabled="recoveryBusy" @click="openRecoveredDraft(item)"><RoomIcon name="edit" /><span><strong>{{ item.title || t('保留的草稿') }}</strong><small>{{ remoteState.agents.find(agent => agent.id === item.agentId)?.name || t('角色') }}</small></span><RoomIcon name="next" /></button></div><p v-if="!recoveredDrafts.length" class="room-empty">{{ t('没有保留的草稿') }}</p></template>
+      <template v-else><button class="room-text-button" @click="recoveryPreview = null; recoveryNotice = ''"><RoomIcon name="back" />{{ t('返回') }}</button><textarea v-if="recoveryPreview.draft" class="remote-recovered-draft" :value="recoveryPreview.draft" :aria-label="t('保留的草稿')" rows="8" readonly /><p v-else class="remote-help">{{ t('文字已发送或清空。') }}</p><p v-if="recoveryPreview.attachments.length" class="remote-help">{{ t('原附件请在新会话中重新添加。') }}<span v-for="item in recoveryPreview.attachments" :key="item.id"> · {{ item.name }}</span></p><div class="remote-purpose-actions"><button class="room-primary-button" :disabled="!recoveryPreview.draft" @click="copyRecoveredDraft"><RoomIcon name="copy" />{{ t('复制文字') }}</button><button class="room-text-button" :disabled="recoveryBusy" @click="removeRecoveredDraft">{{ t('移出列表') }}</button></div></template>
+    </RoomDrawer>
     <RoomDrawer v-if="drawer === 'art'" :title="agent?.name || '角色展示'" subtitle="CG 与角色资料" :tone="tone" @close="drawer = null"><img v-if="cg" class="remote-cg-full" :src="cg" :alt="`${agent?.name || '角色'}的 CG`" /><RemoteAvatar v-else class="remote-cg-avatar" :id="agent?.id" :label="agent?.name" /><p class="remote-help">{{ characterState?.vibe || characterState?.mood || agent?.description || '这个角色尚未提供 CG，可以在本机显示偏好中选择图片。' }}</p><button class="room-text-button" @click="drawer = 'appearance'">调整角色展示</button></RoomDrawer>
     <RoomDrawer v-if="drawer === 'dispatch'" title="新的远程任务" subtitle="由当前 infOS 执行" :tone="tone" :busy="dispatching" @close="drawer = null"><RemoteFeedback :message="error" /><p v-if="dispatchUnknown" class="remote-notice">提交结果尚未确认，请先到通知页核对，避免重复派发。<button class="room-text-button" @click="drawer = null; changeTab('inbox')">去核对</button></p><form class="remote-connection-form" @submit.prevent="dispatchTask"><label>任务标题<input v-model="taskTitle" maxlength="120" :disabled="dispatching" placeholder="可选，方便之后查找" /></label><label>希望完成什么<textarea v-model="taskInstruction" required rows="5" maxlength="16000" :disabled="dispatching" placeholder="描述任务目标和要求…" /></label><p class="remote-help">执行角色：{{ agent?.name || '未选择角色' }}。离开手机后，任务仍可在服务端继续执行。</p><button class="room-primary-button" :disabled="!online || dispatching || dispatchUnknown || !agent?.id || !taskInstruction.trim()">{{ dispatching ? '正在提交…' : '提交任务' }}</button></form></RoomDrawer>
 
-    <RoomDrawer v-if="drawer === 'threads'" title="会话" subtitle="找到上次的话题，也可以开始新的对话" :tone="tone" @close="drawer = null"><label v-if="remoteState.agents.length > 12" class="remote-search"><RoomIcon name="search" /><input v-model="agentSearch" placeholder="查找角色" /></label><div class="remote-agent-list"><button v-for="item in visibleAgents" :key="item.id" :class="{ selected: pickerAgent === item.id }" @click="pickerAgent = item.id; threadPage = 1; loadThreads()"><RemoteAvatar :id="item.id" :label="item.name" /><span>{{ item.name }}{{ item.isEnabled === false ? ' · 已停用' : '' }}</span></button></div><div class="remote-list-toolbar"><button class="room-text-button" :disabled="!online || creating || !pickerAgent" @click="createConversation"><RoomIcon name="plus" />新建会话</button><button class="room-icon-button" :disabled="threadLoading" aria-label="刷新会话列表" @click="loadThreads"><RoomIcon name="refresh" /></button></div><RemoteFeedback :message="threadError" /><p v-if="threadLoading && !threads.length" class="room-empty">正在读取会话…</p><p v-else-if="!threads.length" class="room-empty">{{ pickerAgent ? '这个角色还没有可用会话。' : '连接恢复后，可选择角色与会话。' }}</p><div class="remote-record-list"><button v-for="item in threads" :key="item.id" class="remote-record" :class="{ selected: selection?.threadId === item.id }" @click="selectConversation({ threadId: item.id, agentId: item.agentId || pickerAgent, title: item.title || '新的对话' })"><RoomIcon name="chat" /><span><strong>{{ item.title || '新的对话' }}</strong><small>{{ time(item.updatedAt || item.createdAt) }}</small></span><RoomIcon name="arrow" /></button></div><div class="remote-pagination"><button :disabled="threadLoading || threadPage === 1" @click="threadPage--; loadThreads()">上一页</button><span>{{ threadPage }}</span><button :disabled="threadLoading || !moreThreads" @click="threadPage++; loadThreads()">下一页</button></div></RoomDrawer>
+    <RoomDrawer v-if="drawer === 'threads'" title="会话" subtitle="找到上次的话题，也可以开始新的对话" :tone="tone" @close="drawer = null"><label v-if="remoteState.agents.length > 12" class="remote-search"><RoomIcon name="search" /><input v-model="agentSearch" placeholder="查找角色" /></label><div class="remote-agent-list"><button v-for="item in visibleAgents" :key="item.id" :class="{ selected: pickerAgent === item.id }" @click="pickerAgent = item.id; threadPage = 1; loadThreads()"><RemoteAvatar :id="item.id" :label="item.name" /><span>{{ item.name }}{{ item.isEnabled === false ? ' · 已停用' : '' }}</span></button></div><div class="remote-list-toolbar"><button v-if="selection" class="room-text-button" @click="drawer = 'thread-manage'"><RoomIcon name="more" />当前会话选项</button><button class="room-text-button" :disabled="!online || creating || !pickerAgent" @click="createConversation"><RoomIcon name="plus" />新建会话</button><button class="room-icon-button" :disabled="threadLoading" aria-label="刷新会话列表" @click="loadThreads"><RoomIcon name="refresh" /></button></div><RemoteFeedback :message="threadError" /><p v-if="threadLoading && !threads.length" class="room-empty">正在读取会话…</p><p v-else-if="!threads.length" class="room-empty">{{ pickerAgent ? '这个角色还没有可用会话。' : '连接恢复后，可选择角色与会话。' }}</p><div class="remote-record-list"><button v-for="item in threads" :key="item.id" class="remote-record" :class="{ selected: selection?.threadId === item.id }" @click="selectConversation({ threadId: item.id, agentId: item.agentId || pickerAgent, title: item.title || '新的对话' })"><RoomIcon name="chat" /><span><strong>{{ item.title || '新的对话' }}</strong><small>{{ time(item.updatedAt || item.createdAt) }}</small></span><RoomIcon name="arrow" /></button></div><div class="remote-pagination"><button :disabled="threadLoading || threadPage === 1" @click="threadPage--; loadThreads()">上一页</button><span>{{ threadPage }}</span><button :disabled="threadLoading || !moreThreads" @click="threadPage++; loadThreads()">下一页</button></div></RoomDrawer>
 
-    <RoomDrawer v-if="drawer === 'character'" :title="agent?.name || '角色'" subtitle="来自 infOS 的伙伴" :tone="tone" @close="drawer = null"><RemoteCharacter :agent="agent" :state="characterState" :image="cg" @collapse="drawer = null" /><p>{{ agent?.description || '选择会话后，可以查看角色信息。' }}</p><dl class="remote-metadata"><template v-for="(value, key) in agent?.publicProfile || {}" :key="key"><dt>{{ profileLabels[key] || key }}</dt><dd>{{ value }}</dd></template><template v-if="characterState?.mood"><dt>心情</dt><dd>{{ characterState.mood }}</dd></template><template v-if="characterState?.mind"><dt>此刻的想法</dt><dd>{{ characterState.mind }}</dd></template></dl><button class="room-primary-button" @click="drawer = 'appearance'">显示偏好与角色外观</button></RoomDrawer>
+    <RoomDrawer v-if="drawer === 'character'" :title="agent?.name || '角色'" subtitle="来自 infOS 的伙伴" :tone="tone" @close="drawer = null"><RemoteCharacter :agent="agent" :state="characterState" :image="cg" @collapse="drawer = null" /><p>{{ agent?.description || '选择会话后，可以查看角色信息。' }}</p><dl class="remote-metadata"><template v-for="(value, key) in agent?.publicProfile || {}" :key="key"><dt>{{ profileLabels[key] || key }}</dt><dd>{{ value }}</dd></template><template v-if="characterState?.mood"><dt>心情</dt><dd>{{ characterState.mood }}</dd></template><template v-if="characterState?.mind"><dt>此刻的想法</dt><dd>{{ characterState.mind }}</dd></template></dl><button class="room-secondary-button" @click="drawer = 'art'"><RoomIcon name="expand" />查看角色立绘</button><button class="room-primary-button" @click="drawer = 'appearance'">显示偏好与角色外观</button></RoomDrawer>
 
-    <RoomDrawer v-if="drawer === 'actions'" title="会话与更多" :subtitle="selection?.title || '当前连接'" :tone="tone" @close="drawer = null"><div class="chat-room-destinations"><button @click="drawer = null; changeTab('inbox')"><RoomIcon name="bell" /><span>通知<small v-if="inboxCount">{{ inboxCount }}</small></span></button><button @click="drawer = null; changeTab('tasks')"><RoomIcon name="tasks" /><span>任务</span></button><button @click="drawer = null; changeTab('library')"><RoomIcon name="files" /><span>资料</span></button><button @click="drawer = 'art'"><RoomIcon name="expand" /><span>角色立绘</span></button></div><div class="remote-action-menu"><button :disabled="!selection || !online" @click="drawer = 'thread-settings'"><RoomIcon name="settings" />模型、工具与执行设置</button><button :disabled="!selection || busy || !online" @click="messageAction = null; drawer = 'rewind'"><RoomIcon name="refresh" />回退会话与相关文件</button><button @click="drawer = null; openManagement('workbench')"><RoomIcon name="files" />工作区与终端</button><button @click="drawer = null; openManagement()"><RoomIcon name="settings" />管理与工作台</button><button :disabled="!selection" @click="refreshConversation"><RoomIcon name="refresh" />刷新当前会话</button><button :disabled="!selection" @click="drawer = null; detail = { title: '行动清单', query: { kind: 'plan', threadId: selection.threadId } }"><RoomIcon name="document" />查看行动清单</button><button :disabled="!selection" @click="renameTitle = selection.title; drawer = 'rename'"><RoomIcon name="edit" />修改会话名称</button><button :disabled="!selection" @click="drawer = 'delete'"><RoomIcon name="trash" />删除远程会话</button><button :disabled="!selection || busy || uploading" @click="drawer = 'reset'"><RoomIcon name="refresh" />重置本机会话记录</button><button @click="drawer = 'connections'"><RoomIcon name="connection" />连接与运行模式</button></div></RoomDrawer>
+    <RoomDrawer v-if="drawer === 'actions'" title="会话操作" :tone="tone" @close="drawer = null"><div class="conversation-actions"><button :disabled="!selection || !online" @click="drawer = 'thread-settings'"><RoomIcon name="settings" /><span>会话设置</span><RoomIcon name="next" /></button><button v-if="interactionMode === 'work'" :disabled="!selection" @click="drawer = null; detail = { title: '行动清单', query: { kind: 'plan', threadId: selection.threadId } }"><RoomIcon name="tasks" /><span>行动清单</span><RoomIcon name="next" /></button><button :disabled="!selection || busy || !online" @click="messageAction = null; drawer = 'rewind'"><RoomIcon name="refresh" /><span>回滚会话</span><RoomIcon name="next" /></button></div></RoomDrawer>
+    <RoomDrawer v-if="drawer === 'thread-manage'" title="会话管理" :subtitle="selection?.title" :tone="tone" @close="drawer = null"><div class="conversation-actions"><button :disabled="!selection || !online" @click="renameTitle = selection.title; drawer = 'rename'"><RoomIcon name="edit" /><span>重命名</span><RoomIcon name="next" /></button><button :disabled="!selection || busy || !online" @click="drawer = 'delete'"><RoomIcon name="trash" /><span>删除会话</span><RoomIcon name="next" /></button></div><details class="conversation-maintenance"><summary>维护选项<RoomIcon name="down" /></summary><button class="room-text-button" :disabled="!selection" @click="refreshConversation({ retryUnavailable: true })">刷新会话</button><button class="room-text-button" :disabled="!selection || busy || uploading" @click="drawer = 'reset'">重置本机阅读与草稿</button></details></RoomDrawer>
     <RoomDrawer v-if="drawer === 'rename'" title="修改会话名称" :busy="mutating" :tone="tone" @close="drawer = null"><RemoteFeedback :message="error" /><form class="remote-connection-form" @submit.prevent="renameConversation"><label>会话名称<input v-model="renameTitle" required maxlength="100" /></label><button class="room-primary-button" :disabled="mutating || !online || !renameTitle.trim()">保存</button></form></RoomDrawer>
     <RoomDrawer v-if="drawer === 'delete'" title="删除这条远程会话？" :busy="mutating" :tone="tone" @close="drawer = null"><RemoteFeedback :message="error" /><p>将按 infOS 的删除规则处理「{{ selection?.title }}」。该操作会影响其他客户端。</p><button class="room-danger-button" :disabled="mutating || !online" @click="deleteConversation">确认删除会话</button></RoomDrawer>
     <RoomDrawer v-if="drawer === 'pending' && pending" title="核对发送结果" subtitle="先看看结果，避免重复发送" :tone="tone" :busy="reviewing" @close="drawer = null; reviewNote = ''; reviewed = false"><p v-if="pending.context?.operation" class="remote-notice">{{ managementOperationLabel(pending.context.operation) }}</p><p class="remote-help">{{ pending.context?.input?.content || pending.context?.input?.instruction || '这项操作的结果尚未确认。' }}</p><RemoteFeedback :message="error" /><RemoteFeedback :message="remoteState.pendingError" /><div class="remote-actions"><button class="room-secondary-button" @click="reconcile">重新核对</button><button v-if="pending.context?.input?.threadId" class="room-secondary-button" @click="fromReference({ threadId: pending.context.input.threadId, agentId: pending.context.input.agentId || selection?.agentId }); drawer = null">查看对应会话</button></div><template v-if="remotePendingRequests.has(pending.requestId)"><label class="remote-checkbox"><input v-model="reviewed" type="checkbox" />我已查看结果</label><textarea v-model="reviewNote" rows="3" maxlength="2048" placeholder="写下核对结果，例如已在会话中看到回复…" /><button class="room-primary-button" :disabled="!reviewed || !reviewNote.trim() || reviewing || pending.state !== 'unknown'" @click="review">保存核对记录</button></template><p v-else class="remote-help">此操作已经完成核对。</p></RoomDrawer>
@@ -88,6 +100,7 @@
 
 <script setup>
 import { computed, ref, reactive, watch, nextTick, onMounted, onBeforeUnmount } from 'vue'
+import { useRouter, useRoute } from 'vue-router'
 import RemoteFeedback from '../components/remote/RemoteFeedback.vue'
 import { open as openExternal } from '@tauri-apps/plugin-shell'
 import RoomIcon from '../components/remote/RemoteIcon.vue'
@@ -103,6 +116,10 @@ import RemoteHome from '../components/remote/RemoteHome.vue'
 import RemoteQueue from '../components/remote/RemoteQueue.vue'
 import RemoteAppearance from '../components/remote/RemoteAppearance.vue'
 import RemoteManager from '../components/remote/RemoteManager.vue'
+import RemoteConversationHub from '../components/remote/RemoteConversationHub.vue'
+import RemoteTaskHub from '../components/remote/RemoteTaskHub.vue'
+import { t } from '../i18n/remote'
+import { useRemoteLocaleSync } from '../composables/useRemoteLocaleSync'
 import RemoteThreadSettings from '../components/remote/RemoteThreadSettings.vue'
 import RemoteMessageActions from '../components/remote/RemoteMessageActions.vue'
 import RemoteComposerTools from '../components/remote/RemoteComposerTools.vue'
@@ -114,7 +131,7 @@ import { currentToken, assertToken } from '../stores/mode'
 import { remoteClient, remoteConnections } from '../services/remote'
 import { readPresentation, writePresentation } from '../services/remotePresentation'
 import { uploadRemoteFile } from '../services/remoteMedia'
-import { remoteState, remoteViews, remoteExecutions, remotePendingRequests, remoteNotifications, readRemote, sendRemoteChat, performRemote, initializeRemote, reconnectRemote, resumeRemote, reconcileRemotePendingRequests, reviewRemoteRequest, refreshRemoteNotifications, refreshRemotePendingRequests } from '../stores/remote'
+import { remoteState, remoteViews, remoteExecutions, remotePendingRequests, remoteNotifications, remoteUnavailableThreads, focusRemoteThread, retryRemoteThreadReads, retireRemoteThread, readRemote, sendRemoteChat, performRemote, initializeRemote, reconnectRemote, resumeRemote, reconcileRemotePendingRequests, reviewRemoteRequest, refreshRemoteNotifications, refreshRemotePendingRequests } from '../stores/remote'
 import { remoteItems } from '../utils/remoteMarkdown'
 import { managementOperationLabel } from '../services/remoteManagement'
 import '../styles/remote.css'
@@ -122,9 +139,13 @@ import '../styles/remote-theme.css'
 import '../styles/remote-management.css'
 import '../styles/remote-interactions.css'
 import '../styles/remote-conversation.css'
+import '../styles/remote-workspace-ux.css'
+import '../styles/remote-phase-two.css'
 import { resolveRemoteResource } from '../services/remoteResources'
 
 const token = currentToken()
+useRemoteLocaleSync()
+const conversationHub = ref(null), taskHub = ref(null)
 const managementSection = ref(null), messageAction = ref(null), manager = ref(null)
 const imageMode = ref('auto')
 const inputCapabilities = ref(null), composerTools = ref(null), controlsBusy = ref(false)
@@ -133,7 +154,15 @@ const workspaceContextLabel = computed(() => [workspaceContext.value?.filePath, 
 const imageModeOptions = computed(() => [{ value: 'auto', label: '自动识图', description: '由 infOS 按当前模型与服务配置处理' }, { value: 'native', label: '原生视觉', description: inputCapabilities.value?.effective?.enableVision ? '当前模型支持视觉' : '当前模型未声明视觉能力', disabled: !!inputCapabilities.value && !inputCapabilities.value.effective?.enableVision }, { value: 'relay', label: '图片转述', description: inputCapabilities.value?.relayAvailable ? '转述服务已配置' : '尚未确认有可用的转述服务', disabled: inputCapabilities.value?.relayAvailable === false }])
 const { keyboardOpen, viewportStyle } = useRoomViewport()
 const selection = ref(null), tab = ref('chat'), drawer = ref(null), detail = ref(null), resource = ref(null), profile = ref(null)
-const draft = ref(''), attachments = ref([]), pages = ref([]), loading = ref(false), loadingHistory = ref(false), verified = ref(false), sending = ref(null), sessionReady = ref(false)
+const navigationPending = ref(false)
+const visitedPages = ref(['chat']), navDirection = ref('forward'), chatReturnPage = ref('home')
+// 只保留界面位置；配置与授权内容不进入页面导航历史。
+const pagePositions = new Map()
+let navigationVersion = 0, routingReady = false, approvedNavigations = 0, removeNavigationGuard = null
+const router = useRouter(), route = useRoute()
+watch(() => selection.value?.threadId, () => pagePositions.delete('manage'))
+watch(tab, (value, previous) => { if (!visitedPages.value.includes(value)) visitedPages.value.push(value); const order = ['home', 'conversations', 'chat', 'tasks', 'library', 'manage', 'inbox']; navDirection.value = order.indexOf(value) < order.indexOf(previous) ? 'backward' : 'forward'; if (value === 'chat' && previous !== 'chat') chatReturnPage.value = previous }, { flush: 'sync' })
+const draft = ref(''), attachments = ref([]), pages = ref([]), loading = ref(false), loadingHistory = ref(false), verified = ref(false), queueReady = ref(false), sending = ref(null), sessionReady = ref(false)
 const error = ref(''), storageError = ref(''), uploading = ref(false), stopping = ref(false), reconnecting = ref(false), creating = ref(false), mutating = ref(false)
 const queuePanel = ref(null), chatStage = ref(null), copiedMessage = ref(null)
 const transcript = ref(null), composer = ref(null), fileInput = ref(null), atEnd = ref(true), historyWindow = ref(false)
@@ -148,7 +177,8 @@ const tabs = [{ id: 'home', label: '首页', icon: 'home' }, { id: 'chat', label
 const profileLabels = { gender: '性别', identity: '身份', appearance: '外貌', personality: '性格' }
 const emptySession = () => ({ draft: '', attachments: [], anchor: null, offset: 0, atEnd: true, cursor: null, editId: crypto.randomUUID(), sendRequestId: null, workspaceContext: null })
 let reading = emptySession(), disposed = false, version = 0, listVersion = 0, suppressScroll = false, draftTimer = null, scrollTimer = null, opening = null, verificationTimer = null, projectionTimer = null, readingVersion = 0, scrollRestore = 0
-let stageObserver = null, copyTimer = null
+let stageObserver = null, copyTimer = null, retiringSelection = null, recoveryWrites = Promise.resolve()
+const recoveredDrafts = ref([]), recoveryPreview = ref(null), recoveryBusy = ref(false), recoveryNotice = ref(''), recoveryError = ref(''), retirementError = ref(null)
 const observedFrames = new Set()
 const online = computed(() => remoteState.connection === 'online')
 const agent = computed(() => {
@@ -168,7 +198,7 @@ const conversationReady = computed(() => snapshots.value.length > 0)
 const conversationSyncing = computed(() => pages.value.some(page => { const view = remoteViews.get(JSON.stringify(page.query)); return view?.loading || view?.syncing }))
 const serverExecution = computed(() => remoteItems(remoteViews.get(JSON.stringify({ kind: 'active_executions' }))?.data).find(item => item.threadId === selection.value?.threadId && ['running', 'paused'].includes(item.state)))
 const busy = computed(() => !!selection.value && (!!serverExecution.value || sending.value?.threadId === selection.value.threadId || [...remoteExecutions.values()].some(item => item.threadId === selection.value.threadId && item.state === 'observing')))
-const canSend = computed(() => online.value && verified.value && agent.value?.isEnabled !== false && !controlsBusy.value && !sending.value && !changingInteraction.value && !uploading.value && !loading.value && !!draft.value.trim())
+const canSend = computed(() => online.value && verified.value && !remoteUnavailableThreads.has(selection.value?.threadId) && agent.value?.isEnabled !== false && !controlsBusy.value && !sending.value && !changingInteraction.value && !uploading.value && !loading.value && !!draft.value.trim())
 const visibleAgents = computed(() => { const keyword = agentSearch.value.trim().toLowerCase(); return remoteState.agents.filter(item => !keyword || `${item.name} ${item.id}`.toLowerCase().includes(keyword)).slice(0, 24) })
 const threads = computed(() => remoteItems(threadQuery.value && remoteViews.get(JSON.stringify(threadQuery.value))?.data))
 const moreThreads = computed(() => { const data = threadQuery.value && remoteViews.get(JSON.stringify(threadQuery.value))?.data; return typeof data?.total === 'number' ? threadPage.value * 30 < data.total : threads.value.length >= 30 })
@@ -215,7 +245,8 @@ async function saveCharacter(value) {
   Object.assign(appearance, saved.data)
 }
 function changeDisplay({ key, value }) {
-  if (!['theme', 'palette', 'showCg', 'reduceMotion', 'roleStyle'].includes(key)) return
+  if (!['theme', 'palette', 'showCg', 'reduceMotion', 'roleStyle', 'fontSize'].includes(key)) return
+  if (key === 'fontSize' && (!Number.isInteger(value) || value < 13 || value > 18)) return
   display[key] = value
   persistTheme()
 }
@@ -272,7 +303,9 @@ async function persistCurrent() {
   try { await writePresentation(sessionScope(), current, token); guard(); storageError.value = '' }
   catch (failure) { if (!disposed) storageError.value = `草稿还没保存成功，请重试。`; throw failure }
 }
-async function preparePageLeave() { queuePanel.value?.prepareLeave?.(); await manager.value?.prepareLeave?.() }
+function setTaskHub(value) { taskHub.value = value }
+function taskPending(value) { if (value) { pending.value = value; drawer.value = 'pending' } else showManagementPending() }
+async function preparePageLeave() { queuePanel.value?.prepareLeave?.(); await manager.value?.prepareLeave?.(); if (tab.value === 'conversations') await conversationHub.value?.prepareLeave?.(); if (tab.value === 'tasks') await taskHub.value?.prepareLeave?.() }
 async function prepareModeSwitch() {
   await preparePageLeave()
   if (uploading.value || dispatching.value || mutating.value || changingInteraction.value) throw new Error('当前操作尚未完成，请稍后再切换运行模式')
@@ -282,7 +315,7 @@ async function prepareModeSwitch() {
   guard()
 }
 function persistLater() { clearTimeout(draftTimer); draftTimer = setTimeout(() => persistCurrent().catch(() => {}), 280) }
-function retryPersist() { persistCurrent().catch(() => {}) }
+function retryPersist() { if (remoteUnavailableThreads.has(selection.value?.threadId)) { retirementError.value = null; leaveUnavailableConversation() } else persistCurrent().catch(() => {}) }
 function draftChanged() { reading.editId = crypto.randomUUID(); reading.sendRequestId = null; persistLater(); resizeComposer() }
 function resizeComposer() { if (!composer.value) return; composer.value.style.height = 'auto'; composer.value.style.height = `${Math.min(composer.value.scrollHeight, 112)}px` }
 function onScroll() { if (suppressScroll) return; readingVersion++; captureReading(); clearTimeout(scrollTimer); scrollTimer = setTimeout(() => persistCurrent().catch(() => {}), 450) }
@@ -303,8 +336,84 @@ async function restoreScroll(saved = reading) {
   }
   await nextTick(); if (restore === scrollRestore) suppressScroll = false
 }
+async function loadDraftRecoveries() {
+  try { const values = await readPresentation({ kind: 'draft_recoveries' }, token); guard(); recoveredDrafts.value = values || []; recoveryError.value = '' }
+  catch (failure) { if (!disposed) { try { assertToken(token, 'remote'); recoveryError.value = t('暂时没能读取保留的草稿。') } catch { /* 旧连接不影响当前界面。 */ } } }
+}
+function updateDraftRecoveries(update) {
+  const operation = recoveryWrites.catch(() => {}).then(async () => {
+    const current = await readPresentation({ kind: 'draft_recoveries' }, token); guard()
+    const values = update(current || [])
+    if (values.length > 128) throw new Error(t('请先处理保留的草稿。'))
+    await writePresentation({ kind: 'draft_recoveries' }, values, token); guard(); recoveredDrafts.value = values
+  })
+  recoveryWrites = operation
+  return operation
+}
+async function openRecoveredDraft(item) {
+  if (recoveryBusy.value) return
+  recoveryBusy.value = true; recoveryNotice.value = ''; error.value = ''
+  try { const saved = await readPresentation(sessionScope(item), token); guard(); recoveryPreview.value = { ...item, draft: saved?.draft || '', attachments: saved?.attachments || [] } }
+  catch (failure) { if (!disposed) error.value = failure.message }
+  finally { if (!disposed) recoveryBusy.value = false }
+}
+async function copyRecoveredDraft() {
+  try { await navigator.clipboard.writeText(recoveryPreview.value?.draft || ''); guard(); recoveryNotice.value = t('已复制') }
+  catch { if (!disposed) error.value = t('暂时没能复制，请长按文字复制。') }
+}
+async function removeRecoveredDraft() {
+  if (!recoveryPreview.value || recoveryBusy.value) return
+  recoveryBusy.value = true; const item = recoveryPreview.value
+  try { await updateDraftRecoveries(values => values.filter(value => value.agentId !== item.agentId || value.threadId !== item.threadId)); recoveryPreview.value = null }
+  catch (failure) { if (!disposed) error.value = failure.message }
+  finally { if (!disposed) recoveryBusy.value = false }
+}
+async function leaveUnavailableConversation() {
+  if (retiringSelection) return retiringSelection
+  if (!selection.value || !remoteUnavailableThreads.has(selection.value.threadId) || navigationPending.value) return
+  const item = { ...selection.value }, request = ++version
+  verified.value = false; navigationPending.value = true; retirementError.value = null
+  clearTimeout(verificationTimer); clearTimeout(projectionTimer)
+  const operation = (async () => {
+    try {
+      // 会话失效不等于用户放弃输入；队列内未保存的编辑也先收回到原会话草稿。
+      const queuedDraft = queuePanel.value?.recoveryDraft?.()
+      if (queuedDraft && draft.value !== queuedDraft && !draft.value.endsWith(`\n\n${queuedDraft}`)) {
+        const combined = [draft.value, queuedDraft].filter(Boolean).join('\n\n')
+        if (new TextEncoder().encode(combined).length > 131072) throw new Error(t('请先复制未保存的队列修改，再选择其他会话。'))
+        draft.value = combined; reading.editId = crypto.randomUUID(); reading.sendRequestId = null
+      }
+      await persistCurrent(); guard(request)
+      const hasDraft = !!draft.value.trim() || attachments.value.length > 0
+      if (hasDraft) await updateDraftRecoveries(values => [...values.filter(value => value.agentId !== item.agentId || value.threadId !== item.threadId), item])
+      guard(request)
+      await writePresentation({ kind: 'home' }, null, token); guard(request)
+      pickerAgent.value = item.agentId
+      selection.value = null; sessionReady.value = false; queueReady.value = false; pages.value = []
+      draft.value = ''; attachments.value = []; workspaceContext.value = null; loading.value = false; loadingHistory.value = false
+      drawer.value = null; detail.value = null; resource.value = null
+      await nextTick(); guard(request)
+      navigationPending.value = false
+      await showThreads(); guard(request)
+      error.value = t(hasDraft ? '这段对话已不可用，未发送的草稿已保留。' : '这段对话已不可用，请选择其他会话。')
+    } catch (failure) {
+      if (!disposed && request === version) { retirementError.value = item.threadId; loading.value = false; storageError.value = t('草稿还没保存成功，请重试。'); error.value = failure.message }
+    } finally { if (!disposed && request === version) navigationPending.value = false }
+  })()
+  retiringSelection = operation
+  try { await operation } finally { if (retiringSelection === operation) retiringSelection = null }
+}
 async function selectConversation(item) {
   if (!item.threadId || !item.agentId) return
+  if (retiringSelection) await retiringSelection
+  if (remoteUnavailableThreads.has(selection.value?.threadId)) {
+    await leaveUnavailableConversation()
+    if (remoteUnavailableThreads.has(selection.value?.threadId)) return
+  }
+  if (remoteUnavailableThreads.has(item.threadId)) {
+    try { await readRemote({ kind: 'thread', id: item.threadId }, { allowCached: false, retryUnavailable: true }) }
+    catch (failure) { error.value = failure.message; return }
+  }
   try { await preparePageLeave() } catch (failure) { error.value = failure.message; return }
   if (uploading.value) { error.value = '附件正在上传，完成后再切换会话'; return }
   inputCapabilities.value = null
@@ -312,7 +421,7 @@ async function selectConversation(item) {
   const promise = (async () => {
     if (selection.value) await persistCurrent()
     guard(request)
-    selection.value = { agentId: item.agentId, threadId: item.threadId, title: item.title || '继续对话' }; tab.value = 'chat'; drawer.value = null; detail.value = null; verified.value = false; sessionReady.value = false; loading.value = true; loadingHistory.value = false; error.value = ''; pages.value = []; draft.value = ''; attachments.value = []; workspaceContext.value = null
+    selection.value = { agentId: item.agentId, threadId: item.threadId, title: item.title || '继续对话' }; tab.value = 'chat'; drawer.value = null; detail.value = null; verified.value = false; queueReady.value = false; sessionReady.value = false; loading.value = true; loadingHistory.value = false; error.value = ''; pages.value = []; draft.value = ''; attachments.value = []; workspaceContext.value = null
     Object.assign(appearance, defaultCharacterAppearance())
     try {
       const [saved, character] = await Promise.all([readPresentation(sessionScope(item), token), readPresentation({ kind: 'character', agentId: item.agentId }, token)])
@@ -326,20 +435,15 @@ async function selectConversation(item) {
       if (cached) { pages.value[0].snapshot = cached; await restoreScroll({ ...reading }) }
       if (remoteState.initializing) { await initializeRemote(); guard(request) }
       if (remoteState.activeAgentId !== item.agentId) remoteClient.connect(item.agentId, token).catch(failure => { if (!disposed && request === version) error.value = failure.message })
-      const results = await Promise.allSettled([readRemote(currentQuery), readRemote({ kind: 'thread', id: item.threadId }, { allowCached: false })])
+      // 先确认会话仍有效，再启动消息和队列读取，避免一个旧会话同时产生三路 404。
+      const metadata = await readRemote({ kind: 'thread', id: item.threadId }, { allowCached: false, retryUnavailable: true })
       guard(request)
-      const metadata = results[1]
-      if (metadata.status === 'fulfilled') {
-        const thread = metadata.value?.thread
-        if (!thread || thread.agentId !== item.agentId) throw new Error('此会话的角色信息已改变，请重新选择会话')
-        verified.value = true; selection.value.title = thread.title || '新的对话'
-        await writePresentation({ kind: 'home' }, selection.value, token); guard(request)
-      } else if (metadata.reason?.code === 'REMOTE_NOT_FOUND' || metadata.reason?.code === 'REMOTE_AUTH_REQUIRED') {
-        if (metadata.reason.code === 'REMOTE_NOT_FOUND') { await writePresentation({ kind: 'home' }, null, token); guard(request); selection.value = null; pages.value = []; drawer.value = 'threads'; pickerAgent.value = item.agentId; loadThreads() }
-        throw metadata.reason
-      }
-      if (results[0].status === 'rejected') throw results[0].reason
-      if (pages.value[0]) pages.value[0].snapshot = results[0].value
+      const thread = metadata?.thread
+      if (!thread || thread.agentId !== item.agentId) throw new Error('此会话的角色信息已改变，请重新选择会话')
+      verified.value = true; queueReady.value = true; selection.value.title = thread.title || '新的对话'
+      await writePresentation({ kind: 'home' }, selection.value, token); guard(request)
+      const projection = await readRemote(currentQuery, { retryUnavailable: true }); guard(request)
+      if (pages.value[0]) pages.value[0].snapshot = projection
       await restoreScroll({ ...reading }); guard(request)
       readRemote({ kind: 'agent_state', id: item.agentId, threadId: item.threadId }).catch(() => {})
       readRemote({ kind: 'agent', id: item.agentId }).catch(() => {})
@@ -348,7 +452,7 @@ async function selectConversation(item) {
     finally {
       if (!disposed && request === version) {
         loading.value = false
-        if (selection.value && !verified.value && online.value) {
+        if (selection.value && !verified.value && online.value && !remoteUnavailableThreads.has(item.threadId)) {
           clearTimeout(verificationTimer); verificationTimer = setTimeout(verifySelected, 2000)
         }
       }
@@ -357,7 +461,8 @@ async function selectConversation(item) {
   opening = promise
   try { await promise } catch (failure) { if (!disposed && request === version) error.value = failure.message } finally { if (opening === promise) opening = null }
 }
-async function showThreads() { drawer.value = 'threads'; pickerAgent.value = selection.value?.agentId || remoteState.activeAgentId || remoteState.agents[0]?.id || null; await loadThreads() }
+async function prepareSingleList() { pickerAgent.value ||= selection.value?.agentId || remoteState.activeAgentId || remoteState.agents[0]?.id || null; await loadThreads() }
+async function showThreads() { if (tab.value === 'conversations') await conversationHub.value?.showList?.(); if (await changeTab('conversations')) await prepareSingleList() }
 async function loadThreads() {
   if (!pickerAgent.value) return
   const request = ++listVersion; threadLoading.value = true; threadError.value = ''
@@ -371,10 +476,12 @@ async function createConversation() {
   try { guard(request); const agentId = pickerAgent.value; const result = await performRemote({ kind: 'create_thread', agentId, title: '新的对话' }); guard(request); if (!result?.thread?.id) throw new Error('服务端未返回新会话身份'); await selectConversation({ threadId: result.thread.id, agentId: result.thread.agentId || agentId, title: result.thread.title }) }
   catch (failure) { if (!disposed && request === version) threadError.value = failure.message } finally { if (!disposed) creating.value = false }
 }
-async function refreshConversation() {
-  if (!selection.value) return
+async function refreshConversation(options) {
+  const retryUnavailable = options?.retryUnavailable === true
+  if (!selection.value || remoteUnavailableThreads.has(selection.value.threadId)) return
+  if (retryUnavailable) retryRemoteThreadReads(selection.value.threadId)
   const saved = { ...reading }, request = version, readingRequest = readingVersion, current = query(pages.value.at(-1)?.query.beforeCursor || null)
-  try { guard(request); const data = await readRemote(current, { allowCached: false }); guard(request); const page = pages.value.find(page => JSON.stringify(page.query) === JSON.stringify(current)); if (page) page.snapshot = data; await restoreScroll(readingRequest === readingVersion ? saved : { ...reading }) }
+  try { guard(request); const data = await readRemote(current, { allowCached: false, retryUnavailable }); guard(request); const page = pages.value.find(page => JSON.stringify(page.query) === JSON.stringify(current)); if (page) page.snapshot = data; await restoreScroll(readingRequest === readingVersion ? saved : { ...reading }) }
   catch (failure) { if (!disposed && request === version) error.value = failure.message }
 }
 async function older() {
@@ -392,8 +499,59 @@ async function latest() {
   await refreshConversation()
   if (!disposed && request === version) await restoreScroll(reading)
 }
-async function changeTab(value) { const request = version; captureReading(); try { queuePanel.value?.prepareLeave?.(); if (tab.value === 'manage' && value !== 'manage') await preparePageLeave(); await persistCurrent(); guard(request); tab.value = value; if (value === 'manage') managementSection.value = null; if (value === 'chat') { await restoreScroll(reading); guard(request); if (online.value) refreshConversation() } } catch (failure) { if (!disposed) error.value = failure.message } }
-async function openManagement(section = null) { try { await preparePageLeave() } catch (failure) { error.value = failure.message; return }; await changeTab('manage'); if (tab.value === 'manage') managementSection.value = section }
+async function changeTab(value, { fromHistory = false, replace = false } = {}) {
+  if (!['home', 'conversations', 'chat', 'tasks', 'library', 'manage', 'inbox'].includes(value)) return false
+  if (tab.value === value) return true
+  if (navigationPending.value && !fromHistory) return false
+  navigationPending.value = true
+  const intent = ++navigationVersion, request = version, previous = tab.value
+  captureReading()
+  try {
+    if (!fromHistory) { await preparePageLeave(); await persistCurrent() }
+    guard(request)
+    if (intent !== navigationVersion) return false
+    const oldPage = document.querySelector(`.workspace-page[data-page="${previous}"]`)
+    if (oldPage) pagePositions.set(previous, oldPage.scrollTop)
+    if (!fromHistory && routingReady && route.query.workspace !== value) {
+      approvedNavigations++
+      try { const failure = await router[replace ? 'replace' : 'push']({ query: { ...route.query, workspace: value } }); if (failure) return false }
+      finally { approvedNavigations-- }
+    }
+    if (intent !== navigationVersion || disposed) return false
+    const order = ['home', 'conversations', 'chat', 'tasks', 'library', 'manage', 'inbox']
+    navDirection.value = order.indexOf(value) < order.indexOf(previous) ? 'backward' : 'forward'
+    if (oldPage?.contains(document.activeElement)) document.activeElement.blur?.()
+    tab.value = value
+    if (value === 'chat') { await restoreScroll(reading); guard(request); if (online.value) refreshConversation() }
+    return true
+  } catch (failure) { if (!disposed && failure.code !== 'UI_CANCELLED') error.value = failure.message; return false }
+  finally { navigationPending.value = false }
+}
+function deactivatePage(element) { element.inert = true; if (element.contains(document.activeElement)) document.activeElement.blur?.() }
+function activatePage(element) { element.inert = false }
+function restoreManagementPosition() { const element = document.querySelector('.workspace-page[data-page="manage"]'); if (element && tab.value === 'manage') restorePagePosition(element) }
+function restorePagePosition(element) { element.scrollTop = pagePositions.get(element.dataset.page) || 0 }
+function returnFromChat() {
+  const previous = router.options.history.state.back
+  if (previous && new URL(previous, location.href).searchParams.get('workspace') === chatReturnPage.value) router.back()
+  else changeTab(chatReturnPage.value || 'home', { replace: true })
+}
+function workspaceKeydown(event) {
+  if (event.key !== 'Escape' || event.defaultPrevented || drawer.value || detail.value || resource.value) return
+  if (keyboardOpen.value) document.activeElement?.blur?.()
+  else if (tab.value === 'chat') returnFromChat()
+  else if (tab.value === 'conversations' && conversationHub.value?.roomId) conversationHub.value.back()
+  else if (tab.value === 'manage' && managementSection.value) manager.value?.back?.()
+  else if (tab.value !== 'home') changeTab('home')
+}
+async function openManagement(section = null) {
+  try {
+    if (tab.value === 'manage') { await preparePageLeave(); if (section) manager.value?.openSection?.(section); else manager.value?.back?.(); return }
+    const previous = managementSection.value
+    managementSection.value = section
+    if (!await changeTab('manage')) managementSection.value = previous
+  } catch (failure) { if (!disposed) error.value = failure.message }
+}
 async function useWorkbenchContext(input) {
   const request = version
   try {
@@ -508,14 +666,14 @@ async function consumeNotificationOpen() {
     if (!result.data) return
     await preparePageLeave(); guard(request)
     await persistCurrent(); guard(request)
-    drawer.value = null; detail.value = null; resource.value = null; tab.value = 'inbox'
+    drawer.value = null; detail.value = null; resource.value = null; await changeTab('inbox')
     await refreshRemoteNotifications(); guard(request)
     await nextTick(); guard(request)
     document.getElementById(`remote-notice-${JSON.stringify([result.data.principalId, result.data.notificationId])}`)?.scrollIntoView({ block: 'center' })
   } catch (failure) { if (!disposed && request === version) error.value = failure.message }
   finally { openingNotice = false }
 }
-function resume() { if (!document.hidden && !disposed) { resumeRemote().catch(() => {}); consumeNotificationOpen() } }
+function resume() { if (!document.hidden && !disposed) { focusRemoteThread(verified.value && ['chat', 'home'].includes(tab.value) ? selection.value?.threadId : null); resumeRemote().catch(() => {}); consumeNotificationOpen() } }
 function saveOnHide() { persistCurrent().catch(() => {}) }
 function visibility() { if (document.hidden) saveOnHide(); else resume() }
 async function warmInbox() { try { guard(); await Promise.allSettled(['approvals', 'questions', 'tools', 'active_executions'].map(kind => readRemote({ kind }))) } catch { /* 连接提示保留在主界面，列表本身保留各自的读取错误。 */ } }
@@ -548,14 +706,16 @@ watch(() => [...remoteExecutions.values()].map(item => `${item.requestId}:${item
 watch(() => rows.value.map(row => `${row.surface.surfaceId}:${row.surface.revision}`).join('|'), async () => { if (atEnd.value && !historyWindow.value && !loading.value && tab.value === 'chat') await restoreScroll({ ...reading, atEnd: true }) })
 async function verifySelected() {
   clearTimeout(verificationTimer)
-  if (!selection.value || !online.value || disposed) return
+  if (!selection.value || !online.value || disposed || remoteUnavailableThreads.has(selection.value.threadId)) return
   if (opening) { verificationTimer = setTimeout(verifySelected, 500); return }
+  const retryAfter = remoteViews.get(JSON.stringify({ kind: 'thread', id: selection.value.threadId }))?.retryAfter || 0
+  if (retryAfter > Date.now()) { verificationTimer = setTimeout(verifySelected, Math.max(150, retryAfter - Date.now())); return }
   const request = version, item = { ...selection.value }
   try {
     guard(request)
     const data = await readRemote({ kind: 'thread', id: item.threadId }, { allowCached: false }); guard(request)
     if (data?.thread?.agentId !== item.agentId) throw new Error('会话角色信息已改变，请重新选择')
-    verified.value = true
+    verified.value = true; queueReady.value = true
     await refreshConversation(); guard(request)
     await remoteClient.subscribe({ kind: 'thread', id: item.threadId }, token).catch(failure => {
       // 会话已核验；订阅短暂断线不撤销输入资格，消息仍可通过队列同步。
@@ -565,18 +725,44 @@ async function verifySelected() {
     if (!disposed && request === version) {
       verified.value = false; error.value = failure.message
       if (['REMOTE_STALE_READ', 'REMOTE_NETWORK', 'REMOTE_HTTP', 'REMOTE_RATE_LIMIT'].includes(failure.code)) verificationTimer = setTimeout(verifySelected, 2000)
-      if (failure.code === 'REMOTE_NOT_FOUND') {
-        try { await persistCurrent(); guard(request); await writePresentation({ kind: 'home' }, null, token); guard(request); selection.value = null; sessionReady.value = false; pages.value = []; await showThreads() }
-        catch (saveFailure) { if (!disposed && request === version) error.value = saveFailure.message }
-      }
+      if (failure.code === 'REMOTE_NOT_FOUND') retireRemoteThread(item.threadId)
     }
   }
 }
-watch(() => remoteState.ready, ready => { if (ready) warmInbox(); if (ready && selection.value) verifySelected(); else if (ready && drawer.value === 'threads' && !pickerAgent.value) showThreads() })
+watch(() => remoteState.ready, ready => { if (ready) warmInbox(); if (ready && selection.value) verifySelected(); if (ready && (tab.value === 'conversations' || drawer.value === 'threads') && !pickerAgent.value) prepareSingleList() })
+watch([() => selection.value?.threadId, tab, verified], ([id, page, confirmed]) => focusRemoteThread(confirmed && ['chat', 'home'].includes(page) ? id : null), { immediate: true, flush: 'sync' })
+watch([() => remoteUnavailableThreads.has(selection.value?.threadId), tab, uploading, mutating, changingInteraction, dispatching, sending, () => queuePanel.value?.busy, navigationPending, retirementError], ([missing, page]) => {
+  if (!missing || !['chat', 'home'].includes(page)) return
+  verified.value = false
+  if (!navigationPending.value && retirementError.value !== selection.value?.threadId && !uploading.value && !mutating.value && !changingInteraction.value && !dispatching.value && !sending.value && !queuePanel.value?.busy) leaveUnavailableConversation()
+})
 watch([draft, tab], () => nextTick(resizeComposer))
 watch([tab, drawer, () => selection.value?.threadId], () => { error.value = '' })
+watch(() => route.query.workspace, value => {
+  if (routingReady && !approvedNavigations && value !== tab.value) changeTab(typeof value === 'string' ? value : 'home', { fromHistory: true })
+})
+watch(tab, value => {
+  if (!routingReady || approvedNavigations || route.query.workspace === value) return
+  approvedNavigations++
+  router.push({ query: { ...route.query, workspace: value } }).catch(failure => { if (!disposed) error.value = failure.message }).finally(() => { approvedNavigations-- })
+})
 onMounted(async () => {
+  window.addEventListener('keydown', workspaceKeydown)
+  removeNavigationGuard = router.beforeEach(async () => {
+    if (!routingReady || approvedNavigations) return true
+    if (retiringSelection) return false
+    const panels = [...document.querySelectorAll('.room-drawer-panel')].filter(panel => panel.getClientRects().length)
+    if (drawer.value || detail.value || resource.value || panels.length) {
+      panels.at(-1)?.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }))
+      return false
+    }
+    if (tab.value === 'conversations' && conversationHub.value?.roomId) { await conversationHub.value.back(); return false }
+    if (tab.value === 'manage' && managementSection.value) { manager.value?.back?.(); return false }
+    try { await preparePageLeave(); await persistCurrent(); guard(); return true }
+    catch (failure) { if (!disposed && failure.code !== 'UI_CANCELLED') error.value = failure.message; return false }
+  })
   remoteState.restoringView = true
+  loadDraftRecoveries()
   if (typeof ResizeObserver !== 'undefined' && chatStage.value) { stageObserver = new ResizeObserver(() => { if (tab.value === 'chat' && chatStage.value?.clientHeight > 0) contentResized() }); stageObserver.observe(chatStage.value) }
   document.addEventListener('visibilitychange', visibility)
   window.addEventListener('online', resume); window.addEventListener('focus', resume); window.addEventListener('pageshow', resume); window.addEventListener('pagehide', saveOnHide)
@@ -589,9 +775,11 @@ onMounted(async () => {
     if (home) await selectConversation(home); else { tab.value = 'home'; pickerAgent.value = remoteState.activeAgentId || remoteState.agents[0]?.id || null; await loadCharacterAppearance() }
     if (online.value) warmInbox()
   } catch (failure) { if (!disposed && request === version) error.value = failure.message }
-  finally { if (!disposed) { remoteState.restoringView = false; consumeNotificationOpen() } }
+  finally { if (!disposed) { routingReady = true; approvedNavigations++; router.replace({ query: { ...route.query, workspace: tab.value } }).catch(failure => { if (!disposed) error.value = failure.message }).finally(() => { approvedNavigations-- }); remoteState.restoringView = false; consumeNotificationOpen() } }
 })
 onBeforeUnmount(() => {
+  focusRemoteThread(null)
+  routingReady = false; removeNavigationGuard?.(); window.removeEventListener('keydown', workspaceKeydown)
   stageObserver?.disconnect(); clearTimeout(copyTimer)
   if (contentFrame !== null) cancelAnimationFrame(contentFrame)
   clearTimeout(draftTimer); clearTimeout(scrollTimer); clearTimeout(verificationTimer); clearTimeout(projectionTimer)

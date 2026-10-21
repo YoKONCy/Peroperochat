@@ -1,4 +1,5 @@
 <template>
+  <RemoteFeedback v-if="visible && unavailable && !remoteUnavailableThreads.has(threadId)" :message="queueView?.error" />
   <aside v-if="items.length || snapshot?.paused || expanded" class="chat-queue-summary" aria-label="待发送消息">
     <button v-if="items.length || snapshot?.paused" type="button" class="chat-queue-chip" :data-attention="failed > 0 || !!error" :aria-expanded="expanded" aria-haspopup="dialog" @click="expanded = true"><RemoteIcon :name="snapshot?.paused ? 'pause' : failed ? 'alert' : 'queue'" /><span>{{ summary }}</span><RemoteIcon name="up" /></button>
     <RoomDrawer v-if="expanded" title="等着说的话" :subtitle="snapshot?.paused ? '已暂停，继续后按顺序发送' : '排好顺序，慢慢说'" :busy="changing" :before-close="beforeClose" @close="close">
@@ -33,13 +34,15 @@ import RemoteIcon from './RemoteIcon.vue'
 import RemoteFeedback from './RemoteFeedback.vue'
 import RoomDrawer from '../companion/RoomDrawer.vue'
 import { remoteFeedbackMessage } from '../../services/remoteFeedback.js'
-import { remoteState, remoteViews, remoteExecutions, readRemote, performRemote, installQueuedLive } from '../../stores/remote'
+import { remoteState, remoteViews, remoteExecutions, remoteUnavailableThreads, readRemote, performRemote, installQueuedLive } from '../../stores/remote'
 import { currentToken, assertToken } from '../../stores/mode'
 import { remoteStatus } from '../../utils/remoteMarkdown'
 const props = defineProps({ threadId: { type: String, required: true }, agentId: { type: String, required: true }, visible: Boolean })
 const emit = defineEmits(['updated', 'pending'])
 const token = currentToken(), query = { kind: 'queue', id: props.threadId }
-const snapshot = computed(() => remoteViews.get(JSON.stringify(query))?.data)
+const queueView = computed(() => remoteViews.get(JSON.stringify(query)))
+const unavailable = computed(() => remoteUnavailableThreads.has(props.threadId) || ['REMOTE_NOT_FOUND', 'REMOTE_FORBIDDEN', 'REMOTE_INCOMPATIBLE', 'REMOTE_PROTOCOL', 'REMOTE_INVALID_INPUT'].includes(queueView.value?.errorCode))
+const snapshot = computed(() => unavailable.value ? null : queueView.value?.data)
 const online = computed(() => remoteState.connection === 'online')
 const items = computed(() => (snapshot.value?.items || []).filter(item => ['queued', 'failed', 'interrupted'].includes(item.state)))
 const ordered = computed(() => items.value.filter(item => item.state === 'queued' && !item.immediate))
@@ -49,20 +52,21 @@ const failed = computed(() => items.value.filter(item => ['failed', 'interrupted
 const summary = computed(() => snapshot.value?.paused ? `${items.value.length} 条消息已暂停` : failed.value ? `${failed.value} 条消息待处理` : `${items.value.length} 条待发送`)
 function select(item, force = false) { if (editing.value && editing.value !== item.id && dirty.value) { error.value = '先保存或放弃当前编辑，再查看另一条消息。'; return }; selected.value = !force && selected.value === item.id && editing.value !== item.id ? null : item.id }
 const dirty = computed(() => !!editing.value && edited.value !== original.value)
-const writable = computed(() => online.value && !remoteViews.get(JSON.stringify(query))?.cached)
+const writable = computed(() => online.value && !unavailable.value && !!snapshot.value && !queueView.value?.cached)
 function beforeClose() { if (dirty.value) { discard.value = true; return false }; return true }
 function prepareLeave() { if (changing.value) throw new Error('队列操作还在进行，请稍等。'); if (dirty.value) { expanded.value = true; discard.value = true; throw new Error('队列里还有未保存的修改。') } }
-defineExpose({ prepareLeave })
+defineExpose({ prepareLeave, busy: changing, recoveryDraft: () => dirty.value ? edited.value : '' })
 function close() { expanded.value = false; editing.value = null; discard.value = false }
 function edit(item) { if (editing.value && editing.value !== item.id && dirty.value) { error.value = '先保存或放弃当前编辑，再修改另一条消息。'; return }; selected.value = item.id; editing.value = item.id; edited.value = original.value = item.input?.content || ''; editingRevision.value = item.revision }
 function reference(item) { return item.input?.workspaceContext?.filePath || (item.input?.workspaceContext?.terminalId ? '终端引用' : '') }
-let disposed = false, loading = false, timer = null, previousRun = ''
+let disposed = false, loading = false, polling = false, timer = null, previousRun = ''
 function guard() { assertToken(token, 'remote'); if (disposed) throw new Error('队列面板已关闭') }
 async function refresh() {
-  if (loading || disposed || document.hidden || !props.visible) return
+  if (loading || disposed || document.hidden || !props.visible || !online.value || unavailable.value || queueView.value?.retryAfter > Date.now()) return
   loading = true
   try {
     const next = await readRemote(query); guard(); error.value = ''
+    if (document.hidden || !props.visible || unavailable.value) return
     if (remoteViews.get(JSON.stringify(query))?.cached) return
     if (!Array.isArray(next?.items)) return
     const running = next.items.find(item => item.state === 'running')?.id || ''
@@ -91,9 +95,9 @@ function move(item, offset) {
   ;[order[index], order[target]] = [order[target], order[index]]
   return mutate({ kind: 'queue_order', threadId: props.threadId, order })
 }
-async function poll() { await refresh(); if (!disposed) timer = setTimeout(poll, document.hidden || !props.visible ? 10000 : 2500) }
-const wake = () => { if (!document.hidden) refresh() }
-watch(() => props.visible, value => { if (value) refresh(); else close() })
+async function poll() { clearTimeout(timer); timer = null; if (polling || disposed || document.hidden || !props.visible || !online.value || unavailable.value) return; polling = true; try { await refresh() } finally { polling = false }; if (!disposed && !document.hidden && props.visible && online.value && !unavailable.value) timer = setTimeout(poll, 2500) }
+const wake = () => { poll() }
+watch([() => props.visible, online, unavailable], () => { if (!props.visible) close(); poll() })
 watch(items, values => { if (selected.value && !values.some(item => item.id === selected.value) && !editing.value) selected.value = null })
 onMounted(() => { poll(); document.addEventListener('visibilitychange', wake); window.addEventListener('online', wake) })
 onBeforeUnmount(() => { disposed = true; clearTimeout(timer); document.removeEventListener('visibilitychange', wake); window.removeEventListener('online', wake) })

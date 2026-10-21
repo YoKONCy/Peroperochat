@@ -26,7 +26,22 @@ fn envelope(node:&str,id:&str,kind:&str,payload:Value)->Value {
 fn emit(app:&AppHandle,token:&Token,kind:&str,data:Value) {
     if let Ok(_gate)=app.state::<Coordinator>().gate(Some(token),false) {let _=app.emit("remote-event",json!({"modeToken":token,"kind":kind,"data":data}));}
 }
+fn transient_room_hint(value:&Value)->bool {
+    let payload=&value["payload"];
+    value["protocolVersion"]==1 && value["type"]=="push" && value["id"].as_str()==Some("")
+        && value.get("streamId").is_none() && value.get("sequence").is_none()
+        && payload["action"].as_str().is_some_and(|action|matches!(action,
+            "stronghold_round_started"|"stronghold_agent_queued"|"stronghold_agent_started"|
+            "stronghold_agent_delta"|"stronghold_agent_tool_started"|"stronghold_agent_tool_completed"|
+            "stronghold_agent_completed"|"stronghold_agent_failed"|"stronghold_round_completed"))
+        && ["roomId","roundId"].iter().all(|key|payload[*key].as_str().is_some_and(|id|!id.is_empty() && id.len()<=1024))
+}
 pub(super) fn accept_push(app:&AppHandle,token:&Token,value:Value)->ChatResult<()> {
+    // infOS 据点通过未编号的临时广播展示接话状态。它们不参与持久回执、去重或流游标，恢复仍读取权威房间快照。
+    if transient_room_hint(&value) {
+        let mode=app.state::<Coordinator>();let _gate=mode.gate(Some(token),false)?;
+        return app.emit("remote-event",json!({"modeToken":token,"kind":"gateway","data":value})).map_err(|_|super::inactive());
+    }
     if value["protocolVersion"]!=1 || value["type"]!="push" || !value["id"].as_str().is_some_and(|id|!id.is_empty() && id.len()<=1024) {
         return Err(ChatError::new("REMOTE_PROTOCOL","Gateway 补发事件身份或版本无效"));
     }
@@ -153,4 +168,20 @@ pub async fn connect(app:&AppHandle,session:&super::Session,principal:&str)->Cha
         emit(&app,&run_token,"connection",json!({"state":"offline","sessionId":session_id}));
     });
     Ok(Handle {token,principal:principal.into(),window_id,session_id:handle_session_id,queue,task:Arc::new(task)})
+}
+
+#[cfg(test)]
+mod room_hint_tests {
+    use super::*;
+    #[test]
+    fn only_known_room_hints_may_omit_delivery_identity() {
+        let value=json!({"protocolVersion":1,"type":"push","id":"","payload":{"action":"stronghold_agent_delta","roomId":"tea-room","roundId":"round-a","agentId":"pero","delta":"你好"}});
+        assert!(transient_room_hint(&value));
+        let mut invalid=value.clone();invalid["payload"]["action"]=json!("durable_notification");
+        assert!(!transient_room_hint(&invalid));
+        let mut invalid=value.clone();invalid["streamId"]=json!("thread:a");invalid["sequence"]=json!(1);
+        assert!(!transient_room_hint(&invalid));
+        let mut invalid=value;invalid["payload"]["roundId"]=json!("");
+        assert!(!transient_room_hint(&invalid));
+    }
 }

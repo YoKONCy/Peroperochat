@@ -1,6 +1,6 @@
 <template>
   <section class="remote-record-detail">
-    <header class="remote-record-heading"><RemoteAvatar v-if="kind === 'agents' && record.id" :id="record.id" :label="record.name" /><BrandIcon v-else-if="['models', 'providers'].includes(kind)" :brand="resolveModelBrand(record.modelId) || resolveProviderBrand(record.provider || record.brand, record.apiBase)" :size="32" fallback="model" /><RemoteIcon v-else :name="icon" /><div><small>{{ label }}</small><h3>{{ title }}</h3></div></header>
+    <header class="remote-record-heading"><RemoteAvatar v-if="kind === 'agents' && record.id" :id="record.id" :label="record.name" fit="contain" /><BrandIcon v-else-if="['models', 'providers'].includes(kind)" :brand="resolveModelBrand(record.modelId) || resolveProviderBrand(record.provider || record.brand, record.apiBase)" :size="32" fallback="model" /><RemoteIcon v-else :name="icon" /><div><small>{{ label }}</small><h3>{{ title }}</h3></div></header>
     <div v-if="tags.length" class="remote-record-badges"><span v-for="tag in tags" :key="tag">{{ tag }}</span></div>
     <article v-if="body" class="remote-record-body">{{ body }}</article>
     <dl v-if="facts.length" class="remote-record-facts"><div v-for="fact in facts" :key="fact.key"><dt>{{ fact.label }}</dt><dd>{{ fact.value }}</dd></div></dl>

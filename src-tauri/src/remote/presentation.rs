@@ -9,15 +9,21 @@ use crate::{mode::{Coordinator, Token}, local::types::*};
 #[serde(tag="kind", rename_all="snake_case", deny_unknown_fields)]
 pub enum Scope {
     Home,
+    DraftRecoveries,
     Appearance,
     Session { #[serde(rename="agentId")] agent_id:String, #[serde(rename="threadId")] thread_id:String },
+    Room { #[serde(rename="roomId")] room_id:String },
     Character { #[serde(rename="agentId")] agent_id:String },
 }
 impl Scope {
     fn key(&self)->ChatResult<String> {
         match self {
-            Self::Home|Self::Appearance=>{}, Self::Session {agent_id,thread_id}=>{super::operations::segment(agent_id)?;super::operations::segment(thread_id)?;},
+            Self::Home|Self::Appearance|Self::DraftRecoveries=>{}, Self::Session {agent_id,thread_id}=>{super::operations::segment(agent_id)?;super::operations::segment(thread_id)?;},
             Self::Character {agent_id}=>{super::operations::segment(agent_id)?;},
+            Self::Room {room_id}=>{
+                super::operations::segment(room_id)?;
+                if room_id.contains(['/', '\\']) {return Err(ChatError::new("INVALID_INPUT","房间标识无效"));}
+            },
         }
         Ok(format!("ui:{}",serde_json::to_string(self).map_err(|_|super::inactive())?))
     }
@@ -25,6 +31,9 @@ impl Scope {
 #[derive(Deserialize, Serialize)]
 #[serde(rename_all="camelCase", deny_unknown_fields)]
 pub struct DraftAttachment {id:String,name:String}
+#[derive(Deserialize, Serialize)]
+#[serde(rename_all="camelCase", deny_unknown_fields)]
+pub struct RoomView {draft:String,mention:String,#[serde(default)] offset:f64,#[serde(default)] at_end:bool,#[serde(default)] send_request_id:Option<String>}
 #[derive(Deserialize, Serialize)]
 #[serde(rename_all="camelCase", deny_unknown_fields)]
 pub struct SessionView {
@@ -52,7 +61,8 @@ pub struct CharacterStyle {
 }
 #[derive(Deserialize, Serialize)]
 #[serde(rename_all="camelCase", deny_unknown_fields)]
-pub struct AppearanceView {theme:String,palette:String,show_cg:bool,reduce_motion:bool,role_style:bool}
+pub struct AppearanceView {theme:String,palette:String,show_cg:bool,reduce_motion:bool,role_style:bool,#[serde(default="default_font_size")] font_size:u8}
+fn default_font_size()->u8 {14}
 fn palette_valid(value:&str)->bool { ["standard","sky","night","sakura","mint","amber","crimson","silver","peach","violet","rose"].contains(&value) }
 fn color_valid(value:&str)->bool {value.len()==7 && value.starts_with('#') && value.as_bytes()[1..].iter().all(u8::is_ascii_hexdigit)}
 fn cg_valid(value:&str)->bool {
@@ -69,10 +79,24 @@ fn validate(scope:&Scope,value:Value)->ChatResult<Value> {
     if value.is_null() {return Ok(Value::Null);}
     let invalid=||ChatError::new("INVALID_INPUT","远程阅读偏好或草稿格式无效");
     match scope {
+        Scope::Room {..}=> {
+            let value:RoomView=serde_json::from_value(value).map_err(|_|invalid())?;
+            if value.draft.chars().count()>16000 || value.mention.len()>300 || value.send_request_id.as_ref().is_some_and(|id|uuid::Uuid::parse_str(id).is_err()) || !value.offset.is_finite() || value.offset<0.0 || value.offset>100_000_000.0 {return Err(invalid());}
+            Ok(json!(value))
+        },
         Scope::Appearance=> {
             let value:AppearanceView=serde_json::from_value(value).map_err(|_|invalid())?;
-            if !["light","dark","system"].contains(&value.theme.as_str()) || !palette_valid(&value.palette) {return Err(invalid());}
+            if !["light","dark","system"].contains(&value.theme.as_str()) || !palette_valid(&value.palette) || !(13..=18).contains(&value.font_size) {return Err(invalid());}
             Ok(json!(value))
+        },
+        Scope::DraftRecoveries=> {
+            let values:Vec<HomeView>=serde_json::from_value(value).map_err(|_|invalid())?;
+            if values.len()>128 {return Err(invalid());}
+            for item in &values {
+                super::operations::segment(&item.agent_id)?;super::operations::segment(&item.thread_id)?;
+                if item.title.len()>1024 {return Err(invalid());}
+            }
+            Ok(json!(values))
         },
         Scope::Home=> {
             let value:HomeView=serde_json::from_value(value).map_err(|_|invalid())?;
@@ -101,12 +125,13 @@ fn validate(scope:&Scope,value:Value)->ChatResult<Value> {
 }
 
 fn settle_sent_draft(tx:&rusqlite::Transaction<'_>,scope:&Scope,value:&mut Value)->ChatResult<bool> {
-    if !matches!(scope,Scope::Session {..}) {return Ok(false);}
+    if !matches!(scope,Scope::Session {..}|Scope::Room {..}) {return Ok(false);}
     let Some(id)=value["sendRequestId"].as_str() else {return Ok(false);};
     let state:Option<String>=tx.query_row("SELECT state FROM requests WHERE id=?1",[id],|row|row.get(0)).optional()?;
     if state.as_deref()!=Some("completed") {return Ok(false);}
     // 读写都核对持久回执，防止延迟保存把已发送草稿重新写回；新编辑已解除请求关联。
-    value["draft"]=json!("");value["attachments"]=json!([]);value["workspaceContext"]=Value::Null;value["sendRequestId"]=Value::Null;value["editId"]=json!(uuid::Uuid::new_v4().to_string());
+    value["draft"]=json!("");value["sendRequestId"]=Value::Null;
+    if matches!(scope,Scope::Session {..}) {value["attachments"]=json!([]);value["workspaceContext"]=Value::Null;value["editId"]=json!(uuid::Uuid::new_v4().to_string());}
     Ok(true)
 }
 
@@ -175,6 +200,19 @@ mod tests {
         assert!(validate(&Scope::Appearance,value.clone()).is_ok());
         let mut invalid=value;invalid["theme"]=json!("javascript:alert(1)");
         assert!(validate(&Scope::Appearance,invalid).is_err());
+    }
+    #[test]
+    fn room_draft_keeps_receipt_but_rejects_unbounded_positions_and_unknown_fields() {
+        let scope=Scope::Room {room_id:"tea-room".into()};
+        assert!(scope.key().is_ok());
+        let value=json!({"draft":"等会儿接着聊","mention":"@all","offset":12.0,"atEnd":false,"sendRequestId":uuid::Uuid::new_v4().to_string()});
+        assert!(validate(&scope,value.clone()).is_ok());
+        let mut invalid=value.clone();invalid["offset"]=json!(-1);
+        assert!(validate(&scope,invalid).is_err());
+        let mut invalid=value;invalid["localMemory"]=json!("不允许混入本地业务数据");
+        assert!(validate(&scope,invalid).is_err());
+        assert!(Scope::Room {room_id:"../local".into()}.key().is_err());
+        assert!(Scope::Room {room_id:"..\\local".into()}.key().is_err());
     }
     #[test]
     fn character_style_rejects_executable_css_and_urls() {

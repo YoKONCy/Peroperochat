@@ -1,10 +1,10 @@
 <template>
   <section class="remote-collection" :class="{ 'file-library': kind === 'library' && source === 'files' }">
-    <header class="remote-section-heading"><div><span class="remote-eyebrow">{{ eyebrow }}</span><h1>{{ title }}</h1></div><button v-if="kind === 'tasks'" class="room-icon-button" aria-label="新建远程任务" :disabled="remoteState.connection !== 'online' || !agentId" @click="$emit('create-task')"><RoomIcon name="plus" /></button><button class="room-icon-button" aria-label="刷新列表" :disabled="loading" @click="reload"><RoomIcon name="refresh" /></button></header>
+    <header class="remote-section-heading"><div><span class="remote-eyebrow">{{ eyebrow }}</span><h1>{{ title }}</h1></div><button v-if="kind === 'library'" type="button" class="library-manage-button" :disabled="source === 'files' && (!threadId || !agentId)" @click="$emit('manage', managementEntry.section)"><RoomIcon :name="managementEntry.icon" />{{ managementEntry.label }}</button><button v-if="kind === 'tasks'" class="room-icon-button" aria-label="新建远程任务" :disabled="remoteState.connection !== 'online' || !agentId" @click="$emit('create-task')"><RoomIcon name="plus" /></button><button class="room-icon-button" aria-label="刷新列表" :disabled="loading" @click="reload"><RoomIcon name="refresh" /></button></header>
     <div v-if="kind === 'tasks'" class="remote-task-filter"><span>任务状态</span><ChoicePicker v-model="taskStatus" label="任务状态" :options="taskStatuses" /></div>
-    <template v-if="kind === 'library'"><div class="remote-segments"><button v-for="item in sources" :key="item.id" :aria-pressed="source === item.id" :class="{ selected: source === item.id }" @click="source = item.id">{{ item.label }}</button></div><RemoteFilePath v-if="source === 'files'" :path="path" :disabled="loading" @navigate="navigateFiles" /><form class="remote-search" @submit.prevent="search"><RoomIcon name="search" /><input v-model="searchText" :placeholder="source === 'files' ? '在文件夹里找找…' : '搜索当前连接中的资料'" aria-label="搜索资料" maxlength="200" /><button type="submit">搜索</button></form></template>
-    <template v-if="kind === 'inbox'"><RemoteFeedback :message="remoteState.notificationError" /><article v-for="notice in notices" :id="`remote-notice-${JSON.stringify([notice.principalId, notice.notificationId])}`" :key="`${notice.principalId}:${notice.notificationId}:${notice.revision}`" class="remote-input-card"><span class="remote-eyebrow">{{ notice.replayed ? '较早的提醒' : '新的提醒' }}</span><h3>{{ notice.title || 'infOS 通知' }}</h3><p class="remote-notice-body">{{ notice.body }}</p><button class="room-text-button" :disabled="acknowledging || remoteState.connection !== 'online'" @click="acknowledge(notice)">标为已读</button></article></template>
-    <RemoteFeedback :message="error" />
+    <template v-if="kind === 'library'"><div class="remote-segments remote-library-tabs"><button v-for="item in sources" :key="item.id" :aria-pressed="source === item.id" :class="{ selected: source === item.id }" @click="source = item.id"><RoomIcon :name="item.id === 'files' ? 'folder' : item.id === 'memories' ? 'memory' : 'document'" />{{ t(item.label) }}</button></div><RemoteFilePath v-if="source === 'files'" :path="path" :disabled="loading" @navigate="navigateFiles" /><form class="remote-search" @submit.prevent="search"><RoomIcon name="search" /><input v-model="searchText" :placeholder="source === 'files' ? '在文件夹里找找…' : '搜索当前连接中的资料'" aria-label="搜索资料" maxlength="200" /><button type="submit">搜索</button></form></template>
+    <template v-if="kind === 'inbox'"><RemoteFeedback v-if="active" :message="remoteState.notificationError" /><article v-for="notice in notices" :id="`remote-notice-${JSON.stringify([notice.principalId, notice.notificationId])}`" :key="`${notice.principalId}:${notice.notificationId}:${notice.revision}`" class="remote-input-card"><span class="remote-eyebrow">{{ notice.replayed ? '较早的提醒' : '新的提醒' }}</span><h3>{{ notice.title || 'infOS 通知' }}</h3><p class="remote-notice-body">{{ notice.body }}</p><button class="room-text-button" :disabled="acknowledging || remoteState.connection !== 'online'" @click="acknowledge(notice)">标为已读</button></article></template>
+    <RemoteFeedback v-if="active" :message="error" />
     <p v-if="cached && remoteState.connection !== 'online'" class="remote-cache-note">离线中，显示上次保存的内容。</p>
     <p v-if="kind === 'library' && source === 'files' && loading && rows.length" class="file-opening-note" role="status">正在读取文件…</p>
     <p v-if="(loading || syncing) && !rows.length" class="room-empty">正在载入…</p>
@@ -22,17 +22,19 @@ import RoomIcon from './RemoteIcon.vue'
 import RemoteFilePath from './RemoteFilePath.vue'
 import '../../styles/remote-files.css'
 import ChoicePicker from '../companion/ChoicePicker.vue'
+import { t } from '../../i18n/remote'
 import RemoteFileCover from './RemoteFileCover.vue'
 import { readRemote, remoteViews, remotePendingRequests, refreshRemotePendingRequests, remoteNotifications, remoteState, refreshRemoteNotifications, acknowledgeRemoteNotification } from '../../stores/remote'
 import { currentToken, assertToken } from '../../stores/mode'
 import { remoteItems, remoteStatus } from '../../utils/remoteMarkdown'
-const props = defineProps({ kind: String, agentId: String, threadId: String })
-const emit = defineEmits(['detail', 'thread', 'pending', 'create-task', 'resource'])
+const props = defineProps({ kind: String, agentId: String, threadId: String, active: { type: Boolean, default: true } })
+const emit = defineEmits(['detail', 'thread', 'pending', 'create-task', 'resource', 'manage'])
 const token = currentToken()
 const page = ref(1), source = ref('files'), path = ref('.'), searchText = ref(''), keyword = ref(''), loading = ref(false), error = ref(''), queries = ref([]), taskStatus = ref(null)
 const acknowledging = ref(false)
 const notices = computed(() => [...remoteNotifications.values()])
 const sources = [{ id: 'files', label: '文件' }, { id: 'memories', label: '记忆' }, { id: 'documents', label: '文档' }]
+const managementEntry = computed(() => ({ files: { section: 'workbench', label: '文件管理', icon: 'folder' }, memories: { section: 'memories', label: '记忆管理', icon: 'memory' }, documents: { section: 'documents', label: '文档管理', icon: 'edit' } })[source.value])
 const taskStatuses = [{ value: null, label: '全部' }, { value: 'running', label: '执行中' }, { value: 'waiting_input', label: '等待回复' }, { value: 'paused', label: '已暂停' }, { value: 'completed', label: '已完成' }, { value: 'failed', label: '执行失败' }]
 let version = 0, disposed = false
 const title = computed(() => ({ tasks: '任务', inbox: '通知', library: '资料' }[props.kind]))
@@ -47,6 +49,7 @@ const rows = computed(() => {
 const hasMore = computed(() => { const data = views.value[0]?.data; return typeof data?.total === 'number' ? page.value * 30 < data.total : rows.value.length >= 30 })
 function guard() { assertToken(token, 'remote'); if (disposed) throw new Error('页面已关闭') }
 async function reload() {
+  if (!props.active) return
   const request = ++version; loading.value = true; error.value = ''
   try {
     guard()
@@ -94,9 +97,10 @@ async function open(row) {
     finally { if (!disposed && request === version) loading.value = false }
     return
   }
-  emit('detail', { title: row.title || row.summary || '记忆来源', query: { kind: source.value === 'memories' ? 'memory_source' : 'document', id: row.id }, summary: row.summary || row.event?.summary })
+  emit('detail', { title: source.value === 'memories' ? '记忆' : row.title || row.summary || '文档', query: { kind: source.value === 'memories' ? 'memory_source' : 'document', id: row.id }, summary: row.summary || row.event?.summary })
 }
-watch(() => [props.kind, props.agentId, props.threadId], () => { page.value = 1; path.value = '.'; reload() }, { immediate: true })
+watch(() => [props.kind, props.agentId, props.threadId], () => { queries.value = []; page.value = 1; path.value = '.'; reload() }, { immediate: true })
+watch(() => props.active, value => { if (value) reload(); else { version++; loading.value = false; error.value = '' } })
 watch([page, path], reload)
 watch(source, () => { page.value = 1; path.value = '.'; searchText.value = ''; keyword.value = ''; reload() })
 watch(taskStatus, () => { if (page.value !== 1) page.value = 1; else reload() })

@@ -67,3 +67,6 @@ data/
 *.keystore
 *.p12
 settings.json
+
+# Archived docs (原始文档与设计稿归档，仅本地保留)
+docs/archived/

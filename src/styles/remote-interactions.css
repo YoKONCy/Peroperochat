@@ -29,7 +29,8 @@
 .remote-manager-record-link { display:flex; align-items:center; width:100%; gap:12px; background:transparent; border:0; color:var(--room-ink); text-align:left; font:inherit; min-width:0; padding:12px 2px; }
 .remote-manager-record-link > svg,.remote-manager-record-link > .remote-avatar { width:30px; height:30px; flex:none; color:var(--room-accent); }
 .remote-manager-record-link > svg:last-child { width:15px; }
-.remote-manager-record-link > span { flex:1; min-width:0; }
+.remote-manager-record-link > span:not(.character-avatar) { flex:1; min-width:0; }
+.remote-manager-record-link > .character-avatar { flex:0 0 46px; width:46px; height:46px; min-width:46px; aspect-ratio:1; border-radius:12px 12px 12px 5px; }
 .remote-manager-record-link small { display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; color:var(--room-muted); font-size:12px; line-height:1.6; margin-top:5px; overflow-wrap:anywhere; }
 .remote-manager-record-link em,.remote-record-badges span { font-style:normal; font-size:11px; padding:3px 7px; background:var(--room-subtle); color:var(--room-accent); border-radius:6px; }
 .remote-subnav { display:flex; gap:6px; overflow-x:auto; padding:4px 0 12px; margin:0 0 12px; scrollbar-width:thin; }

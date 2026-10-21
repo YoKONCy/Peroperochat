@@ -51,7 +51,7 @@ pub fn snapshot_in(conn: &Connection) -> ChatResult<Value> {
 pub fn update_builtin_personas(conn:&mut Connection)->ChatResult<()> {
     conn.execute_batch("CREATE TABLE IF NOT EXISTS local_config_migrations(version INTEGER PRIMARY KEY);")?;
     let tx=conn.transaction()?;
-    let updated:bool=tx.query_row("SELECT EXISTS(SELECT 1 FROM local_config_migrations WHERE version=2)",[],|r|r.get(0))?;
+    let updated:bool=tx.query_row("SELECT EXISTS(SELECT 1 FROM local_config_migrations WHERE version=3)",[],|r|r.get(0))?;
     if updated {return Ok(());}
     let config=snapshot_in(&tx)?;
     let defaults:Value=serde_json::from_str(include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/../shared/defaultAgents.json")))
@@ -64,7 +64,7 @@ pub fn update_builtin_personas(conn:&mut Connection)->ChatResult<()> {
         }
         set_value_in(&tx,"ppc.agents",&json!(agents.to_string()))?;
     }
-    tx.execute("INSERT INTO local_config_migrations(version) VALUES(2)",[])?;
+    tx.execute("INSERT INTO local_config_migrations(version) VALUES(3)",[])?;
     tx.commit()?;Ok(())
 }
 

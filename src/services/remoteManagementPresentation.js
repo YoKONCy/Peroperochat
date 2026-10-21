@@ -2,8 +2,8 @@
 export const managementAreas = [
   { id: 'daily', label: '常用配置', icon: 'settings', description: '连接、模型与角色', ids: ['providers', 'models', 'assignments', 'agents', 'user', 'voice'] },
   { id: 'content', label: '内容与资料', icon: 'memory', description: '提示词、记忆与知识', ids: ['prompts', 'memories', 'facts', 'documents', 'assets', 'logs'] },
-  { id: 'work', label: '工作台', icon: 'folder', description: '文件、执行与陪伴安排', ids: ['workbench', 'task-management', 'rooms', 'scheduler', 'proactive', 'tarot'] },
-  { id: 'advanced', label: '高级管理', icon: 'shield', description: '扩展、实例与维护', ids: ['mcp', 'skills', 'tools', 'integrations', 'inbound', 'access', 'distributed', 'usage', 'runtime', 'maintenance', 'config', 'reset'] },
+  { id: 'work', label: '日常安排', icon: 'folder', description: '文件、任务与陪伴', ids: ['workbench', 'task-management', 'scheduler', 'proactive'] },
+  { id: 'insights', label: '实例概况', icon: 'pulse', description: '用量与运行状态', ids: ['usage', 'runtime'] },
 ]
 export const sectionDescriptions = {
   providers: '维护连接地址与凭据，供多个模型共用。', models: '选择连接、声明能力并配置生成参数。', assignments: '安排全局、角色与视觉转述使用的模型。', agents: '编辑身份、公开资料、人设与互动方式。', user: '你的个人资料与 infOS 服务端偏好。', voice: '配置识别与朗读服务，或进行单次试听。',

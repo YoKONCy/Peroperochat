@@ -1,7 +1,7 @@
 <template>
   <div class="app companion-surface" :class="{ 'standalone-design': isStandalone }" :data-tone="tone" :data-reduce-motion="isStandalone && !displayPreferences.motion" :style="isStandalone ? localStyle : undefined">
     <div v-if="contentReady" class="app-mode-content" :inert="transitionVisible ? true : undefined" :aria-hidden="transitionVisible ? true : undefined">
-      <router-view v-if="isStandalone" />
+      <router-view v-if="isStandalone" v-slot="{ Component }"><Transition name="app-route" mode="out-in"><component :is="Component" :key="route.path" /></Transition></router-view>
       <RemoteWorkspace v-else-if="isRemote" :key="`${modeState.snapshot.installationId}:${modeState.snapshot.activationEpoch}:${modeState.snapshot.activeTarget.profileId}`" />
     </div>
     <Transition name="mode-curtain"><ModeTransition v-if="transitionVisible" :waiting="transitionWaiting" /></Transition>
@@ -43,6 +43,12 @@ watch(() => [route.fullPath, modeState.snapshot?.activationEpoch, modeState.snap
 body { margin: 0; background-color: var(--room-page); }
 .mode-curtain-leave-active { transition: opacity .22s ease; pointer-events: none; }
 .mode-curtain-leave-to { opacity: 0; }
+.app-route-enter-active{transition:opacity 170ms ease,transform 210ms cubic-bezier(.2,.75,.25,1)}
+.app-route-leave-active{pointer-events:none;transition:opacity 110ms ease,transform 130ms ease}
+.app-route-enter-from{opacity:0;transform:translateY(7px)}
+.app-route-leave-to{opacity:0;transform:translateY(-3px)}
+@media(prefers-reduced-motion:reduce){.app-route-enter-active,.app-route-leave-active{transition:none;transform:none}}
+[data-reduce-motion=true] .app-route-enter-active,[data-reduce-motion=true] .app-route-leave-active{transition:none;transform:none}
 @media (prefers-reduced-motion: reduce) { .mode-curtain-leave-active { transition: none; } }
 .app { 
   min-height: 100vh; 
