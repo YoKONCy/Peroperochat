@@ -2,6 +2,7 @@ import { reactive, shallowReactive } from 'vue'
 import { remoteClient } from '../../services/remote'
 import { currentToken, assertToken, onModeInvalidated } from '../mode'
 import { applyRemoteFrame, createRemoteSurfaceState, installRemoteProjection } from '../../services/remoteSurface'
+import { remoteFeedbackMessage } from '../../services/remoteFeedback.js'
 
 // 独立模式 Store 不参与远程数据投影；服务端是消息、任务与角色状态的权威。
 export const remoteState = shallowReactive({ connection: 'offline', sessionId: null, agents: [], activeAgentId: null, error: null, pendingError: null, notificationError: null, ready: false, initializing: false, restoringView: false })
@@ -23,7 +24,7 @@ let resuming = null
 let lastResumeAt = 0
 let queuedFrames = []
 let queuedFrame = null
-const blockedCodes = new Set(['REMOTE_AUTH_REQUIRED', 'REMOTE_IDENTITY_CHANGED', 'REMOTE_INCOMPATIBLE', 'REMOTE_PROTOCOL', 'CREDENTIAL_UNAVAILABLE', 'PROFILE_NOT_FOUND', 'INVALID_PROFILE'])
+const blockedCodes = new Set(['REMOTE_AUTH_REQUIRED', 'REMOTE_IDENTITY_CHANGED', 'REMOTE_INCOMPATIBLE', 'CREDENTIAL_UNAVAILABLE', 'PROFILE_NOT_FOUND', 'INVALID_PROFILE'])
 const offlineCodes = new Set(['REMOTE_NETWORK', 'REMOTE_HTTP', 'REMOTE_RATE_LIMIT'])
 
 function blockConnection(error) {
@@ -69,7 +70,7 @@ export async function refreshRemoteNotifications() {
   const result = await remoteClient.notifications(token)
   assertToken(token, 'remote')
   if (request !== notificationVersion) return
-  if (!Array.isArray(result.data?.items)) throw new Error('远程通知缓存格式无效')
+  if (!Array.isArray(result.data?.items)) throw new Error('暂时没能载入通知，请稍后再试。')
   remoteNotifications.clear()
   for (const item of result.data.items) remoteNotifications.set(`${item.principalId}:${item.notificationId}`, item)
   remoteState.notificationError = null
@@ -110,7 +111,7 @@ export async function refreshRemotePendingRequests() {
   const pending = await remoteClient.pendingRequests(token)
   assertToken(token, 'remote')
   if (version !== pendingVersion) return
-  if (!Array.isArray(pending)) throw new Error('远程待核对操作记录格式无效')
+  if (!Array.isArray(pending)) throw new Error('暂时没能读取操作记录，请稍后再试。')
   remotePendingRequests.clear()
   for (const item of pending) remotePendingRequests.set(item.requestId, item)
   remoteState.pendingError = null
@@ -120,7 +121,7 @@ export async function reviewRemoteRequest(requestId, note, { confirmed = false }
   const token = currentToken()
   assertToken(token, 'remote')
   const pending = remotePendingRequests.get(requestId)
-  if (!confirmed || !pending || pending.state !== 'unknown' || !note?.trim()) throw new Error('请先核对服务端状态，并明确确认核对说明')
+  if (!confirmed || !pending || pending.state !== 'unknown' || !note?.trim()) throw new Error('请先查看结果，并填写确认说明。')
   await remoteClient.reviewRequest(requestId, pending.fingerprint, note, token)
   assertToken(token, 'remote')
   await refreshRemotePendingRequests()
@@ -150,7 +151,7 @@ export async function reconcileRemotePendingRequests() {
   try { await promise } finally { if (reconciliation?.promise === promise) reconciliation = null }
 }
 
-function scheduleRefresh() {
+function scheduleRefresh(delay = 150) {
   if (refreshTimer) return
   const token = currentToken()
   refreshTimer = setTimeout(async () => {
@@ -165,7 +166,7 @@ function scheduleRefresh() {
       }
     })
     await Promise.all(workers)
-  }, 150)
+  }, delay)
 }
 
 async function listenOnce() {
@@ -184,7 +185,8 @@ async function listenOnce() {
           remoteState.pendingError = error.message
         })
       }
-      if (event.data.message) remoteState.error = event.data.message
+      if (event.data.state === 'online') remoteState.error = null
+      else if (event.data.message) remoteState.error = remoteFeedbackMessage({ code: event.data.code, message: event.data.message })
       if (['auth_required', 'incompatible'].includes(event.data.state)) { clearTimeout(bootstrapTimer); bootstrapTimer = null }
       if (event.data.state !== 'online') {
         remoteState.ready = false
@@ -227,7 +229,7 @@ export async function readRemote(query, { cachedOnly = false, allowCached = true
   if (!remoteViews.has(id) && remoteViews.size >= 64) {
     const disposable = [...remoteViews].find(([, view]) => !view.loading)
     if (disposable) remoteViews.delete(disposable[0])
-    else throw new Error('远程读取请求过多，请稍后再试')
+    else throw new Error('正在载入其他内容，稍等一下再试吧。')
   }
   const previous = remoteViews.get(id)
   const requestVersion = (previous?.requestVersion || 0) + 1
@@ -260,9 +262,9 @@ export async function readRemote(query, { cachedOnly = false, allowCached = true
     }
     assertToken(token, 'remote')
     const view = remoteViews.get(id)
-    if (view?.requestVersion === requestVersion) Object.assign(view, { loading: false, error: error.message, stale: true })
+    if (view?.requestVersion === requestVersion) Object.assign(view, { loading: false, error: error.message, stale: true, syncing: error.code === 'REMOTE_STALE_READ' })
     blockConnection(error)
-    if (error.code === 'REMOTE_STALE_READ') scheduleRefresh()
+    if (error.code === 'REMOTE_STALE_READ') scheduleRefresh(1500)
     throw error
   }
 }
@@ -299,7 +301,7 @@ export async function initializeRemote() {
       const agents = await readRemote({ kind: 'agents' }, { allowCached: false })
       assertToken(token, 'remote')
       if (version !== generation) return
-      if (!Array.isArray(agents)) throw new Error('远程角色列表格式无效')
+      if (!Array.isArray(agents)) throw new Error('暂时没能载入角色，请稍后再试。')
       remoteState.agents = agents
       const principal = agents.find(agent => agent.id === remoteState.activeAgentId)?.id || agents.find(agent => agent.isEnabled)?.id || agents[0]?.id
       if (!principal) throw Object.assign(new Error('服务端尚无可用角色'), { code: 'REMOTE_NOT_FOUND' })

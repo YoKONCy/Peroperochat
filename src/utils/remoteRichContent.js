@@ -72,7 +72,8 @@ function stableParts(source, start = 0) {
     const link = token.type === 'paragraph' && token.raw.trim().match(/^!?\[([^\]\n]*)\]\((?:<([^>\n]+)>|([^\s]+))(?:\s+"[^"]*")?\)$/)
     if (link && (isResourceReference(link[2] || link[3]) || token.raw.trim().startsWith('!['))) return { id, kind: 'resource', source: link[2] || link[3], name: link[1] }
     const math = token.raw.trim().match(/^(?:\$\$|\\\[)\s*([\s\S]*?)\s*(?:\$\$|\\\])$/)
-    return { id, kind: math ? 'formula' : 'markdown', source: math ? math[1] : token.raw }
+    // 保留块的语义，让流式拆分后的标题、列表仍有完整的阅读节奏。
+    return { id, kind: math ? 'formula' : 'markdown', format: token.type, source: math ? math[1] : token.raw }
   }).filter(Boolean)
 }
 export { stableParts as richParts }
@@ -94,7 +95,10 @@ export function renderRemoteMarkdown(source) {
   const normalized = source.split('\n').map(line => { const match = line.match(/^[ \t]*(`{3,}|~{3,})/); if (match) { if (!fence) fence = match[1]; else if (match[1][0] === fence[0] && match[1].length >= fence.length) fence = ''; return line }; return fence ? line : line.replace(/^[ \t]{4,}(?=#{1,6}(?:[ \t]+|$))/, '') }).join('\n')
   const clean = DOMPurify.sanitize(parser.parse(normalized), { ADD_ATTR: ['data-resource-source'], FORBID_TAGS: ['img', 'audio', 'video', 'iframe', 'object', 'embed', 'style', 'script', 'form', 'button'], FORBID_ATTR: ['style'] })
   const fragment = document.createElement('template'); fragment.innerHTML = clean
-  for (const input of fragment.content.querySelectorAll('input')) { input.disabled = true; input.tabIndex = -1 }
+  for (const input of fragment.content.querySelectorAll('input')) {
+    input.disabled = true; input.tabIndex = -1
+    if (input.type === 'checkbox') input.closest('li')?.classList.add('remote-task-item')
+  }
   for (const table of fragment.content.querySelectorAll('table')) { const box = document.createElement('div'); box.className = 'remote-rich-table'; box.tabIndex = 0; box.setAttribute('aria-label', '表格，可左右滑动'); table.replaceWith(box); box.append(table) }
   return fragment.innerHTML
 }

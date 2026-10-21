@@ -40,10 +40,17 @@ pub fn begin_read(app:&AppHandle,token:&Token,key:&str)->ChatResult<i64> {
 }
 pub fn save(app:&AppHandle,token:&Token,key:&str,ticket:i64,value:&Value)->ChatResult<bool> {
     let mode=app.state::<Coordinator>();let _gate=mode.gate(Some(token),false)?;let mut conn=connection(app,token)?;
+    save_projection(&mut conn,key,ticket,value)
+}
+fn save_projection(conn:&mut Connection,key:&str,ticket:i64,value:&Value)->ChatResult<bool> {
     let tx=conn.transaction_with_behavior(TransactionBehavior::Immediate)?;
     let current:Option<i64>=tx.query_row("SELECT ticket FROM projection_reads WHERE key=?1",[key],|r|r.get(0)).optional()?;
     if current!=Some(ticket) {return Ok(false);}
-    let raw=value.to_string();if raw.len()>super::transport::MAX_BODY {return Err(ChatError::new("REMOTE_TOO_LARGE","投影缓存过大"));}
+    let raw=value.to_string();
+    // 离线缓存额度不限制在线阅读；大型单条回复照常返回，不保留过期副本。
+    if raw.len()>super::transport::MAX_BODY {
+        tx.execute("DELETE FROM projections WHERE key=?1",[key])?;tx.commit()?;return Ok(true);
+    }
     tx.execute("INSERT INTO projections VALUES(?1,?2,?3) ON CONFLICT(key) DO UPDATE SET value=excluded.value,touched=excluded.touched",params![key,raw,chrono::Utc::now().timestamp_millis()])?;
     tx.execute("DELETE FROM projections WHERE key NOT IN (SELECT key FROM projections ORDER BY touched DESC LIMIT 64)",[])?;
     // 总缓存按实际字节限制；不把媒体和全部服务端数据库同步到手机。
@@ -155,6 +162,20 @@ pub fn principal(app:&AppHandle,token:&Token,value:Option<&str>)->ChatResult<Opt
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn large_online_projection_does_not_fail_when_offline_cache_is_full() {
+        let mut conn=Connection::open_in_memory().unwrap();
+        conn.execute_batch("CREATE TABLE projections(key TEXT PRIMARY KEY,value TEXT NOT NULL,touched INTEGER NOT NULL);
+            CREATE TABLE projection_reads(key TEXT PRIMARY KEY,ticket INTEGER NOT NULL);
+            INSERT INTO projection_reads VALUES('conversation',2);
+            INSERT INTO projections VALUES('conversation','{}',0);").unwrap();
+        let value=serde_json::json!({"content":"长".repeat(super::super::transport::MAX_BODY/3+1)});
+        assert!(!save_projection(&mut conn,"conversation",1,&value).unwrap());
+        assert!(save_projection(&mut conn,"conversation",2,&value).unwrap());
+        let count:i64=conn.query_row("SELECT COUNT(*) FROM projections",[],|row|row.get(0)).unwrap();
+        assert_eq!(count,0);
+        assert!(save_projection(&mut conn,"conversation",2,&serde_json::json!({"content":"短回复"})).unwrap());
+    }
     fn store(path:&std::path::Path)->Connection {
         let conn=Connection::open(path).unwrap();conn.execute_batch("CREATE TABLE IF NOT EXISTS requests(id TEXT PRIMARY KEY,fingerprint TEXT NOT NULL,state TEXT NOT NULL,created INTEGER NOT NULL,result TEXT,context TEXT,owner TEXT)").unwrap();conn
     }

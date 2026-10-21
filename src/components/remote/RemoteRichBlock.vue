@@ -1,5 +1,5 @@
 <template>
-  <div ref="root" class="remote-rich-block" :class="{ 'is-expanded': expanded }" :style="{ '--diagram-scale': diagramScale }">
+  <div ref="root" class="remote-rich-block" :class="{ 'is-expanded': expanded }" :data-kind="block.kind" :data-format="block.format" :style="{ '--diagram-scale': diagramScale }">
     <RemoteResourceCard v-if="block.kind === 'resource'" :value="{ source: block.source, name: block.name }" :context="context" @open="$emit('resource', $event)" @resize="$emit('resize')" />
     <div v-else-if="block.kind === 'markdown'" class="remote-rich-prose" @click="activateLink">
       <div v-if="html" class="markdown-body" v-html="html" />
@@ -7,20 +7,20 @@
       <button v-if="!expanded && (block.source.length > 1800 || containsTable)" type="button" class="remote-rich-read-more" @click="open = true"><RemoteIcon name="expand" />{{ containsTable ? '展开表格' : '展开阅读' }}</button>
     </div>
     <section v-else class="remote-rich-panel" :class="`is-${block.kind}`">
-      <header><span><RemoteIcon :name="panelIcon" />{{ title }}</span><div>
-        <button v-if="block.kind === 'code'" type="button" :aria-pressed="wrap" @click="wrap = !wrap"><RemoteIcon name="wrap" /><span>换行</span></button>
+      <header><span class="remote-rich-caption"><i><RemoteIcon :name="panelIcon" /></i><span>{{ title }}</span></span><div class="remote-rich-actions">
+        <button v-if="block.kind === 'code'" type="button" aria-label="自动换行" :aria-pressed="wrap" @click="wrap = !wrap"><RemoteIcon name="wrap" /><span>换行</span></button>
         <template v-if="expanded && block.kind === 'diagram'"><button type="button" aria-label="缩小图表" :disabled="diagramScale <= .6" @click="diagramScale = Math.max(.6, diagramScale - .2)"><RemoteIcon name="zoom-out" /></button><button type="button" aria-label="适应图表" @click="diagramScale = 1">{{ Math.round(diagramScale * 100) }}%</button><button type="button" aria-label="放大图表" :disabled="diagramScale >= 2.4" @click="diagramScale = Math.min(2.4, diagramScale + .2)"><RemoteIcon name="zoom-in" /></button></template>
-        <button v-if="['web', 'diagram', 'formula'].includes(block.kind)" type="button" :aria-pressed="showSource" @click="showSource = !showSource"><RemoteIcon name="code" /><span>{{ showSource ? '预览' : '源码' }}</span></button>
-        <button v-if="block.kind === 'web' && block.previewUrl && block.source" type="button" :aria-pressed="useInlinePreview" @click="useInlinePreview = !useInlinePreview"><RemoteIcon name="desktop" /><span>{{ useInlinePreview ? '会话资源' : '轻量预览' }}</span></button>
+        <button v-if="['web', 'diagram', 'formula'].includes(block.kind)" type="button" :aria-label="showSource ? '查看预览' : '查看源码'" :aria-pressed="showSource" @click="showSource = !showSource"><RemoteIcon :name="showSource ? panelIcon : 'code'" /><span>{{ showSource ? '预览' : '源码' }}</span></button>
+        <button v-if="block.kind === 'web' && block.previewUrl && block.source" type="button" :aria-label="useInlinePreview ? '使用完整预览' : '使用简易预览'" :aria-pressed="useInlinePreview" @click="useInlinePreview = !useInlinePreview"><RemoteIcon name="desktop" /><span>{{ useInlinePreview ? '完整预览' : '简易预览' }}</span></button>
         <button type="button" :aria-label="copied || '复制原文'" @click="copy"><RemoteIcon name="copy" /><span>{{ copied || '复制' }}</span></button>
         <button v-if="!expanded" type="button" aria-label="展开阅读" @click="open = true"><RemoteIcon name="expand" /></button>
       </div></header>
       <pre v-if="showSource || block.kind === 'code'" class="remote-rich-code" :class="{ wrapped: wrap }" tabindex="0"><code v-if="block.kind === 'code' && html" v-html="html" /><code v-else>{{ block.source }}</code></pre>
       <template v-else-if="block.kind === 'web'">
-        <iframe v-if="visible && !pageHidden && (webDocument || previewUrl)" ref="frame" :src="previewUrl || undefined" :srcdoc="previewUrl ? undefined : webDocument" sandbox="allow-scripts" referrerpolicy="no-referrer" :title="block.language === 'svg' ? 'SVG 隔离预览' : 'HTML 隔离预览'" :style="{ height: `${expanded ? 600 : webHeight}px` }" @load="$emit('resize')" />
+        <iframe v-if="visible && !pageHidden && (webDocument || previewUrl)" ref="frame" :src="previewUrl || undefined" :srcdoc="previewUrl ? undefined : webDocument" sandbox="allow-scripts" referrerpolicy="no-referrer" :title="block.language === 'svg' ? 'SVG 预览' : 'HTML 预览'" :style="{ height: `${expanded ? 600 : webHeight}px` }" @load="$emit('resize')" />
         <div v-else class="remote-rich-placeholder"><RemoteIcon name="desktop" />{{ pageHidden ? '返回后继续预览' : '滑到这里时展开预览' }}</div>
-        <footer><RemoteIcon name="shield" />{{ previewUrl ? '隔离预览 · 使用会话资源，无应用权限' : '隔离预览 · 无应用与网络权限' }}<button v-if="block.previewUrl" type="button" @click="$emit('refresh')"><RemoteIcon name="refresh" />刷新</button></footer>
-        <p v-if="previewUrl && block.source" class="remote-web-hint">页面空白时，可切换轻量预览或刷新。</p>
+        <footer><RemoteIcon name="shield" />安全预览<button v-if="block.previewUrl" type="button" @click="$emit('refresh')"><RemoteIcon name="refresh" />刷新</button></footer>
+        <p v-if="previewUrl && block.source" class="remote-web-hint">没有显示？试试简易预览。</p>
       </template>
       <div v-else-if="html" class="remote-rich-canvas" :class="{ 'is-formula': block.kind === 'formula' }" tabindex="0" :aria-label="title" v-html="html" />
       <div v-else-if="loading" class="remote-rich-placeholder" role="status"><RemoteIcon name="clock" />正在排版…</div>
@@ -49,7 +49,7 @@ const previewUrl = computed(() => useInlinePreview.value ? '' : props.block.prev
 const containsTable = computed(() => /^\s*\|.*\|/m.test(props.block.source))
 const channel = crypto.randomUUID(), token = currentToken()
 let generation = 0, observer, copyTimer, disposed = false, prepared = ''
-const title = computed(() => ({ code: String(props.block.language || 'TEXT').toUpperCase(), web: props.block.language === 'svg' ? 'SVG · 隔离预览' : 'HTML · 隔离预览', diagram: 'MERMAID', formula: '公式', markdown: '消息正文' }[props.block.kind] || '内容'))
+const title = computed(() => ({ code: String(props.block.language || 'TEXT').toUpperCase(), web: props.block.language === 'svg' ? 'SVG 预览' : 'HTML 预览', diagram: '图表', formula: '公式', markdown: '消息正文' }[props.block.kind] || '内容'))
 const panelIcon = computed(() => ({ code: 'code', web: 'desktop', diagram: 'diagram', formula: 'formula' }[props.block.kind] || 'files'))
 const webDocument = computed(() => props.block.kind === 'web' && !previewUrl.value ? embeddedRemoteDocument(props.block.source, channel) : '')
 async function inlineMath(markup) {

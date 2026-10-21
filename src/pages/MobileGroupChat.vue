@@ -12,8 +12,8 @@
         <button class="room-text-button roster-edit" :disabled="pageLoading || !membersReady || busy" @click="openMembers">成员<RoomIcon name="arrow" /></button>
       </section>
 
-      <p v-if="loadError" class="room-error group-error" role="alert">{{ loadError }} <button class="room-text-button" :disabled="pageLoading || busy" @click="load">重新读取</button></p>
-      <p v-if="actionError" class="room-error group-error" role="alert">{{ actionError }} <button class="room-icon-button" aria-label="关闭提示" @click="actionError = ''"><RoomIcon name="close" /></button></p>
+      <FeedbackMessage :message="loadError" action-label="重试" @action="load" /><button v-if="loadError" class="room-text-button" :disabled="pageLoading || busy" @click="load"><RoomIcon name="refresh" />重新加载对话</button>
+      <FeedbackMessage :message="actionError" @dismiss="actionError = ''" />
 
       <main ref="chatList" class="group-timeline" aria-label="家庭群聊消息" @scroll="onScroll">
         <div class="group-messages">
@@ -65,7 +65,7 @@
           <RoomSwitch v-model="member.enabled" :disabled="savingMembers" :label="`${member.name}参与回应`" />
         </article>
       </div>
-      <p v-if="membersError" class="room-error" role="alert">{{ membersError }}</p>
+      <FeedbackMessage :message="membersError" />
       <template #footer><div class="members-footer"><span>{{ memberDraft.filter(member => member.enabled).length }} 位伙伴参与</span><button class="room-primary-button" :disabled="savingMembers || !membersChanged" @click="saveMembers">{{ savingMembers ? '正在保存…' : '保存成员设置' }}</button></div></template>
     </RoomDrawer>
   </div>
@@ -74,7 +74,9 @@
 <script setup>
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
-import { ElMessage, ElMessageBox } from 'element-plus'
+import { ElMessageBox } from 'element-plus'
+import { appMessage as ElMessage } from '../services/appFeedback'
+import FeedbackMessage from '../components/FeedbackMessage.vue'
 import CompanionHeader from '../components/companion/CompanionHeader.vue'
 import CharacterAvatar from '../components/companion/CharacterAvatar.vue'
 import CompanionEmblem from '../components/companion/CompanionEmblem.vue'

@@ -1,5 +1,7 @@
 // 来自定稿原型的受信任矢量源码；不接收服务端传入的 SVG。
 export const remoteIconPaths = {
+    scan: '<path class="icon-wash" d="M7 7h4v4H7Zm6 6h4v4h-4Z"/><path d="M8 3H4a1 1 0 0 0-1 1v4m13-5h4a1 1 0 0 1 1 1v4M3 16v4a1 1 0 0 0 1 1h4m8 0h4a1 1 0 0 0 1-1v-4M7 7h4v4H7Zm6 6h4v4h-4Zm1-6h3m0 0v3M7 14v3h3"/><path class="icon-detail" d="M3 12h18"/>',
+    link: '<path class="icon-wash" d="m9 8 3-3a5 5 0 0 1 7 7l-3 3-3-3 3-3-1-1-3 3Z"/><path d="m10 8 3-3a4.2 4.2 0 0 1 6 6l-3 3m-2 2-3 3a4.2 4.2 0 0 1-6-6l3-3m1 5 6-6"/><path class="icon-detail" d="m3 5 2 2m14 10 2 2"/>',
     brain: '<path class="icon-wash" d="M12 4a4 4 0 0 0-7-1 4 4 0 0 0-2 7 4 4 0 0 0 1 7 4 4 0 0 0 8 3 4 4 0 0 0 8-3 4 4 0 0 0 1-7 4 4 0 0 0-2-7 4 4 0 0 0-7 1Z"/><path d="M12 4a4 4 0 0 0-7-1 4 4 0 0 0-2 7 4 4 0 0 0 1 7 4 4 0 0 0 8 3 4 4 0 0 0 8-3 4 4 0 0 0 1-7 4 4 0 0 0-2-7 4 4 0 0 0-7 1Zm0 0v16M6 7c3 0 4 3 2 5m10-5c-3 0-4 3-2 5M5 17c0-3 3-4 5-2m9 2c0-3-3-4-5-2"/>',
     audio: '<path class="icon-wash" d="M10 5 5 9H2v6h3l5 4Z"/><path d="M10 5 5 9H2v6h3l5 4Zm4 3a6 6 0 0 1 0 8m3-11a10 10 0 0 1 0 14"/><path class="icon-detail" d="M13 11v2"/>',
     terminal: '<path class="icon-wash" d="M2.5 4h19v16h-19Z"/><path d="M2.5 4h19v16h-19ZM3 8h18m-15 3 3 3-3 3m6 0h5"/><path class="icon-detail" d="M5 6h.5m2 0H8"/>',

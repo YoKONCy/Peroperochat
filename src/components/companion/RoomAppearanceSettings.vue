@@ -1,6 +1,6 @@
 <template>
   <form class="room-appearance-settings" @submit.prevent="save">
-    <p v-if="appearanceError" class="room-error" role="alert">{{ appearanceError }} <button type="button" class="room-text-button" @click="reload">重新读取</button></p>
+    <FeedbackMessage :message="appearanceError" action-label="重试" @action="reload" /><button v-if="appearanceError" type="button" class="room-text-button" @click="reload">重新加载显示偏好</button>
     <fieldset :disabled="appearanceBusy || loading">
       <label class="appearance-label">角色显示</label>
       <div class="appearance-renderers" role="group" aria-label="角色显示方式">
@@ -17,7 +17,8 @@
 </template>
 <script setup>
 import { computed, onMounted, reactive, ref, watch } from 'vue'
-import { ElMessage } from 'element-plus'
+import { appMessage as ElMessage } from '../../services/appFeedback'
+import FeedbackMessage from '../FeedbackMessage.vue'
 import RoomIcon from './RoomIcon.vue'
 import ChoicePicker from './ChoicePicker.vue'
 import RoomSwitch from './RoomSwitch.vue'

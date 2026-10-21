@@ -37,6 +37,29 @@ pub enum Query {
     WorkspaceFile {#[serde(rename="agentId")] agent_id:String,#[serde(rename="threadId")] thread_id:String,path:String},
 }
 pub struct Route {pub method:reqwest::Method,pub path:String,pub params:Vec<(String,String)>,pub body:Option<Value>}
+
+pub async fn fetch_query<F,Fut>(query:&Query,mut execute:F)->ChatResult<Value>
+where F:FnMut(Route,usize)->Fut,Fut:std::future::Future<Output=ChatResult<Value>> {
+    let mut query=query.clone();
+    loop {
+        // 长对话自动缩小单页，游标与消息保持完整；单条长回复使用独立读取额度。
+        let limit=match &query {
+            Query::Conversation {page_size,..} if *page_size>1=>super::transport::MAX_BODY,
+            Query::Conversation {..}|Query::TaskProjection {..}|Query::Queue {..}|Query::QueueLive {..}|Query::Room {..}|Query::Thread {..}=>super::transport::MAX_PROJECTION_BODY,
+            _=>super::transport::MAX_BODY,
+        };
+        match execute(query.route()?,limit).await {
+            Err(error) if error.code=="REMOTE_TOO_LARGE"=> {
+                match &mut query {
+                    Query::Conversation {page_size,..} if *page_size>1=>*page_size=(*page_size/2).max(1),
+                    Query::Room {limit,..} if *limit>1=>*limit=(*limit/2).max(1),
+                    _=>return Err(error),
+                }
+            },
+            result=>return result,
+        }
+    }
+}
 fn route(path:String)->Route {Route {method:reqwest::Method::GET,path,params:Vec::new(),body:None}}
 pub fn segment(value:&str)->ChatResult<String> {
     if value.is_empty() || matches!(value,"."|"..") || value.len()>256 || value.chars().any(char::is_control) {return Err(ChatError::new("INVALID_INPUT","远程对象身份无效"));}
@@ -170,6 +193,29 @@ fn invalid()->ChatError {ChatError::new("INVALID_INPUT","远程操作参数无�
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[tokio::test]
+    async fn oversized_history_retries_smaller_pages_without_losing_cursor() {
+        let query=Query::Conversation {id:"thread-a".into(),before_cursor:Some("123".into()),page_size:24};
+        let mut attempts=Vec::new();
+        let result=fetch_query(&query,|route,limit| {
+            assert_eq!(route.method,reqwest::Method::GET);
+            assert_eq!(route.path,"/chat/threads/thread-a/projection");
+            assert!(route.params.contains(&("beforeCursor".into(),"123".into())));
+            let size=route.params.iter().find(|(key,_)|key=="pageSize").unwrap().1.parse::<u32>().unwrap();
+            attempts.push(size);
+            std::future::ready(if size>1 {Err(ChatError::new("REMOTE_TOO_LARGE","内容较多"))} else {
+                assert_eq!(limit,super::super::transport::MAX_PROJECTION_BODY);
+                Ok(json!({"pageSize":1,"hasMoreBefore":true,"beforeCursor":"122","messages":[{"messageId":"122"}]}))
+            })
+        }).await.unwrap();
+        assert_eq!(attempts,vec![24,12,6,3,1]);assert_eq!(result["beforeCursor"],"122");assert_eq!(result["hasMoreBefore"],true);
+    }
+    #[tokio::test]
+    async fn paging_does_not_retry_auth_network_or_write_failures() {
+        let query=Query::Conversation {id:"t".into(),before_cursor:None,page_size:24};let mut calls=0;
+        let result=fetch_query(&query,|_,_| {calls+=1;std::future::ready(Err(ChatError::new("REMOTE_AUTH_REQUIRED","需要登录")))}).await;
+        assert_eq!(calls,1);assert_eq!(result.unwrap_err().code,"REMOTE_AUTH_REQUIRED");
+    }
     #[test]
     fn typed_routes_encode_ids_and_keep_bounds_and_explicit_rewind() {
         assert_eq!(segment("a/b?#").unwrap(),"a%2Fb%3F%23");

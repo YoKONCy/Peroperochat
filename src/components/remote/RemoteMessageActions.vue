@@ -1,6 +1,6 @@
 <template>
   <RoomDrawer :title="view === 'edit' ? '编辑消息' : plan ? '保存并重新生成' : previewData ? '确认回滚' : message ? '消息操作' : '回滚会话'" :busy="busy" :before-close="beforeClose" @close="emit('close')">
-    <p v-if="error" class="room-error" role="alert">{{ error }}</p><p v-if="notice" class="remote-notice" role="status">{{ notice }}</p>
+    <RemoteFeedback :message="error" /><RemoteFeedback :message="notice" tone="success" />
     <button v-if="unresolved" class="room-text-button" @click="$emit('pending')">操作结果待核对，前往通知</button>
     <div v-if="message && view === 'menu'" class="remote-action-menu">
       <button @click="copy"><RemoteIcon name="copy" /><span>复制正文<small>复制这条消息的文字</small></span></button>
@@ -9,7 +9,7 @@
     </div>
     <form v-if="view === 'edit'" @submit.prevent="saveOnly">
       <label class="remote-field">消息正文<textarea v-model="content" rows="8" maxlength="131072" required :disabled="busy" /></label>
-      <p class="remote-help">仅保存保留后续记录；重新生成会先保存修订，再确认回滚范围。</p>
+      <p class="remote-help">仅保存会保留后续对话；重新生成会替换这之后的内容。</p>
       <div class="remote-purpose-actions"><RemoteAction icon="back" :disabled="busy" @click="view = 'menu'">返回</RemoteAction><RemoteAction icon="check" type="submit" :disabled="busy || blocked || unresolved || !content.trim() || content === message.content">仅保存</RemoteAction><RemoteAction icon="refresh" tone="primary" :disabled="busy || blocked || unresolved || !content.trim()" @click="prepare">保存并重新生成</RemoteAction></div>
     </form>
     <RemoteAction v-if="!message && !previewData" icon="refresh" :disabled="busy || blocked" @click="preview">查看会话回滚范围</RemoteAction>
@@ -19,6 +19,7 @@
   </RoomDrawer>
 </template>
 <script setup>
+import RemoteFeedback from './RemoteFeedback.vue'
 import { ref, onBeforeUnmount } from 'vue'
 import RoomDrawer from '../companion/RoomDrawer.vue'
 import RemoteAction from './RemoteAction.vue'

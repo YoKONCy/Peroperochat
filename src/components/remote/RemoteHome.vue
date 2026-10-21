@@ -9,9 +9,9 @@
     <div class="remote-home-content">
       <ModeSwitchEntry remote class="remote-home-mode-entry" @open="$emit('connections')" />
       <button class="remote-resume-card" @click="$emit(selection ? 'resume' : 'threads')"><RemoteIcon class="remote-resume-art" name="landscape" artwork /><span class="remote-eyebrow"><RemoteIcon name="diamond" />{{ selection ? '继续上次会话' : '开始一段对话' }}</span><h2>{{ selection?.title || '选择你的伙伴' }}</h2><p>{{ selection ? '会话、任务和记忆，与你连接的 infOS 同步。' : '选择角色和会话，把熟悉的陪伴带在身边。' }}</p><span class="remote-resume-arrow"><RemoteIcon name="arrow" /></span></button>
-      <p v-if="error" class="room-error" role="alert">{{ error }}<button class="room-text-button" @click="reload">重试</button></p>
+      <RemoteFeedback :message="error" action-label="重试" @action="reload" /><button v-if="error" class="room-text-button" @click="reload">重新加载首页</button>
       <div class="remote-home-section-title"><h3><RemoteIcon name="diamond" />进行中的任务</h3><button class="room-text-button" @click="$emit('tasks')">查看全部<RemoteIcon name="arrow" /></button></div>
-      <p v-if="loading && !tasks.length" class="remote-help">正在读取任务…</p><p v-else-if="!tasks.length" class="remote-help">{{ online ? '现在没有进行中的任务。' : '离线期间暂时没有可用任务缓存。' }}</p>
+      <p v-if="loading && !tasks.length" class="remote-help">正在读取任务…</p><p v-else-if="!tasks.length" class="remote-help">{{ online ? '现在没有进行中的任务。' : '连上 infOS 后，就能看到任务进展。' }}</p>
       <button v-for="task in tasks" :key="task.id" class="remote-home-task" @click="$emit('detail', { title: task.title || '任务详情', query: { kind: 'task_projection', id: task.id }, taskId: task.id })"><span class="remote-task-icon"><RemoteIcon name="tasks" /></span><span><strong>{{ task.title || '远程任务' }}</strong><small>{{ remoteStatus(task.status) }}</small><span v-if="typeof task.currentStage === 'string' && task.currentStage" class="remote-task-stage">{{ task.currentStage }}</span></span><RemoteIcon name="arrow" /></button>
       <div class="remote-home-section-title"><h3><RemoteIcon name="diamond" />会话里的文件</h3><button class="room-text-button" @click="$emit('library')">查看全部<RemoteIcon name="arrow" /></button></div>
       <button v-for="file in files" :key="file.path" class="remote-home-file" @click="$emit('detail', { title: file.name, query: { kind: 'workspace_file', agentId: selection.agentId, threadId: selection.threadId, path: file.path } })"><RemoteFileCover :name="file.name" /><span><strong>{{ file.name }}</strong><small>保存在当前 infOS</small></span><RemoteIcon name="open" /></button>
@@ -22,6 +22,7 @@
   </section>
 </template>
 <script setup>
+import RemoteFeedback from './RemoteFeedback.vue'
 import { computed, ref, watch, onBeforeUnmount } from 'vue'
 import RemoteIcon from './RemoteIcon.vue'
 import ModeSwitchEntry from '../ModeSwitchEntry.vue'

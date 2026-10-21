@@ -211,7 +211,7 @@
 
 <script setup>
 import { ref, reactive, computed, onMounted, onBeforeUnmount, watch } from 'vue'
-import { ElMessage } from 'element-plus'
+import { appMessage as ElMessage } from '../../services/appFeedback'
 import RoomIcon from '../companion/RoomIcon.vue'
 import CharacterAvatar from '../companion/CharacterAvatar.vue'
 

@@ -41,7 +41,7 @@
 .remote-themed .art-hairline { stroke: currentColor; stroke-width: .6; opacity: .5; vector-effect: non-scaling-stroke; }
 .remote-themed .art-jewel { fill: var(--accent-secondary); stroke: currentColor; stroke-width: .65; vector-effect: non-scaling-stroke; }
 .remote-themed .art-light { fill: var(--surface); fill-opacity: .7; stroke: none; }
-.remote-themed .room-primary-button, .remote-themed .remote-send { color: var(--surface) !important; background: linear-gradient(130deg, var(--button-face), color-mix(in srgb, var(--button-face) 91%, var(--accent-secondary))); border: 1px solid var(--bevel); border-radius: 4px 11px 4px 4px; box-shadow: inset 0 1px 0 var(--edge-light); }
+.remote-themed .room-primary-button{ color: var(--surface) !important; background: linear-gradient(130deg, var(--button-face), color-mix(in srgb, var(--button-face) 91%, var(--accent-secondary))); border: 1px solid var(--bevel); border-radius: 4px 11px 4px 4px; box-shadow: inset 0 1px 0 var(--edge-light); }
 .remote-themed .room-secondary-button { color: var(--ink); background: var(--surface); border-radius: 4px 10px 4px 4px; }
 .remote-themed .room-danger-button { color: var(--danger) !important; background: color-mix(in srgb, var(--danger) 7%, var(--surface)); border-color: color-mix(in srgb, var(--danger) 26%, var(--surface)); }
 .remote-themed .room-error, .remote-themed .remote-page-error { background: color-mix(in srgb, var(--danger) 8%, var(--surface)); color: var(--danger); border-color: var(--danger); }
@@ -89,18 +89,6 @@
 .remote-actions > button, .remote-task-controls > button, .remote-inline-confirm button { background: var(--surface); color: var(--ink); border-color: var(--line); border-radius: 4px 9px 4px 4px; }
 .remote-attachment { background: var(--panel); border-radius: 4px 12px 4px 6px; }
 .remote-attachment > svg:last-child { color: var(--accent); }
-.remote-composer { background: var(--surface); padding: 2px 14px 6px; border-color: var(--line); }
-.remote-composer-modes { display: flex; align-items: center; gap: 5px; padding: 5px 0 8px; }
-.remote-composer-modes button { border: 1px solid transparent; background: none; color: var(--muted); padding: 5px 9px; border-radius: 3px 8px 3px 3px; display: flex; align-items: center; gap: 5px; font-size: 10px; min-height: 30px; }
-.remote-composer-modes button.selected { color: var(--accent); border-color: var(--bevel); background: var(--wash); box-shadow: inset 0 1px 0 var(--edge-light); }
-.remote-composer-modes button svg { width: 14px; height: 14px; }
-.remote-composer-modes > span { margin-left: auto; color: var(--muted); font-size: 9px; }
-.remote-composer-line { border-radius: 5px 14px 5px 9px; background: linear-gradient(110deg, var(--surface), var(--wash)); border-color: var(--line); padding: 6px; box-shadow: inset 0 1px 0 var(--edge-light); }
-.remote-composer textarea { color: var(--ink); }
-.remote-composer textarea::placeholder { color: var(--muted); }
-.remote-composer-status { color: var(--muted); }
-.remote-send:disabled { background: var(--wash); color: var(--muted) !important; }
-.remote-jump-latest { background: var(--surface); color: var(--accent); border-color: var(--bevel); bottom: 137px; border-radius: 5px 11px 5px 5px; }
 .remote-pending-summary, .remote-notice { background: var(--wash); color: var(--muted); border: 1px solid var(--line); }
 .remote-navigation { background: linear-gradient(var(--surface), var(--panel)); border-color: var(--line); padding-top: 8px; }
 .remote-navigation button { position: relative; gap: 6px; padding-top: 7px; color: var(--muted); font-size: 10px; letter-spacing: .5px; }

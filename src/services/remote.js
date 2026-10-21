@@ -2,6 +2,8 @@ import { invoke } from '@tauri-apps/api/core'
 import { listen } from '@tauri-apps/api/event'
 import { currentToken, assertToken, sameToken } from '../stores/mode'
 import { normalizeError } from './localChatClient'
+import { presentRemoteError } from './remoteFeedback.js'
+import { createRemoteReadCoordinator } from './remoteReadCoordinator.js'
 
 async function scoped(command, args = {}, token = currentToken()) {
   assertToken(token, 'remote')
@@ -11,15 +13,16 @@ async function scoped(command, args = {}, token = currentToken()) {
     if (result?.modeToken && !sameToken(result.modeToken, token)) throw new Error('远程响应运行身份不匹配')
     return result
   } catch (value) {
-    const error = normalizeError(value)
+    const error = presentRemoteError(normalizeError(value))
     const requestId = args.requestId || args.request?.requestId
     if (requestId) error.requestId = requestId
     throw error
   }
 }
 async function control(command, args) {
-  try { return await invoke(command, args) } catch (error) { throw normalizeError(error) }
+  try { return await invoke(command, args) } catch (error) { throw presentRemoteError(normalizeError(error)) }
 }
+const reads = createRemoteReadCoordinator({ query: (query, options) => scoped('remote_query', { query, cachedOnly: options.cachedOnly }, options.token), assertActive: token => assertToken(token, 'remote') })
 export const remoteConnections = {
   decodePairing: raw => control('remote_decode_pairing', { raw, modeToken: currentToken() }),
   list: () => control('remote_profiles'),
@@ -37,7 +40,7 @@ export const remoteClient = {
   manageUpload: (kind, id, file, { fields = {}, requestId = crypto.randomUUID(), token } = {}) => scoped('remote_manage_upload', { kind, id, file, fields, requestId }, token),
   tts: (input, { requestId = crypto.randomUUID(), token } = {}) => scoped('remote_voice_tts', { ...input, requestId }, token),
   exportText: (name, content, token) => scoped('remote_export_text', { name, content }, token),
-  query: (query, { cachedOnly = false, token } = {}) => scoped('remote_query', { query, cachedOnly }, token),
+  query: (query, { cachedOnly = false, token = currentToken() } = {}) => reads.read(query, { cachedOnly, token }),
   action: (action, { requestId = crypto.randomUUID(), token } = {}) => scoped('remote_action', { action, requestId }, token),
   chat: (input, { requestId = crypto.randomUUID(), token } = {}) => scoped('remote_chat', { request: { ...input, requestId } }, token),
   connect: (principalId, token, force = false) => scoped('remote_connect', { principalId, force }, token),

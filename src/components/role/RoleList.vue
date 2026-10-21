@@ -60,7 +60,8 @@
 
 <script setup>
 import { ref, computed } from 'vue'
-import { ElMessageBox, ElMessage } from 'element-plus'
+import { ElMessageBox } from 'element-plus'
+import { appMessage as ElMessage } from '../../services/appFeedback'
 import RoleCard from './RoleCard.vue'
 import RoomIcon from '../companion/RoomIcon.vue'
 

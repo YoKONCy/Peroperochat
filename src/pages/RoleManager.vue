@@ -40,7 +40,7 @@
 <script setup>
 import { ref, computed, onMounted, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
-import { ElMessage } from 'element-plus'
+import { appMessage as ElMessage } from '../services/appFeedback'
 import { Loading } from '@element-plus/icons-vue'
 import { useRoleManager } from '../composables/useRoleManager'
 import RoleList from '../components/role/RoleList.vue'

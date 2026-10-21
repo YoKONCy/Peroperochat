@@ -3,18 +3,19 @@
     <header class="remote-section-heading"><div><span class="remote-eyebrow">{{ eyebrow }}</span><h1>{{ title }}</h1></div><button v-if="kind === 'tasks'" class="room-icon-button" aria-label="新建远程任务" :disabled="remoteState.connection !== 'online' || !agentId" @click="$emit('create-task')"><RoomIcon name="plus" /></button><button class="room-icon-button" aria-label="刷新列表" :disabled="loading" @click="reload"><RoomIcon name="refresh" /></button></header>
     <div v-if="kind === 'tasks'" class="remote-task-filter"><span>任务状态</span><ChoicePicker v-model="taskStatus" label="任务状态" :options="taskStatuses" /></div>
     <template v-if="kind === 'library'"><div class="remote-segments"><button v-for="item in sources" :key="item.id" :aria-pressed="source === item.id" :class="{ selected: source === item.id }" @click="source = item.id">{{ item.label }}</button></div><RemoteFilePath v-if="source === 'files'" :path="path" :disabled="loading" @navigate="navigateFiles" /><form class="remote-search" @submit.prevent="search"><RoomIcon name="search" /><input v-model="searchText" :placeholder="source === 'files' ? '在文件夹里找找…' : '搜索当前连接中的资料'" aria-label="搜索资料" maxlength="200" /><button type="submit">搜索</button></form></template>
-    <p v-if="kind === 'inbox'" class="remote-help">缓存最近 256 条待阅通知；明确标为已读后才发送回执。Android 可在连接设置开启原生后台接收。审批、问题与待核对请求仍以服务端状态为准。</p>
-    <template v-if="kind === 'inbox'"><p v-if="remoteState.notificationError" class="room-error">{{ remoteState.notificationError }}</p><article v-for="notice in notices" :id="`remote-notice-${JSON.stringify([notice.principalId, notice.notificationId])}`" :key="`${notice.principalId}:${notice.notificationId}:${notice.revision}`" class="remote-input-card"><span class="remote-eyebrow">{{ notice.principalId }} · {{ notice.replayed ? '历史通知' : '待阅通知' }}</span><h3>{{ notice.title || 'infOS 通知' }}</h3><p class="remote-notice-body">{{ notice.body }}</p><button class="room-text-button" :disabled="acknowledging || remoteState.connection !== 'online'" @click="acknowledge(notice)">标为已读</button></article></template>
-    <p v-if="error" class="room-error" role="alert">{{ error }}</p>
-    <p v-if="cached" class="remote-cache-note">正在显示缓存，内容可能已经更新。</p>
+    <template v-if="kind === 'inbox'"><RemoteFeedback :message="remoteState.notificationError" /><article v-for="notice in notices" :id="`remote-notice-${JSON.stringify([notice.principalId, notice.notificationId])}`" :key="`${notice.principalId}:${notice.notificationId}:${notice.revision}`" class="remote-input-card"><span class="remote-eyebrow">{{ notice.replayed ? '较早的提醒' : '新的提醒' }}</span><h3>{{ notice.title || 'infOS 通知' }}</h3><p class="remote-notice-body">{{ notice.body }}</p><button class="room-text-button" :disabled="acknowledging || remoteState.connection !== 'online'" @click="acknowledge(notice)">标为已读</button></article></template>
+    <RemoteFeedback :message="error" />
+    <p v-if="cached && remoteState.connection !== 'online'" class="remote-cache-note">离线中，显示上次保存的内容。</p>
     <p v-if="kind === 'library' && source === 'files' && loading && rows.length" class="file-opening-note" role="status">正在读取文件…</p>
-    <p v-if="loading && !rows.length" class="room-empty">正在读取…</p>
+    <p v-if="(loading || syncing) && !rows.length" class="room-empty">正在载入…</p>
+    <p v-else-if="error && !rows.length && (kind !== 'inbox' || !notices.length)" class="remote-empty"><RoomIcon name="refresh" /><strong>暂时没能载入</strong><span>稍后点右上角刷新，再试一次。</span></p>
     <p v-else-if="!rows.length && (kind !== 'inbox' || !notices.length)" class="remote-empty"><RoomIcon :name="kind === 'inbox' ? 'check' : 'document'" /><strong>{{ kind === 'inbox' ? '暂时没有需要处理的事项' : '这里还没有内容' }}</strong><span>{{ kind === 'tasks' ? '角色执行的任务会出现在这里。' : kind === 'library' ? '可以换个关键词，或查看其他分类。' : '新的审批和问题会在这里汇合。' }}</span></p>
     <div class="remote-record-list"><button v-for="row in rows" :key="`${row.category}:${row.id || row.requestId || row.path}`" class="remote-record" @click="open(row)"><RemoteFileCover v-if="row.category === 'files' && row.type !== 'directory'" :name="row.name" /><span v-else class="remote-record-symbol"><RoomIcon :name="row.category === 'pending' ? 'help' : row.category === 'approval' ? 'sliders' : row.type === 'directory' ? 'wardrobe' : kind === 'tasks' ? 'model' : 'document'" /></span><span><small>{{ category(row) }}</small><strong>{{ row.title || row.question || row.name || row.summary || row.event?.summary || '查看详情' }}</strong><em v-if="row.instruction || row.description || row.summary">{{ row.instruction || row.description || row.summary }}</em><small v-if="row.status">{{ remoteStatus(row.status) }}</small></span><RoomIcon name="arrow" /></button></div>
     <div v-if="kind !== 'inbox' && (kind === 'tasks' || source !== 'files')" class="remote-pagination"><button :disabled="loading || page <= 1" @click="page--">上一页</button><span>第 {{ page }} 页</span><button :disabled="loading || !hasMore" @click="page++">下一页</button></div>
   </section>
 </template>
 <script setup>
+import RemoteFeedback from './RemoteFeedback.vue'
 import { managementOperationLabel } from '../../services/remoteManagement'
 import { computed, ref, watch, onBeforeUnmount } from 'vue'
 import RoomIcon from './RemoteIcon.vue'
@@ -37,10 +38,11 @@ let version = 0, disposed = false
 const title = computed(() => ({ tasks: '任务', inbox: '通知', library: '资料' }[props.kind]))
 const eyebrow = computed(() => ({ tasks: '把进展留在身边', inbox: '等你看一眼', library: '一起积累的内容' }[props.kind]))
 const views = computed(() => queries.value.map(query => remoteViews.get(JSON.stringify(query))))
+const syncing = computed(() => views.value.some(view => view?.loading || view?.syncing))
 const cached = computed(() => views.value.some(view => view?.cached))
 const rows = computed(() => {
   const values = views.value.flatMap((view, index) => remoteItems(view?.data?.nodes || view?.data).map(item => ({ ...item, category: props.kind === 'inbox' ? index === 0 ? 'approval' : 'question' : props.kind === 'tasks' ? 'task' : source.value }))).filter(item => props.kind !== 'library' || source.value !== 'files' || `${item.name || ''} ${item.path || ''}`.toLowerCase().includes(keyword.value.toLowerCase()))
-  return props.kind === 'inbox' ? [...[...remotePendingRequests.values()].filter(item => item.state === 'unknown').map(item => ({ ...item, id: item.requestId, category: 'pending', title: '发送结果待核对', summary: item.context?.input?.content || item.context?.input?.instruction || managementOperationLabel(item.context?.operation) || '请查看服务端状态后再确认' })), ...values] : values
+  return props.kind === 'inbox' ? [...[...remotePendingRequests.values()].filter(item => item.state === 'unknown').map(item => ({ ...item, id: item.requestId, category: 'pending', title: '有一项操作需要确认', summary: item.context?.input?.content || item.context?.input?.instruction || managementOperationLabel(item.context?.operation) || '查看结果，避免重复发送。' })), ...values] : values
 })
 const hasMore = computed(() => { const data = views.value[0]?.data; return typeof data?.total === 'number' ? page.value * 30 < data.total : rows.value.length >= 30 })
 function guard() { assertToken(token, 'remote'); if (disposed) throw new Error('页面已关闭') }
@@ -98,5 +100,6 @@ watch(() => [props.kind, props.agentId, props.threadId], () => { page.value = 1;
 watch([page, path], reload)
 watch(source, () => { page.value = 1; path.value = '.'; searchText.value = ''; keyword.value = ''; reload() })
 watch(taskStatus, () => { if (page.value !== 1) page.value = 1; else reload() })
+watch(() => remoteState.connection, (state, previous) => { if (state === 'online' && previous !== 'online') reload() })
 onBeforeUnmount(() => { disposed = true; version++ })
 </script>

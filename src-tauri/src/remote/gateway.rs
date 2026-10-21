@@ -73,7 +73,7 @@ pub async fn connect(app:&AppHandle,session:&super::Session,principal:&str)->Cha
     let mut request=url.as_str().into_client_request().map_err(|_|super::transport::network())?;
     request.headers_mut().insert("Authorization",format!("Bearer {}",session.secret).parse().map_err(|_|super::transport::network())?);
     let config=tokio_tungstenite::tungstenite::protocol::WebSocketConfig::default()
-        .max_message_size(Some(super::transport::MAX_BODY)).max_frame_size(Some(super::transport::MAX_BODY));
+        .max_message_size(Some(super::transport::MAX_PROJECTION_BODY)).max_frame_size(Some(super::transport::MAX_PROJECTION_BODY));
     let (mut socket,_)=tokio::select! {biased;
         _=changes.changed()=>return Err(super::inactive()),
         result=tokio::time::timeout(Duration::from_secs(12),tokio_tungstenite::connect_async_with_config(request,Some(config),false))=>result.map_err(|_|super::transport::network())?.map_err(|error| {
@@ -127,7 +127,7 @@ pub async fn connect(app:&AppHandle,session:&super::Session,principal:&str)->Cha
                         break;
                     }
                     if !message.is_text() {continue;}
-                    let Ok(text)=message.to_text() else {break};if text.len()>super::transport::MAX_BODY {break;}
+                    let Ok(text)=message.to_text() else {break};if text.len()>super::transport::MAX_PROJECTION_BODY {break;}
                     let Ok(value)=serde_json::from_str::<Value>(text) else {break};
                     if value["protocolVersion"]!=1 {break;}
                     match value["type"].as_str() {

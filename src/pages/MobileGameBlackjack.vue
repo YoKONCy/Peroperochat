@@ -73,7 +73,7 @@
 <script setup>
 import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
 import { useRouter } from 'vue-router'
-import { ElMessage } from 'element-plus'
+import { appMessage as ElMessage } from '../services/appFeedback'
 import CompanionHeader from '../components/companion/CompanionHeader.vue'
 import { AGENTS, getActiveAgentId } from '../api'
 import { localInvoke, localChat } from '../services/localChat'

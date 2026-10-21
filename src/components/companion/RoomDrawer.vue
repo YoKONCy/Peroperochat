@@ -27,6 +27,7 @@ import RoomAccent from './RoomAccent.vue'
 import CompanionEmblem from './CompanionEmblem.vue'
 import RemoteIcon from '../remote/RemoteIcon.vue'
 import { useRoomViewport } from '../../composables/useRoomViewport'
+import { registerFeedbackSurface } from '../../services/appFeedback'
 const props = defineProps({ title: { type: String, required: true }, subtitle: { type: String, default: '' }, tone: { type: String, default: 'pero' }, variant: { type: String, default: 'default' }, busy: Boolean, beforeClose: Function })
 defineEmits(['close'])
 const panel = ref(null)
@@ -34,7 +35,7 @@ const visible = ref(true)
 const { viewportStyle } = useRoomViewport()
 const remoteTheme = inject(REMOTE_THEME, null)
 const localTheme = inject(LOCAL_APPEARANCE, null)
-let previousFocus = null
+let previousFocus = null, unregisterFeedback = null
 function requestClose() { if (!props.busy && props.beforeClose?.() !== false) visible.value = false }
 function handleKeydown(event) {
   if (event.key === 'Escape') { event.stopPropagation(); requestClose(); return }
@@ -46,8 +47,8 @@ function handleKeydown(event) {
   if (event.shiftKey && (document.activeElement === first || document.activeElement === panel.value)) { event.preventDefault(); last.focus() }
   else if (!event.shiftKey && (document.activeElement === last || document.activeElement === panel.value)) { event.preventDefault(); first.focus() }
 }
-onMounted(async () => { previousFocus = document.activeElement; await nextTick(); panel.value?.focus({ preventScroll: true }) })
-onBeforeUnmount(() => { if (previousFocus?.isConnected) previousFocus.focus({ preventScroll: true }) })
+onMounted(async () => { previousFocus = document.activeElement; await nextTick(); if (panel.value) { unregisterFeedback = registerFeedbackSurface(panel.value); panel.value.focus({ preventScroll: true }) } })
+onBeforeUnmount(() => { unregisterFeedback?.(); if (previousFocus?.isConnected) previousFocus.focus({ preventScroll: true }) })
 </script>
 
 <style scoped>

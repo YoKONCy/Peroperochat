@@ -1,8 +1,8 @@
 <template>
   <section class="remote-surface" :aria-label="label">
-    <template v-for="node in nodes" :key="`${surface.generation}:${node.nodeId}`">
+    <template v-for="(node, index) in nodes" :key="`${surface.generation}:${node.nodeId}`">
       <RemoteRichText v-if="node.kind === 'markdown'" :source="node.props.source || ''" :node-id="node.nodeId" :streaming="isStreaming(node)" :suspended="disabled || !!surface.suspended" :interrupted="surface.state === 'failed'" :context="context" @resource="$emit('resource', $event)" @resize="$emit('resize')" />
-      <template v-else-if="['tool-call', 'tool-result'].includes(node.kind)"><RemoteToolTrace :node="node" :thread-id="surface.threadId" /><RemoteResourceCard v-for="file in toolFiles(node)" :key="file.id" :value="file" :context="context" @open="$emit('resource', $event)" @resize="$emit('resize')" /></template>
+      <div v-else-if="isTool(node)" class="chat-trace-run" :class="{ 'is-first': !isTool(nodes[index - 1]), 'is-last': !isTool(nodes[index + 1]) }"><header v-if="!isTool(nodes[index - 1])" class="chat-trace-heading"><RoomIcon name="route" /><span>执行轨迹</span><small>点击查看详情</small></header><RemoteToolTrace :node="node" :thread-id="surface.threadId" @resize="$emit('resize')" /><RemoteResourceCard v-for="file in toolFiles(node)" :key="file.id" :value="file" :context="context" @open="$emit('resource', $event)" @resize="$emit('resize')" /></div>
       <RemoteReasoning v-else-if="['native-reasoning', 'thinking'].includes(node.kind)" :node="node" :active="surface.state === 'open'" :context="context" @resource="$emit('resource', $event)" @resize="$emit('resize')" />
       <details v-else-if="node.kind === 'model-retry'" class="remote-model-retry" :data-state="node.props.state"><summary><RoomIcon name="refresh" /><strong>{{ retryStatus(node.props.state) }}</strong><span v-if="Number.isSafeInteger(node.props.attempt)">已重试 {{ node.props.attempt }} 次<span v-if="Number.isSafeInteger(node.props.maxRetries)"> / 最多 {{ node.props.maxRetries }} 次</span></span></summary><p>{{ node.props.reason || '上游模型请求发生重试。' }}</p><p v-if="node.props.partialResponse" class="remote-help">上次请求已返回部分内容，请结合后续记录查看。</p></details>
       <RemoteRichBlock v-else-if="['code', 'math', 'mermaid'].includes(node.kind)" :block="{ kind: node.kind === 'math' ? 'formula' : node.kind === 'mermaid' ? 'diagram' : 'code', source: node.props.source || node.props.code || '', language: node.props.language || 'text' }" :context="context" @resource="$emit('resource', $event)" @resize="$emit('resize')" />
@@ -26,10 +26,11 @@
       <p v-else class="remote-help">此内容适合在 infOS 桌面端查看。</p>
     </template>
     <p v-if="preview && surface.nodes.some(node => ['approval', 'input'].includes(node.kind))" class="remote-help">正在同步可操作的请求…</p>
-    <p v-if="error" class="room-error" role="alert">{{ error }}</p>
+    <RemoteFeedback :message="error" />
   </section>
 </template>
 <script setup>
+import RemoteFeedback from './RemoteFeedback.vue'
 import { computed, reactive, ref } from 'vue'
 import RoomIcon from './RemoteIcon.vue'
 import RemoteResourceCard from './RemoteResourceCard.vue'
@@ -44,6 +45,7 @@ import '../../styles/remote-rich.css'
 import { remoteStatus } from '../../utils/remoteMarkdown'
 import { submitRemoteInput } from '../../stores/remote'
 import { currentToken, assertToken } from '../../stores/mode'
+function isTool(node) { return !!node && ['tool-call', 'tool-result'].includes(node.kind) }
 const props = defineProps({ surface: { type: Object, required: true }, label: String, disabled: Boolean })
 const emit = defineEmits(['resource', 'updated', 'resize'])
 const busy = ref(false), error = ref(''), messages = reactive({}), selections = reactive({}), taskMessage = ref('')

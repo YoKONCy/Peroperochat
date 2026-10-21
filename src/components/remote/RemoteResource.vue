@@ -46,8 +46,8 @@
     </div>
     <template #footer>
       <div class="file-save-dock">
-        <p v-if="saveError" class="file-save-message is-error" role="alert"><RemoteIcon name="alert" />{{ saveError }}</p>
-        <p v-else-if="saved" class="file-save-message" role="status"><RemoteIcon name="check" />{{ saved }}</p>
+        <RemoteFeedback :message="saveError" />
+        <RemoteFeedback :message="saved" tone="success" />
         <template v-if="saving"><div class="file-transfer-label"><span role="status">{{ progress.phase === 'saving' ? '选择位置，收好这份文件' : '正在把文件带到身边…' }}</span><strong>{{ progress.phase === 'saving' ? '保存中' : percent === null ? formatFileSize(progress.received) : `${percent}%` }}</strong></div><div class="file-transfer-track" :class="{ indeterminate: percent === null }" role="progressbar" aria-label="下载进度" :aria-valuenow="percent" aria-valuemin="0" aria-valuemax="100"><i :style="{ width: `${percent ?? 24}%` }" /></div></template>
         <div class="file-save-actions"><span><RemoteIcon :name="saving ? 'download' : 'shield'" />{{ saving ? progress.phase === 'saving' ? '正在交给系统保存' : `${formatFileSize(progress.received)} / ${formatFileSize(progress.total)}` : '保留完整原件' }}</span><button v-if="saving && downloadId" class="file-button secondary" :disabled="cancelling" @click="cancel">{{ cancelling ? '正在取消…' : '取消保存' }}</button><button v-else class="file-button primary" :disabled="saving" @click="save"><RemoteIcon :name="resource.kind === 'external' ? 'open' : 'download'" />{{ resource.kind === 'external' ? '使用系统打开' : '保存到设备' }}</button></div>
       </div>
@@ -59,6 +59,7 @@ import { ref, computed, watch, onMounted, onBeforeUnmount } from 'vue'
 import { open as openSystemUrl } from '@tauri-apps/plugin-shell'
 import RoomDrawer from '../companion/RoomDrawer.vue'
 import RemoteIcon from './RemoteIcon.vue'
+import RemoteFeedback from './RemoteFeedback.vue'
 import RemoteFileCover from './RemoteFileCover.vue'
 import RemoteFileState from './RemoteFileState.vue'
 import RemoteSelect from './RemoteSelect.vue'

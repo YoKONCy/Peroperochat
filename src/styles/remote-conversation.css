@@ -1,52 +1,78 @@
-/* 对话一期定稿：文字、思考、轨迹、审批与队列各有轮廓；主题和身份保持独立。 */
-.remote-themed.remote-themed[data-remote-theme] { --chat-page:color-mix(in srgb,var(--tint) 50%,var(--surface)); --chat-paper:var(--surface); --chat-glass:color-mix(in srgb,var(--surface) 92%,transparent); --chat-shadow:color-mix(in srgb,var(--ink) 6%,transparent); --chat-thinking:color-mix(in srgb,var(--accent-secondary) 15%,var(--surface)); }
+/* 对话页按定稿独立排版；输入、队列和顶栏使用新结构，避免继承旧表单布局。 */
+.remote-themed.remote-themed[data-remote-theme]{font-family:"Segoe UI","PingFang SC","Microsoft YaHei UI","Noto Sans SC",system-ui,-apple-system,BlinkMacSystemFont,sans-serif;font-synthesis:none;-webkit-font-smoothing:antialiased;}
+.remote-workspace.is-chat-room{
+  --chat-body:16px;--chat-label:12px;--chat-caption:11px;--chat-ink:var(--ink);--chat-dim:color-mix(in srgb,var(--muted) 83%,var(--surface));
+  --chat-page:color-mix(in srgb,var(--tint) 48%,var(--surface));--chat-paper:var(--surface);--chat-glass:color-mix(in srgb,var(--surface) 93%,transparent);
+  --chat-line:color-mix(in srgb,var(--accent) 13%,var(--surface));--chat-shadow:color-mix(in srgb,var(--ink) 7%,transparent);--chat-thinking:color-mix(in srgb,var(--accent-secondary) 12%,var(--surface));
+  font-family:"Segoe UI","PingFang SC","Microsoft YaHei UI","Noto Sans SC",system-ui,-apple-system,BlinkMacSystemFont,sans-serif;font-synthesis:none;-webkit-font-smoothing:antialiased;
+  color:var(--chat-ink);background:var(--chat-page);font-size:var(--chat-body);line-height:1.65;isolation:isolate;
+}
+.remote-workspace.is-chat-room[data-remote-theme=dark]{--chat-line:color-mix(in srgb,var(--accent-secondary) 16%,var(--surface));--chat-page:color-mix(in srgb,var(--tint) 70%,var(--surface));--chat-thinking:color-mix(in srgb,var(--accent-secondary) 10%,var(--surface));}
+.is-chat-room .chat-room-header{position:relative;display:flex;align-items:center;flex:none;gap:11px;min-height:80px;padding:calc(10px + env(safe-area-inset-top)) 16px 12px 10px;border-bottom:1px solid var(--chat-line);background:var(--chat-glass);backdrop-filter:blur(10px)}
+.is-chat-room .chat-room-header::after{content:"";position:absolute;left:52px;bottom:-1px;width:44px;height:2px;background:var(--accent-secondary);border-radius:2px;opacity:.8}
+.is-chat-room .chat-room-header button{border:0;background:transparent;font:inherit;color:inherit;cursor:pointer;padding:0}
+.is-chat-room .chat-header-back{display:grid;place-items:center;width:32px;min-width:32px;height:44px;color:var(--muted)!important}.chat-header-back svg{width:20px;height:20px}
+.is-chat-room .chat-header-avatar{flex:none}.is-chat-room .chat-header-avatar .character-avatar{width:42px;height:42px;border:1px solid var(--chat-line);border-radius:12px 12px 12px 5px;box-shadow:0 2px 7px var(--chat-shadow)}
+.is-chat-room .chat-header-heading{flex:1;min-width:0;display:grid;gap:3px}.is-chat-room .chat-header-name{display:flex;align-items:center;gap:9px;max-width:100%;font-size:18px;font-weight:650;line-height:1.4;text-align:left}.chat-header-name>svg{width:21px;height:18px;flex:none;color:var(--accent-secondary)}
+.is-chat-room .chat-header-topic{display:flex;align-items:center;gap:5px;max-width:100%;color:var(--muted)!important;font-size:11px;line-height:1.5;text-align:left}.chat-header-topic span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.chat-header-topic>svg{width:10px;height:10px;flex:none;opacity:.65}.chat-header-topic i{width:5px;height:5px;flex:none;border-radius:50%;background:var(--muted)}.chat-header-topic i[data-online=true]{background:var(--success)}
+.is-chat-room .chat-header-more{position:relative;display:grid;place-items:center;flex:none;width:38px;height:38px;border:1px solid var(--chat-line)!important;border-radius:12px!important;background:color-mix(in srgb,var(--surface) 70%,transparent)!important;color:var(--muted)!important}.chat-header-more>svg{width:20px;height:20px}.chat-header-more>i{position:absolute;right:7px;top:6px;width:5px;height:5px;border-radius:50%;background:var(--accent-secondary)}
+/* 阅读舞台独立于输入区，回到底部按钮以舞台下沿定位。 */
+.is-chat-room .remote-conversation{flex:1;min-height:0;overflow:hidden}.is-chat-room .chat-stage{position:relative;display:flex;flex:1;min-height:0;overflow:hidden}
+.is-chat-room .remote-transcript{flex:1;width:100%;min-width:0;min-height:0;box-sizing:border-box;overflow-y:auto;overflow-x:hidden;overflow-anchor:none;overscroll-behavior:contain;scrollbar-width:thin;padding:16px 17px 20px;background:radial-gradient(ellipse at 100% 0,var(--wash),transparent 43%),var(--chat-page)}
+.is-chat-room .chat-date-divider{display:flex;align-items:center;justify-content:center;gap:12px;margin:5px 0 23px;color:var(--chat-dim);font-size:11px;line-height:1.5}.chat-date-divider::before,.chat-date-divider::after{content:"";height:1px;width:25px;background:var(--chat-line)}
+.is-chat-room .chat-turn{width:100%;min-width:0;margin:0 0 24px;padding:0;border:0;border-radius:0;background:transparent;box-shadow:none;animation:chat-turn-arrive 180ms ease-out both}
+.is-chat-room .chat-speaker{display:flex;align-items:center;gap:7px;min-height:32px;margin:0 1px 12px;padding:0;color:var(--accent);font-size:12px;font-weight:600;line-height:1.4}
+.is-chat-room .chat-speaker>.character-avatar{width:29px;height:29px;min-width:29px;border:1px solid var(--chat-line);border-radius:9px 9px 9px 3px;box-shadow:none}.chat-speaker>svg{width:17px;height:15px;color:var(--accent-secondary)}
+.is-chat-room .chat-speaker time{margin-left:auto;color:var(--chat-dim);font-size:10px;font-weight:400}.is-chat-room .chat-speaker button,.is-chat-room .chat-user-meta button,.is-chat-room .chat-reply-actions button{display:grid;place-items:center;min-width:36px;height:34px;padding:8px;border:0;border-radius:8px;background:transparent;color:var(--chat-dim)}.chat-speaker button svg,.chat-user-meta button svg,.chat-reply-actions button svg{width:17px;height:17px}
+.is-chat-room .chat-turn>.remote-surface{position:relative;padding:0;border:0;border-radius:0;background:transparent;box-shadow:none}.is-chat-room .chat-turn>.remote-surface::before{display:none}
+.is-chat-room .chat-turn:not(.is-user)>.remote-surface>.remote-rich-text{position:relative;margin:0 0 12px;padding:14px 16px;border:1px solid var(--chat-line);border-top-color:color-mix(in srgb,var(--surface) 70%,var(--chat-line));border-radius:5px 22px 22px 22px;background:var(--chat-paper);box-shadow:0 4px 15px -9px var(--chat-shadow)}
+.is-chat-room .chat-turn:not(.is-user)>.remote-surface>.remote-rich-text::before{content:"";position:absolute;left:12px;top:-5px;width:8px;height:8px;transform:rotate(45deg);border-left:1px solid var(--chat-line);border-top:1px solid var(--chat-line);border-radius:2px 0 0;background:var(--chat-paper)}
+.is-chat-room .chat-turn.is-user{width:fit-content;max-width:88%;margin-left:auto;margin-bottom:27px}.is-chat-room .chat-turn.is-user>.remote-surface{padding:12px 15px;border:1px solid color-mix(in srgb,var(--accent) 15%,var(--surface));border-radius:20px 20px 4px 20px;background:color-mix(in srgb,var(--accent) 10%,var(--surface));color:var(--ink)}
+.is-chat-room .chat-user-meta{display:flex;justify-content:flex-end;align-items:center;gap:5px;min-height:24px;margin-top:3px;color:var(--chat-dim);font-size:10px}.is-chat-room .chat-user-meta button{height:26px;min-width:30px;padding:6px}.is-chat-room .chat-user-meta button svg{width:14px;height:14px}.is-chat-room .chat-reply-actions{display:flex;justify-content:flex-end;margin:-4px 2px 0}.is-chat-room .chat-reply-actions button{width:34px;height:30px}
+.is-chat-room[data-bubble=soft] .chat-turn:not(.is-user)>.remote-surface>.remote-rich-text{border-radius:22px 22px 22px 8px}.is-chat-room[data-bubble=ribbon] .chat-turn:not(.is-user)>.remote-surface>.remote-rich-text{border-left:2px solid var(--accent-secondary);border-radius:5px 18px 18px 8px}.is-chat-room[data-bubble=ribbon] .chat-turn:not(.is-user)>.remote-surface>.remote-rich-text::before{display:none}
+/* 正文的排版统一由富文本层控制，聊天和思考只提供字号。 */
+.is-chat-room .chat-turn{--rich-font-size:15.5px}
+/* 思考是轻量云签；已完成的内部状态不占用额外一列。 */
+.is-chat-room .remote-reasoning{position:relative;overflow:visible;margin:11px 0 17px;border:1px solid color-mix(in srgb,var(--accent-secondary) 20%,var(--chat-line));border-radius:18px 18px 18px 7px;background:var(--chat-thinking);box-shadow:inset 0 1px 0 var(--edge-light);color:var(--muted)}
+.is-chat-room .remote-reasoning::before,.is-chat-room .remote-reasoning::after{content:"";position:absolute;bottom:-5px;left:12px;width:6px;height:6px;border:1px solid var(--chat-line);border-radius:50%;background:var(--chat-thinking);pointer-events:none}.is-chat-room .remote-reasoning::after{width:3px;height:3px;bottom:-10px;left:6px}
+.is-chat-room .remote-reasoning>summary{display:flex;align-items:center;gap:7px;min-height:44px;box-sizing:border-box;padding:9px 12px;list-style:none;font-size:11px}.is-chat-room .remote-reasoning>summary>svg:first-child{width:18px;height:18px;flex:none;color:var(--accent-secondary)}.is-chat-room .remote-reasoning>summary>strong{font-size:12px;font-weight:550;line-height:1.4}.is-chat-room .chat-reasoning-meta{margin-left:auto;display:flex;align-items:center;gap:5px;white-space:nowrap;color:var(--chat-dim);font-size:10px}.is-chat-room .remote-reasoning .remote-trace-chevron{width:12px;height:12px}.is-chat-room .remote-reasoning-content{padding:2px 13px 13px}
+.is-chat-room .remote-reasoning-content{--rich-font-size:13px;--rich-section-gap:18px;--rich-text-color:var(--muted)}
+/* 相邻工具形成开放式轨迹，详情与 NIT 子调用按需展开。 */
+.is-chat-room .chat-trace-run{position:relative;min-width:0;margin:0 0 3px}.is-chat-room .chat-trace-run:not(.is-last)::before{content:"";position:absolute;left:16px;top:39px;bottom:-19px;width:1px;background:var(--chat-line)}.is-chat-room .chat-trace-run.is-first:not(.is-last)::before{top:63px}.is-chat-room .chat-trace-heading{display:flex;align-items:center;gap:6px;margin:13px 0 6px;color:var(--muted);font-size:11px}.chat-trace-heading svg{width:14px;height:14px}.chat-trace-heading>small{margin-left:auto;color:var(--chat-dim);font-size:10px}
+.is-chat-room .remote-tool-trace{margin:0;border:0;border-radius:0;background:transparent;box-shadow:none;overflow:visible}.is-chat-room .remote-tool-trace>summary{position:relative;display:grid;grid-template-columns:32px minmax(0,1fr) auto 12px;align-items:center;gap:9px;min-height:55px;box-sizing:border-box;padding:8px 1px;border:0;background:transparent;list-style:none}
+.is-chat-room .remote-tool-glyph{z-index:1;width:30px;height:33px;border:1px solid color-mix(in srgb,var(--trace-accent) 30%,var(--chat-line));border-radius:5px 11px 5px 5px;background:color-mix(in srgb,var(--trace-accent) 6%,var(--surface));box-shadow:0 1px 0 var(--edge-light)}.is-chat-room .remote-tool-glyph svg{width:19px;height:19px}.is-chat-room .remote-tool-glyph::after{width:4px;height:4px;top:-3px;right:-3px;border-width:2px}
+.is-chat-room .remote-tool-heading{gap:3px;line-height:1.5}.is-chat-room .remote-tool-heading strong{font-size:13px;font-weight:550}.is-chat-room .remote-tool-heading>small{margin:0;font-size:11px;color:var(--muted)}.is-chat-room .remote-tool-heading>.remote-tool-result-hint:not(.remote-tool-children-summary){display:none}.is-chat-room .remote-tool-children-summary{font-size:10px!important;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.is-chat-room .remote-tool-meta{display:flex;flex-direction:row;align-items:center;gap:5px;font-size:10px;color:var(--chat-dim);white-space:nowrap}.is-chat-room .remote-tool-meta svg{width:13px;height:13px;color:var(--trace-accent)}.is-chat-room .remote-tool-meta small{font-size:10px}.is-chat-room .remote-tool-state{font-size:10px;color:var(--danger)}.is-chat-room .remote-trace-chevron{width:12px;height:12px;color:var(--chat-dim)}
+.is-chat-room .remote-tool-body{margin:2px 0 12px 16px;padding:9px 0 7px 20px;border-left:1px solid var(--chat-line);background:transparent}.is-chat-room .remote-nit-label{margin-left:6px;padding:1px 4px;border:1px solid var(--chat-line);border-radius:4px;font-size:9px;font-weight:500;color:var(--accent-secondary)}.is-chat-room .remote-nit-children{padding:9px 10px;border:1px solid var(--chat-line);border-radius:5px 12px 12px;background:color-mix(in srgb,var(--surface) 65%,transparent)}.is-chat-room .remote-tool-child .remote-tool-glyph{width:24px;height:27px}.is-chat-room .remote-tool-child>summary{grid-template-columns:25px minmax(0,1fr) auto 11px}.is-chat-room .remote-tool-child .remote-tool-heading strong{font-size:12px}
+ .is-chat-room .chat-trace-pulse{display:inline-block;width:6px;height:6px;border-radius:50%;background:var(--trace-accent);animation:chat-trace-breathe 1.5s ease-in-out infinite}.is-chat-room .chat-reasoning-receiving{color:var(--accent)}.is-chat-room .chat-reasoning-receiving::before{content:"";display:inline-block;width:4px;height:4px;margin-right:4px;border-radius:50%;background:currentColor;animation:chat-trace-breathe 1.5s ease-in-out infinite}.is-chat-room .chat-reasoning-meta small{font-size:inherit}
+.is-chat-room .remote-file-card{border-color:var(--chat-line);border-radius:5px 15px 15px 15px;box-shadow:0 3px 11px -8px var(--chat-shadow);margin-block:10px 15px}.is-chat-room .remote-file-card-meta{background:var(--chat-paper)}.is-chat-room .remote-file-card-meta strong{font-size:13px;font-weight:600}.is-chat-room .remote-file-card-meta small{font-size:11px}.is-chat-room .remote-file-card.is-audio .remote-inline-audio{background:var(--wash)}
+@keyframes chat-trace-breathe{0%,100%{opacity:.4}50%{opacity:1}}
+/* 输入只有配置、输入、轻工具三行，队列详情在独立抽屉中。 */
+.is-chat-room .chat-composer-dock{position:relative;z-index:2;flex:none;box-sizing:border-box;width:100%;padding:3px 11px calc(8px + env(safe-area-inset-bottom));background:linear-gradient(180deg,transparent,var(--chat-page) 25px)}
+.is-chat-room .chat-composer{position:relative;margin:0;padding:3px 11px 4px;border:1px solid var(--chat-line);border-top-color:color-mix(in srgb,var(--surface) 60%,var(--chat-line));border-radius:20px 20px 12px 12px;background:var(--chat-glass);box-shadow:0 -8px 24px -18px var(--chat-shadow),0 3px 7px var(--chat-shadow);backdrop-filter:blur(10px)}.is-chat-room .chat-composer::before{content:"";position:absolute;top:-1px;left:18px;width:30px;height:1px;background:var(--accent-secondary)}
+.is-chat-room .chat-composer-config{display:flex;align-items:center;gap:6px;min-height:38px;border-bottom:1px solid var(--chat-line)}.is-chat-room .chat-model-controls{display:flex;align-items:center;flex:1;min-width:0;gap:7px}.is-chat-room .chat-model-choice{flex:1;min-width:0;max-width:180px}.is-chat-room .chat-effort-choice{flex:0 1 auto;min-width:0;max-width:122px}.is-chat-room .chat-model-controls .remote-select-chip{max-width:100%;font-size:11px;min-height:38px}.is-chat-room .chat-model-controls .remote-select-chip>svg:first-child{width:15px;height:15px;flex:none}.is-chat-room .chat-model-warning{display:grid;place-items:center;min-width:30px;height:34px;padding:7px;border:0;border-radius:6px;color:var(--danger);background:transparent}.chat-model-warning svg{width:15px;height:15px}
+.is-chat-room .chat-context-meter{flex:none;max-width:91px;min-height:38px;padding:4px 0 4px 4px;border:0;background:transparent;color:var(--success);font:inherit;font-size:10px;font-variant-numeric:tabular-nums;white-space:nowrap}
+.is-chat-room .chat-input-line{display:flex;align-items:flex-end;gap:7px;min-height:54px;padding:8px 0 5px;border:0;border-radius:0;background:transparent;box-shadow:none}.is-chat-room .chat-input-line>.room-icon-button{flex:none;min-width:32px;width:32px;height:40px;padding:6px;border:0;border-radius:8px;background:transparent;color:var(--accent)}.is-chat-room .chat-input-line>.room-icon-button svg{width:23px;height:23px}
+.is-chat-room .chat-input-line textarea{box-sizing:border-box;flex:1;min-width:0;width:0;min-height:40px;max-height:112px;resize:none;margin:0;padding:7px 0;border:0;border-radius:0;outline:0;background:transparent;box-shadow:none;font:inherit;font-size:15px;line-height:1.7;color:var(--ink)}.is-chat-room .chat-input-line textarea::placeholder{color:var(--chat-dim)}
+.is-chat-room .chat-send{display:grid;place-items:center;flex:none;width:39px;min-width:39px;height:39px;padding:9px;border:0;border-radius:11px 11px 6px 11px;background:var(--accent);color:var(--surface);box-shadow:inset 0 1px 0 var(--edge-light);cursor:pointer}.is-chat-room .chat-send svg{width:22px;height:22px}.is-chat-room .chat-send:disabled{opacity:.45}.is-chat-room .chat-send[type=button]{background:var(--wash);color:var(--accent);border:1px solid var(--chat-line)}
+.is-chat-room .chat-composer-footer{display:flex;align-items:center;gap:10px;min-height:34px}.is-chat-room .chat-composer-footer>button{display:inline-flex;align-items:center;gap:4px;min-height:34px;min-width:26px;padding:4px 0;border:0;background:transparent;color:var(--muted);font:inherit;font-size:11px}.is-chat-room .chat-composer-footer>button svg{width:14px;height:14px}.is-chat-room .chat-composer-footer>.remote-select-chip{font-size:11px;min-height:34px;max-width:87px}.is-chat-room .chat-composer-footer>.remote-select-chip>svg:first-child{width:14px;height:14px}.is-chat-room .chat-composer-footer>.remote-select-chip>svg:last-child{width:9px;height:9px}
+.is-chat-room .chat-composer-origin{display:inline-flex;align-items:center;gap:4px;margin-left:auto;color:var(--chat-dim);font-size:10px}.chat-composer-origin svg{width:12px;height:12px}.is-chat-room .chat-input-status{display:flex;align-items:center;gap:7px;margin:1px 0 4px;color:var(--muted);font-size:11px;line-height:1.6}.chat-input-status button{padding:4px;border:0;background:transparent;font:inherit;color:var(--accent)}
+.is-chat-room .chat-recovery-chip{display:flex;align-items:center;gap:6px;width:100%;margin:1px 0 5px;padding:5px 0;border:0;border-top:1px dashed var(--chat-line);background:transparent;color:var(--muted);font:inherit;font-size:11px;text-align:left}.chat-recovery-chip>span{flex:1;min-width:0}.chat-recovery-chip>svg{width:13px;height:13px;flex:none}
+.is-chat-room .remote-jump-latest{position:absolute;z-index:2;right:16px;bottom:12px;display:flex;align-items:center;gap:6px;min-height:36px;max-width:calc(100% - 32px);margin:0;padding:6px 12px;border:1px solid var(--chat-line);border-radius:18px;background:var(--surface);color:var(--accent);box-shadow:0 3px 12px var(--chat-shadow);font-size:11px!important}.is-chat-room .remote-jump-latest svg{width:13px;height:13px}
+.is-chat-room[data-keyboard-open=true] .chat-composer-footer{display:none}.is-chat-room[data-keyboard-open=true] .chat-composer-dock{padding-bottom:5px}.is-chat-room[data-keyboard-open=true] .chat-recovery-chip{display:none}
+/* 抽屉中保留清晰的操作层级，避免再次铺出整排表单按钮。 */
+.chat-options-grid,.chat-room-destinations{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px;margin-bottom:14px}.chat-options-grid>button,.chat-room-destinations>button{display:flex;align-items:center;gap:9px;min-height:55px;padding:12px;border:1px solid var(--room-line);border-radius:12px;background:var(--room-subtle);color:var(--room-ink);font:inherit;font-size:13px;text-align:left}.chat-options-grid>button svg,.chat-room-destinations>button svg{width:19px;height:19px;flex:none;color:var(--room-accent)}.chat-room-destinations small{margin-left:6px;color:var(--room-accent)}.chat-context-details{padding:10px 0;color:var(--room-muted);font-size:13px;line-height:1.75}.chat-context-details>strong{display:block;color:var(--room-accent);font-size:26px;font-weight:550;font-variant-numeric:tabular-nums}.chat-context-details strong small{font-size:14px;color:var(--room-muted);font-weight:400}.chat-context-details progress{width:100%;height:5px;margin:14px 0;accent-color:var(--room-accent)}
+@keyframes chat-turn-arrive{from{opacity:0;transform:translateY(5px)}to{opacity:1;transform:none}}
+@media(min-width:760px){.is-chat-room .remote-transcript{padding-inline:max(24px,calc((100% - 760px)/2))}.is-chat-room .chat-composer-dock{max-width:800px;align-self:center}.is-chat-room .chat-header-heading{max-width:700px}.is-chat-room .chat-room-header{padding-inline:max(16px,calc((100% - 850px)/2))}}
+@media(max-width:360px){.is-chat-room .remote-transcript{padding-inline:12px}.is-chat-room .chat-room-header{gap:8px;padding-inline:7px}.is-chat-room .chat-composer-dock{padding-inline:7px}.is-chat-room .chat-composer{padding-inline:9px}.is-chat-room .chat-model-controls{gap:4px}.is-chat-room .chat-model-controls .remote-select-chip{font-size:10px;gap:3px}.is-chat-room .chat-context-meter{font-size:9px}.is-chat-room .chat-composer-footer{gap:8px}.is-chat-room .chat-speaker{gap:5px}}
+
+/* 其他页面与通用抽屉继续沿用原主题。 */
 .remote-workspace .remote-header { padding:calc(9px + env(safe-area-inset-top)) 14px 9px; gap:9px; min-height:74px; background:var(--chat-glass); backdrop-filter:blur(12px); }
 .remote-workspace .remote-header > .room-icon-button { width:44px; height:44px; min-width:44px; border-radius:12px 12px 5px 12px; }
 .remote-workspace .remote-avatar-button { min-width:44px; min-height:44px; }
 .remote-workspace .remote-avatar-button .character-avatar { width:42px; height:42px; border-radius:13px 13px 13px 5px; box-shadow:none; border:1px solid var(--bevel); }
 .remote-workspace .remote-thread-title { font-size:15px!important; font-weight:600!important; }
 .remote-workspace .remote-server { font-size:10px!important; letter-spacing:.03em; }
-.remote-workspace .remote-transcript { padding:22px 17px 25px; background:radial-gradient(ellipse at 100% 0,var(--wash),transparent 42%),var(--chat-page); scrollbar-width:thin; overflow-anchor:none; }
-.remote-workspace .remote-message { margin-bottom:25px; }
-.remote-workspace .remote-message-label { align-items:center; gap:8px; padding:0 3px; margin:0 0 11px; min-height:31px; }
-.remote-workspace .remote-message-label > .remote-message-avatar { width:30px; height:30px; min-width:30px; border-radius:10px 10px 10px 4px; }
-.remote-workspace .remote-message-label > span { padding:0; gap:6px; background:none!important; border:0!important; color:var(--accent)!important; letter-spacing:.01em; font-size:12px; font-weight:600; }
-.remote-workspace .remote-message-label > span::after { display:none; }
-.remote-workspace .remote-message-label > span > .remote-icon { width:18px; height:18px; }
-.remote-workspace .remote-message-label time { font-size:10px; margin-left:auto; padding:0; }
-.remote-workspace .remote-message-label .remote-message-tools { min-width:44px; min-height:44px; margin:-6px -7px -6px 0; display:grid; place-items:center; padding:8px; }
-.remote-workspace .remote-message-label .remote-message-tools svg { width:18px; height:18px; }
-.remote-workspace .remote-message > .remote-surface { background:none!important; border:0!important; box-shadow:none!important; padding:0; }
-.remote-workspace .remote-message > .remote-surface::before { display:none; }
-.remote-workspace .remote-message:not(.is-user) > .remote-surface > .remote-rich-text { padding:16px 16px 17px; border:1px solid var(--line); border-radius:5px 19px 19px 19px; background:var(--chat-paper); box-shadow:0 3px 12px var(--chat-shadow); margin-bottom:14px; }
-.remote-workspace .remote-message.is-user { margin-left:auto; max-width:min(88%,700px); }
-.remote-workspace .remote-message.is-user .remote-message-label { justify-content:flex-end; gap:7px; }
-.remote-workspace .remote-message.is-user .remote-message-label > span { color:var(--muted)!important; font-weight:400; order:1; }
-.remote-workspace .remote-message.is-user .remote-message-label time { margin-left:0; }
-.remote-workspace .remote-message.is-user > .remote-surface { padding:14px 16px; background:color-mix(in srgb,var(--accent) 12%,var(--surface))!important; border:1px solid var(--line)!important; border-radius:18px 5px 18px 18px; }
-.remote-workspace .remote-message.is-user .remote-rich-prose { font-size:15px; }
-.remote-workspace .remote-message .remote-reasoning { position:relative; overflow:visible; margin:10px 3px 18px; border:1px solid var(--line); background:var(--chat-thinking); border-radius:21px 21px 21px 7px; box-shadow:inset 0 1px 0 var(--edge-light); }
-.remote-workspace .remote-reasoning::before,.remote-workspace .remote-reasoning::after { content:''; position:absolute; border:1px solid var(--line); background:var(--chat-thinking); border-radius:50%; pointer-events:none; }
-.remote-workspace .remote-reasoning::before { width:6px; height:6px; left:9px; bottom:-7px; }
-.remote-workspace .remote-reasoning::after { width:3px; height:3px; left:3px; bottom:-12px; }
-.remote-workspace .remote-reasoning > summary { display:flex; align-items:center; min-height:50px; gap:6px; padding:10px 12px; font-size:11px; }
-.remote-workspace .remote-reasoning > summary > svg:first-child { width:21px; height:21px; color:var(--accent); }
-.remote-workspace .remote-reasoning > summary > strong { font-size:12px; font-weight:550; }
-.remote-workspace .remote-reasoning-phase { font-size:10px; }
-.remote-workspace .remote-reasoning-content { padding:0 14px 15px; color:var(--muted); }
-.remote-workspace .remote-reasoning-content .remote-rich-text { background:none; border:0; padding:0; }
-.remote-workspace .remote-reasoning-content .remote-rich-prose,.remote-workspace .remote-reasoning-content .remote-stream-tail { font-size:13px; line-height:1.9; }
-.remote-workspace .remote-tool-trace { position:relative; margin:8px 0 11px; border:0; border-radius:0; background:transparent; box-shadow:none; }
-.remote-workspace .remote-tool-trace > summary { min-height:62px; padding:9px 2px; gap:10px; border-bottom:1px solid var(--line); background:transparent; border-radius:0; }
-.remote-workspace .remote-tool-glyph { width:31px; height:35px; min-width:31px; border:1px solid color-mix(in srgb,var(--trace-accent) 35%,var(--line)); border-radius:9px 9px 4px 9px; background:color-mix(in srgb,var(--trace-accent) 8%,var(--surface)); transform:rotate(-4deg); }
-.remote-workspace .remote-tool-glyph svg { width:20px; height:20px; transform:rotate(4deg); }
-.remote-workspace .remote-tool-heading strong { font-size:13px; font-weight:550; }
-.remote-workspace .remote-tool-heading > small { font-size:11px; margin-top:5px; }
-.remote-workspace .remote-tool-meta { font-size:10px; gap:4px; }
-.remote-workspace .remote-tool-body { margin-left:15px; border-left:1px solid var(--line); padding:13px 0 6px 22px; background:none; }
-.remote-workspace .remote-nit-trace > summary { border-bottom:1px dashed var(--bevel); }
-.remote-workspace .remote-nit-label { padding:2px 5px; font-size:8px; border-radius:4px; }
-.remote-workspace .remote-nit-children { padding:9px 11px 12px; background:var(--wash); border:1px solid var(--line); border-radius:5px 12px 12px 12px; }
 .remote-workspace .remote-approval-card { position:relative; margin:15px 0; padding:17px; background:color-mix(in srgb,#c99c56 7%,var(--surface)); border:1px solid color-mix(in srgb,#c99c56 36%,var(--line)); border-radius:5px 18px 18px 18px; box-shadow:none; }
 .remote-workspace .remote-approval-card::before { content:''; position:absolute; top:-3px; left:22px; width:23px; height:5px; background:#d2b581; border-radius:3px; transform:rotate(-6deg); }
 .remote-workspace .remote-approval-card .remote-eyebrow { display:flex; align-items:center; gap:6px; color:color-mix(in srgb,#b0874e 85%,var(--ink)); letter-spacing:0; font-size:11px; }
@@ -63,39 +89,6 @@
 .remote-themed .remote-option input:checked { border-color:var(--accent); background:var(--wash); }
 .remote-themed .remote-option input[type='checkbox']:checked::after { content:''; width:5px; height:9px; border:solid var(--accent); border-width:0 1.5px 1.5px 0; transform:translateY(-1px) rotate(45deg); }
 .remote-themed .remote-option input[type='radio']:checked::after { content:''; width:8px; height:8px; border-radius:50%; background:var(--accent); }
-.remote-workspace .remote-queue { position:relative; margin:9px 15px 0; padding:0; background:var(--surface); border:1px solid var(--line); border-radius:8px 15px 6px 8px; box-shadow:0 -3px 0 -1px var(--chat-page),0 -4px 0 -1px var(--bevel); max-height:34%; font-size:12px; }
-.remote-workspace .remote-queue > header { gap:8px; padding:5px 9px 5px 12px; min-height:48px; }
-.remote-workspace .remote-queue strong { font-size:12px; font-weight:550; }
-.remote-workspace .remote-queue header small { min-width:20px; height:20px; border-radius:7px; background:var(--wash); color:var(--accent); display:grid; place-items:center; font-size:10px; }
-.remote-workspace .remote-queue header button { display:inline-flex; align-items:center; gap:5px; min-height:44px; }
-.remote-workspace .remote-queue .remote-queue-toggle { flex:1; text-align:left; }
-.remote-workspace .remote-queue .remote-queue-items { padding:0 13px 11px; }
-.remote-workspace .remote-queue article { border-style:dashed; padding-top:11px; }
-.remote-workspace .remote-queue article > p { font-size:13px; }
-.remote-workspace .remote-queue-actions { gap:5px; flex-wrap:wrap; }
-.remote-workspace .remote-queue-actions button { min-height:44px; padding:6px 9px; display:inline-flex; align-items:center; justify-content:center; gap:5px; border-radius:8px; }
-.remote-workspace .remote-queue-actions button:first-child { border:1px solid var(--line); background:var(--wash); }
-.remote-workspace .remote-queue-actions button:last-child { margin-left:auto; color:var(--muted); }
-.remote-workspace .remote-composer { margin:0 12px 6px; border:1px solid var(--line); border-radius:18px 18px 6px 18px; background:var(--chat-glass); box-shadow:0 -4px 20px var(--chat-shadow); padding:8px 12px 6px; backdrop-filter:blur(12px); }
-.remote-workspace .remote-composer-tools { margin-bottom:0; padding-bottom:0; border:0; }
-.remote-workspace .remote-model-controls { gap:6px; padding-bottom:6px; border-bottom:1px solid var(--line); }
-.remote-workspace .remote-model-choice,.remote-workspace .remote-effort-choice { min-height:38px; padding:0 4px; border-radius:8px; background:var(--wash); }
-.remote-workspace .remote-model-choice { flex:1 1 155px; }
-.remote-workspace .remote-effort-choice { flex:1 1 105px; max-width:145px; }
-.remote-workspace .remote-model-controls .remote-select { min-height:42px; padding:6px; font-size:11px; border:0; }
-.remote-workspace .remote-model-choice > .brand-icon { flex:none; }
-.remote-workspace .remote-composer-shortcuts { padding:4px 0 0; gap:2px; }
-.remote-workspace .remote-composer-shortcuts > button { min-height:38px; font-size:10px; padding:5px 7px; }
-.remote-workspace .remote-composer-modes { padding:2px 0 5px; gap:5px; }
-.remote-workspace .remote-composer-modes button { min-height:38px; font-size:11px; border-radius:8px 8px 4px 8px; padding:5px 8px; }
-.remote-workspace .remote-composer-line { align-items:center; padding:4px 0; gap:6px; }
-.remote-workspace .remote-composer-line > .room-icon-button { width:44px; height:44px; }
-.remote-workspace .remote-composer-line textarea { padding:9px 2px; min-height:44px; font-size:15px; line-height:1.65; background:transparent; }
-.remote-workspace .remote-composer-line .remote-send { width:42px; height:42px; min-width:42px; border-radius:12px 12px 5px 12px; box-shadow:inset 0 1px 0 var(--edge-light); }
-.remote-workspace .remote-composer-status { font-size:9px; text-align:center; line-height:1.5; padding-top:2px; display:block; color:var(--muted); }
-.remote-workspace .remote-jump-latest { display:flex; align-items:center; gap:6px; min-height:44px; padding:7px 14px; border:1px solid var(--bevel); border-radius:24px; background:var(--surface); box-shadow:0 3px 14px var(--chat-shadow); color:var(--accent); font-size:11px; }
-.remote-workspace .remote-navigation { background:var(--chat-glass); backdrop-filter:blur(12px); }
-.remote-workspace .remote-navigation button { min-height:51px; }
 .remote-themed .remote-action-menu button { min-height:65px; border-radius:12px 12px 5px 12px; }
 .remote-themed .remote-action-menu button > svg { width:23px; height:23px; color:var(--accent); }
 .remote-themed .remote-action-menu button:nth-child(2) { background:var(--wash); }
@@ -113,7 +106,5 @@
 .remote-themed .room-drawer-panel > .room-drawer-content { scrollbar-width:thin; }
 .remote-workspace .remote-section-body { animation:remote-section-arrive 160ms ease-out; }
 @keyframes remote-section-arrive { from { opacity:.65; transform:translateY(5px); } to { opacity:1; transform:none; } }
-@media(min-width:760px) { .remote-themed .room-drawer-panel { border-radius:22px 22px 7px 22px; }.remote-workspace .remote-transcript > .remote-message { max-width:800px; width:100%; margin-inline:auto; }.remote-workspace .remote-transcript > .remote-message.is-user { width:fit-content; max-width:650px; margin-right:max(0px,calc((100% - 800px)/2)); }.remote-workspace .remote-composer { max-width:840px; width:calc(100% - 24px); align-self:center; } }
-@media(max-width:390px) { .remote-workspace .remote-header { gap:5px; padding-inline:10px; }.remote-workspace .remote-header > .room-icon-button { width:40px; min-width:40px; }.remote-workspace .remote-transcript { padding-inline:12px; }.remote-workspace .remote-message:not(.is-user) > .remote-surface > .remote-rich-text { padding:14px 12px; }.remote-workspace .remote-composer { margin-inline:7px; padding-inline:9px; } }
 @media(prefers-reduced-motion:reduce) { .remote-themed *,.remote-themed *::before,.remote-themed *::after { animation:none!important; transition:none!important; scroll-behavior:auto!important; } }
 .remote-themed[data-reduce-motion='true'] *,.remote-themed[data-reduce-motion='true'] *::before,.remote-themed[data-reduce-motion='true'] *::after { animation:none!important; transition:none!important; scroll-behavior:auto!important; }

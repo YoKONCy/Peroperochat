@@ -1,7 +1,7 @@
 <template>
   <section class="remote-display-settings">
     <p class="remote-help">仅影响当前连接在本机的显示，角色和明暗主题分别选择。</p>
-    <p v-if="error" class="room-error" role="alert">{{ error }}</p><p v-if="saveError" class="room-error" role="alert">{{ saveError }}<button class="room-text-button" @click="$emit('save')">重新保存</button></p>
+    <RemoteFeedback :message="error" /><RemoteFeedback :message="saveError" action-label="重试" @action="$emit('save')" />
     <fieldset :disabled="!ready || saving || importing"><legend>界面主题</legend><div class="remote-theme-options"><button v-for="item in themes" :key="item.id" :class="{ selected: display.theme === item.id }" @click="change('theme', item.id)"><RemoteIcon :name="item.icon" /><span>{{ item.name }}</span></button></div></fieldset>
     <fieldset :disabled="!ready || saving || importing"><legend>配色包<button class="room-text-button" @click="change('palette', 'standard')">使用标准配色</button></legend><div class="remote-palette-grid"><button v-for="palette in remotePalettes" :key="palette.id" :aria-pressed="display.palette === palette.id" :class="{ selected: display.palette === palette.id }" @click="change('palette', palette.id)"><span class="remote-palette-sample"><i :style="{ background: palette.light[1], color: palette.light[0] }" /><i :style="{ background: palette.dark[1], color: palette.dark[0] }" /></span><strong>{{ palette.name }}</strong></button></div></fieldset>
     <div class="remote-preference-row"><span><strong>首页显示角色 CG</strong><small>没有 CG 时使用头像布局</small></span><button class="remote-switch" role="switch" :aria-checked="display.showCg" aria-label="首页显示角色 CG" :disabled="!ready || saving" @click="change('showCg', !display.showCg)" /></div>
@@ -13,6 +13,7 @@
   </section>
 </template>
 <script setup>
+import RemoteFeedback from './RemoteFeedback.vue'
 import { computed, ref, onBeforeUnmount } from 'vue'
 import RemoteIcon from './RemoteIcon.vue'
 import RemoteAvatar from './RemoteAvatar.vue'

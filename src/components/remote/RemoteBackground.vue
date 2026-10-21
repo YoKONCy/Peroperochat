@@ -1,20 +1,16 @@
 <template>
   <section class="remote-background" aria-label="后台通知">
     <div class="remote-background-heading"><span><RoomIcon name="bell" /><strong>后台接收</strong></span><small>{{ label }}</small></div>
-    <p v-if="runtime?.supported">关闭界面后，由轻量原生服务接收当前角色的 infOS 持久通知。无需 Google 服务；切回独立模式会停止连接。</p>
-    <p v-else-if="runtime">{{ runtime.platform === 'ios' ? 'iOS 后台推送尚未接入，当前仅支持应用在线接收。' : '此平台当前仅支持应用在线接收。' }}</p>
+    <p v-if="runtime && !runtime.supported">当前仅在应用内接收消息。</p>
     <template v-if="runtime?.supported">
-      <p v-if="!runtime.eligible" class="remote-background-hint">请先使用「保持登录」重新授权，后台接收不会延长设备授权期限。</p>
-      <p v-if="!runtime.notifications" class="remote-background-hint">系统通知未开启，消息可能无法显示。</p>
-      <p v-if="!runtime.batteryUnrestricted" class="remote-background-hint">建议允许后台运行并取消电池限制；部分手机还需要手动允许自启动。</p>
-      <p v-if="runtime.blocked" class="remote-background-hint">连接已暂停，请核对授权或服务端版本后重试。</p>
+      <p v-if="hint" class="remote-background-hint">{{ hint }}</p>
       <div class="remote-background-actions"><button class="room-secondary-button" :disabled="busy || !runtime.eligible && !runtime.enabled" @click="configure(!runtime.enabled)">{{ busy ? '正在处理…' : runtime.enabled ? '关闭后台接收' : '开启后台接收' }}</button><button v-if="runtime.enabled && (runtime.blocked || runtime.state === 'stopped')" class="room-text-button" :disabled="busy" @click="configure(true)">重新连接</button><button class="room-text-button" :disabled="busy" @click="settings('notifications')">通知设置</button><button class="room-text-button" :disabled="busy" @click="settings('battery')">后台设置</button></div>
-      <p class="remote-background-note">运行时会保留连接通知。系统强行停止或限制后台时，恢复连接后补收服务端保留的通知。</p>
     </template>
-    <p v-if="error" class="room-error" role="alert">{{ error }}</p><button v-if="error && !runtime" class="room-text-button" @click="refresh">重新读取</button>
+    <RemoteFeedback :message="error" /><button v-if="error && !runtime" class="room-text-button" @click="refresh">重试</button>
   </section>
 </template>
 <script setup>
+import RemoteFeedback from './RemoteFeedback.vue'
 import { computed, onMounted, onBeforeUnmount, ref } from 'vue'
 import { isPermissionGranted, requestPermission } from '@tauri-apps/plugin-notification'
 import { remoteClient } from '../../services/remote'
@@ -28,6 +24,15 @@ const label = computed(() => {
   if (!runtime.value.enabled) return '未开启'
   if (runtime.value.blocked) return '需要处理'
   return { online: '已连接', connecting: '正在连接', reconnecting: '等待重连', stopped: '等待启动' }[runtime.value.state] || '等待连接'
+})
+const hint = computed(() => {
+  const state = runtime.value
+  if (!state) return ''
+  if (state.blocked) return '连接已暂停，请检查连接与登录。'
+  if (!state.eligible) return '重新配对时开启「保持登录」即可使用。'
+  if (!state.notifications) return '需要开启系统通知。'
+  if (!state.batteryUnrestricted) return '若收不到消息，请允许应用在后台运行。'
+  return ''
 })
 async function refresh() {
   if (disposed || refreshing || document.hidden) return

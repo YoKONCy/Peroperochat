@@ -4,7 +4,7 @@
       <input v-model="keyword" type="search" placeholder="找找某件事、某个词…" aria-label="搜索日记" />
       <input v-model="date" type="date" aria-label="筛选日记日期" />
     </form>
-    <p v-if="error" class="room-error" role="alert">{{ error }} <button class="room-text-button" @click="reload">重试</button></p>
+    <FeedbackMessage :message="error" action-label="重试" @action="reload" /><button v-if="error" class="room-text-button" @click="reload"><RoomIcon name="refresh" />重新打开日记</button>
     <p v-if="loading && !entries.length" class="journal-loading" role="status">正在读取日记…</p>
     <div v-else-if="!loading && !entries.length && !error" class="room-empty"><RoomIcon name="diary" /><p>{{ keyword || date ? '没有找到相关日记' : '还没有日记' }}<br />{{ keyword || date ? '试试其他关键词或日期。' : '角色写下的日记会显示在这里。' }}</p></div>
     <section v-for="group in groups" :key="group.date" class="journal-day">
@@ -34,7 +34,9 @@
 
 <script setup>
 import { ref, computed, watch, onBeforeUnmount } from 'vue'
-import { ElMessage, ElMessageBox } from 'element-plus'
+import { ElMessageBox } from 'element-plus'
+import { appMessage as ElMessage } from '../../services/appFeedback'
+import FeedbackMessage from '../FeedbackMessage.vue'
 import { queryDiary, writeDiary, deleteDiary } from '../../services/standalone'
 import RoomDrawer from './RoomDrawer.vue'
 import RoomIcon from './RoomIcon.vue'

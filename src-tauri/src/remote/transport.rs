@@ -4,6 +4,7 @@ use serde_json::Value;
 use crate::local::types::*;
 
 pub const MAX_BODY:usize=8*1024*1024;
+pub const MAX_PROJECTION_BODY:usize=64*1024*1024;
 #[derive(Debug,Clone,Serialize,Deserialize)]
 #[serde(rename_all="camelCase")]
 pub struct Identity {pub server_id:String,pub display_name:String,pub app_version:String}
@@ -12,16 +13,18 @@ pub fn client()->ChatResult<reqwest::Client> {
     reqwest::Client::builder().redirect(reqwest::redirect::Policy::none()).connect_timeout(Duration::from_secs(10))
         .build().map_err(|_|ChatError::new("REMOTE_NETWORK","远程网络客户端初始化失败"))
 }
-pub async fn body(mut response:reqwest::Response)->ChatResult<Vec<u8>> {
-    if response.content_length().is_some_and(|n|n>MAX_BODY as u64) {return Err(ChatError::new("REMOTE_TOO_LARGE","远程响应过大，请缩小查询范围"));}
+pub async fn body(response:reqwest::Response)->ChatResult<Vec<u8>> {body_with_limit(response,MAX_BODY).await}
+pub async fn body_with_limit(mut response:reqwest::Response,limit:usize)->ChatResult<Vec<u8>> {
+    if response.content_length().is_some_and(|n|n>limit as u64) {return Err(too_large());}
     let mut bytes=Vec::new();
     while let Some(chunk)=response.chunk().await.map_err(|_|network())? {
-        if bytes.len()+chunk.len()>MAX_BODY {return Err(ChatError::new("REMOTE_TOO_LARGE","远程响应过大"));}
+        if chunk.len()>limit.saturating_sub(bytes.len()) {return Err(too_large());}
         bytes.extend_from_slice(&chunk);
     }
     Ok(bytes)
 }
-pub fn network()->ChatError {ChatError::new("REMOTE_NETWORK","远程连接中断；已发送的操作可能仍在服务端执行，请刷新核对")}
+fn too_large()->ChatError {ChatError::new("REMOTE_TOO_LARGE","这部分内容暂时无法载入，请稍后再试")}
+pub fn network()->ChatError {ChatError::new("REMOTE_NETWORK","暂时连接不上 infOS，请检查网络")}
 pub fn send_error(error:reqwest::Error)->ChatError {
     if error.is_connect() {network().with_outcome("not_sent")} else {network()}
 }
@@ -33,11 +36,11 @@ pub fn status(status:reqwest::StatusCode)->ChatResult<()> {
     let error=match status.as_u16() {
         401=>ChatError::new("REMOTE_AUTH_REQUIRED","远程设备授权已失效，请重新配对或登录"),
         403=>ChatError::new("REMOTE_FORBIDDEN","当前设备没有执行此操作的权限"),
-        404=>ChatError::new("REMOTE_NOT_FOUND","远程对象不存在或目标版本不支持此接口"),
-        409=>ChatError::new("REMOTE_CONFLICT","远程状态已改变，请刷新后重新操作"),
-        400|422=>ChatError::new("REMOTE_INVALID_INPUT","服务端拒绝了操作参数，请刷新后核对"),
+        404=>ChatError::new("REMOTE_NOT_FOUND","这项内容已不存在，或当前 infOS 版本暂不支持"),
+        409=>ChatError::new("REMOTE_CONFLICT","内容刚刚有变化，请再试一次"),
+        400|422=>ChatError::new("REMOTE_INVALID_INPUT","没能完成这项操作，请检查填写的内容"),
         429=>ChatError::new("REMOTE_RATE_LIMIT","远程请求过于频繁，请稍后再试"),
-        _=>ChatError::new("REMOTE_HTTP",format!("远程服务响应异常（HTTP {}）",status.as_u16())),
+        _=>ChatError::new("REMOTE_HTTP","infOS 暂时没有响应，请稍后再试"),
     };
     Err(if matches!(status.as_u16(),400|401|403|404|405|409|413|415|422|429) {error.with_outcome("rejected")} else {error})
 }
@@ -75,6 +78,27 @@ pub async fn probe(endpoint:&str,token:&str)->ChatResult<Identity> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[tokio::test]
+    async fn large_single_projection_has_its_own_budget() {
+        let expected="x".repeat(MAX_BODY+1024);
+        let (url,_)=server(200,expected.clone(),"");
+        let response=client().unwrap().get(url).send().await.unwrap();
+        assert_eq!(body_with_limit(response,MAX_PROJECTION_BODY).await.unwrap().len(),expected.len());
+        let (url,_)=server(200,"超过小额度".into(),"");
+        let response=client().unwrap().get(url).send().await.unwrap();
+        assert_eq!(body_with_limit(response,4).await.unwrap_err().code,"REMOTE_TOO_LARGE");
+    }
+    #[tokio::test]
+    async fn chunked_response_is_bounded_even_without_content_length() {
+        use std::io::{Read,Write};
+        let listener=std::net::TcpListener::bind("127.0.0.1:0").unwrap();let address=listener.local_addr().unwrap();
+        std::thread::spawn(move || {
+            let (mut socket,_)=listener.accept().unwrap();let mut input=[0u8;4096];let _=socket.read(&mut input);
+            let _=socket.write_all(b"HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\nConnection: close\r\n\r\n4\r\n1234\r\n4\r\n5678\r\n0\r\n\r\n");
+        });
+        let response=client().unwrap().get(format!("http://{address}")).send().await.unwrap();
+        assert_eq!(body_with_limit(response,6).await.unwrap_err().code,"REMOTE_TOO_LARGE");
+    }
     fn server(status:u16,body:String,headers:&str)->(String,std::sync::mpsc::Receiver<String>) {
         use std::io::{BufRead,Write};
         let listener=std::net::TcpListener::bind("127.0.0.1:0").unwrap();let address=listener.local_addr().unwrap();

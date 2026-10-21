@@ -1,7 +1,7 @@
 <template>
   <RoomDrawer :title="`${agent.name} 的衣柜`" :subtitle="displayMode === 'live2d' ? '服装细节预览 · 点选查看上身效果' : '服装设置保留给 Live2D，静态立绘不换装'" :tone="tone" variant="wardrobe" @close="$emit('close')">
     <button v-if="displayMode !== 'live2d'" class="room-wardrobe-display room-secondary-button" type="button" @click="$emit('display', 'live2d')"><RoomIcon name="model" />切换到 Live2D 查看服装</button>
-    <p v-if="error" class="room-error" role="alert">{{ error }} <button class="room-text-button" @click="load">重试</button></p>
+    <FeedbackMessage :message="error" action-label="重试" @action="load" /><button v-if="error" class="room-text-button" @click="load"><RoomIcon name="refresh" />重新打开衣柜</button>
     <p v-if="loading" class="room-empty" role="status">正在打开衣柜…</p>
     <div v-else class="outfit-grid">
       <button v-for="outfit in outfits" :key="outfit.id" :disabled="changing" :aria-pressed="String(selected) === String(textureId(outfit))" :class="{ selected: String(selected) === String(textureId(outfit)) }" @click="choose(outfit)">
@@ -14,7 +14,8 @@
 
 <script setup>
 import { ref, watch, onMounted, onBeforeUnmount } from 'vue'
-import { ElMessage } from 'element-plus'
+import { appMessage as ElMessage } from '../../services/appFeedback'
+import FeedbackMessage from '../FeedbackMessage.vue'
 import RoomDrawer from './RoomDrawer.vue'
 import RoomIcon from './RoomIcon.vue'
 import OutfitThumbnail from './OutfitThumbnail.vue'

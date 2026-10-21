@@ -20,8 +20,8 @@
         <button aria-label="打开日记" @click="drawer = 'journal'"><span><RoomIcon name="diary" /></span><small>日记</small></button>
       </nav></Transition>
       <ReminderStrip v-if="panelMode === 'rest' && !keyboardOpen && (reminderTotal || reminderError)" :entries="reminders" :total="reminderTotal" :error="reminderError" @open="drawer = 'reminders'" />
-      <div v-if="loadError" class="room-load-error" role="alert"><span>{{ loadError }}</span><button @click="loadRoomData">重试</button></div>
-      <div v-if="actionError" class="room-action-error" role="alert"><span>{{ actionError }}</span><button aria-label="关闭提示" @click="actionError = ''"><RoomIcon name="close" /></button></div>
+      <FeedbackMessage :message="loadError" action-label="重试" @action="loadRoomData" />
+      <FeedbackMessage :message="actionError" @dismiss="actionError = ''" />
       <RoomChat :key="activeAgentId" ref="chatPanel" v-model="draft.text" v-model:mode="panelMode" :agent="agent" :messages="messages" :busy="isLoading" :activity="activityText" :image="draft.image" :keyboard-open="keyboardOpen" :jump-id="jumpId" @focus="onComposerFocus" @send="send" @stop="conversation.stop" @attach="fileInput?.click()" @remove-image="draft.image = null" @copy="copy" @delete="removeMessage" @regenerate="regenerate" @preview-image="openImage" @dock-size="restDockSpace = $event" />
       <input ref="fileInput" class="room-hidden-input" type="file" accept="image/*" aria-label="选择聊天图片" tabindex="-1" @change="attachImage" />
     </div>
@@ -39,6 +39,7 @@
 
     <RoomDrawer v-if="drawer === 'menu'" title="菜单" :subtitle="agent.name" :tone="tone" @close="drawer = null">
       <div class="room-menu-list">
+        <button v-if="loadError" @click="loadRoomData(); drawer = null"><RoomIcon name="refresh" /><span><strong>重新加载房间</strong><small>再取一次对话与角色状态</small></span><RoomIcon name="arrow" /></button>
         <button @click="openFullChat"><RoomIcon name="chat" /><span><strong>聊天记录</strong><small>查看完整对话</small></span><RoomIcon name="arrow" /></button>
         <button @click="drawer = 'journal'"><RoomIcon name="diary" /><span><strong>日记</strong><small>查看和管理记忆</small></span><RoomIcon name="arrow" /></button>
         <button @click="drawer = 'reminders'"><RoomIcon name="bell" /><span><strong>提醒</strong><small>{{ reminderTotal ? `${reminderTotal} 件待办的小事` : '安排时间，查看或取消提醒' }}</small></span><RoomIcon name="arrow" /></button>
@@ -72,7 +73,9 @@
 <script setup>
 import { computed, reactive, ref, watch, onMounted, onBeforeUnmount, nextTick } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { ElMessage, ElMessageBox } from 'element-plus'
+import { ElMessageBox } from 'element-plus'
+import { appMessage as ElMessage } from '../services/appFeedback'
+import FeedbackMessage from '../components/FeedbackMessage.vue'
 import Live2DWidget from '../components/Live2DWidget.vue'
 import ModeSwitchEntry from '../components/ModeSwitchEntry.vue'
 import RoomChat from '../components/companion/RoomChat.vue'
@@ -369,10 +372,6 @@ onBeforeUnmount(() => {
   .room-quick-actions button:hover svg { transform: rotate(-5deg); }
 }
 .room-hidden-input { position: absolute; width: 1px; height: 1px; overflow: hidden; opacity: 0; pointer-events: none; }
-.room-load-error, .room-action-error { position: absolute; z-index: 35; top: calc(88px + env(safe-area-inset-top)); left: 22px; right: 22px; display: flex; align-items: center; justify-content: space-between; gap: 12px; background: #fff8f3f5; border: 1px solid #e9c5b6; color: #885547; box-shadow: var(--room-shadow); padding: 10px 14px; border-radius: 13px; font-size: 12px; line-height: 1.6; }
-.room-action-error { top: auto; bottom: calc(var(--dock-height) + 10px); }
-.room-load-error button, .room-action-error button { border: 0; background: transparent; padding: 5px; flex: none; }
-.room-action-error svg { width: 16px; height: 16px; }
 .room-role-list { display: flex; flex-direction: column; gap: 10px; }
 .room-role-list > button { display: flex; align-items: center; gap: 16px; padding: 12px; border: 1px solid var(--room-line); border-radius: 3px 12px 3px 3px; background: var(--room-surface); text-align: left; width: 100%; }
 .room-role-list > button.is-current { border-color: var(--room-accent); background: var(--room-subtle); }
@@ -417,8 +416,6 @@ onBeforeUnmount(() => {
   .room-header { padding: calc(22px + env(safe-area-inset-top)) 28px 12px; }
   .room-quick-actions { right: 28px; top: calc(97px + env(safe-area-inset-top)); flex-direction: row; gap: 13px; }
   .room-quick-actions::before { display: none; }
-  .room-action-error { left: auto; right: 28px; width: 420px; }
-  .room-load-error { left: auto; right: 28px; width: 420px; }
 }
 @media (max-width: 360px) { .room-header { padding-left: 12px; padding-right: 12px; } .room-selector-status { max-width: 110px; } .room-quick-actions { right: 10px; gap: 12px; } }
 @media (max-height: 540px) and (max-width: 959px) { .room-quick-actions { top: 90px; gap: 8px; } .room-quick-actions button > span { width: 32px; height: 34px; } }

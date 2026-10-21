@@ -116,12 +116,16 @@ async fn session(app:&AppHandle,token:&Token)->ChatResult<Session> {
     Ok(Session {app:app.clone(),token:token.clone(),profile,secret,client:transport::client()?})
 }
 async fn perform(session:&Session,route:operations::Route)->ChatResult<Value> {
+    let limit=if route.path.ends_with("/projection") || route.path.starts_with("/chat/threads/") || route.path.starts_with("/chat/queue/") {transport::MAX_PROJECTION_BODY} else {transport::MAX_BODY};
+    perform_limited(session,route,limit).await
+}
+async fn perform_limited(session:&Session,route:operations::Route,limit:usize)->ChatResult<Value> {
     let mut url=reqwest::Url::parse(&format!("{}/api{}",session.profile.endpoint,route.path)).map_err(|_|transport::network())?;
     if !route.params.is_empty() {url.query_pairs_mut().extend_pairs(route.params);}
     let mut request=session.client.request(route.method,url).bearer_auth(&session.secret).timeout(std::time::Duration::from_secs(45));
     if let Some(body)=route.body {request=request.json(&body);}
     let response=request.send().await.map_err(transport::send_error)?;
-    let response=checked_response(session,response).await?;transport::envelope(&transport::body(response).await?)
+    let response=checked_response(session,response).await?;transport::envelope(&transport::body_with_limit(response,limit).await?)
 }
 #[tauri::command]
 pub async fn remote_session_status(app:AppHandle,token:Token)->ChatResult<Value> {
@@ -148,12 +152,12 @@ fn cache_key(query:&operations::Query)->String {serde_json::to_string(query).unw
 #[tauri::command]
 pub async fn remote_query(app:AppHandle,token:Token,query:operations::Query,#[allow(non_snake_case)] cached_only:Option<bool>)->ChatResult<Value> {
     let mode=app.state::<Coordinator>();let mut changes=mode.subscribe();validate_token(&app,&token)?;
-    let key=cache_key(&query);let route=query.route()?;
+    let key=cache_key(&query);query.route()?;
     if cached_only==Some(true) {return Ok(json!({"modeToken":token,"cached":true,"data":cache::load(&app,&token,&key)?}));}
     let ticket=cache::begin_read(&app,&token,&key)?;
     let mut data=tokio::select! {biased;
         _=changes.changed()=>return Err(inactive()),
-        result=async {let session=session(&app,&token).await?;perform(&session,route).await}=>result?,
+        result=async {let session=session(&app,&token).await?;operations::fetch_query(&query,|route,limit|perform_limited(&session,route,limit)).await}=>result?,
     };
     if matches!(query,operations::Query::Agent {..}) {
         data=json!({"id":data["id"],"name":data["name"],"description":data["description"],"publicProfile":data["publicProfile"],"ownerAppellation":data["ownerAppellation"]});
@@ -171,7 +175,7 @@ pub async fn remote_query(app:AppHandle,token:Token,query:operations::Query,#[al
     if let operations::Query::QueueLive {id}=&query {
         if !data.is_null() && (data["threadId"]!=*id || !matches!(data["state"].as_str(),Some("open"|"committed"|"failed"|"disposed")) || !data["nodes"].is_array()) {return Err(ChatError::new("REMOTE_PROTOCOL","队列流式投影身份无效"));}
     }
-    if !cache::save(&app,&token,&key,ticket,&data)? {return Err(ChatError::new("REMOTE_STALE_READ","读取期间远程状态已刷新或发生操作，请重新读取"));}
+    if !cache::save(&app,&token,&key,ticket,&data)? {return Err(ChatError::new("REMOTE_STALE_READ","正在同步最新内容"));}
     Ok(json!({"modeToken":token,"cached":false,"data":data}))
 }
 

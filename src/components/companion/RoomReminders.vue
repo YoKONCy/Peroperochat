@@ -2,9 +2,9 @@
   <RoomDrawer :title="`${agent.name} 的提醒`" subtitle="把要记得的小事交给我" :tone="tone" :busy="busy" @close="$emit('close')">
     <p class="reminder-runtime-hint">{{ !runtimeReady ? '正在读取系统提醒状态…' : runtime.background ? '已接入安卓系统提醒，关闭界面后可由系统触发；系统强制停止会中断调度。' : '此平台在应用运行时检查并发送通知。' }} 时间使用设备本地时区。</p>
     <div v-if="runtime.background && !runtime.exact" class="reminder-permission"><span>当前使用非精确提醒，系统可能延迟触发。</span><button class="room-text-button" :disabled="requesting" @click="enablePrecision">允许准时提醒</button></div>
-    <p v-if="runtime.syncError || runtimeError" class="room-error" role="alert">{{ runtime.syncError || runtimeError }}</p>
+    <FeedbackMessage :message="runtime.syncError || runtimeError" />
     <div v-if="!permission" class="reminder-permission"><span>开启系统通知，才能在到点时收到提醒。</span><button class="room-text-button" :disabled="requesting" @click="enableNotifications">开启通知</button></div>
-    <p v-if="error || actionError" class="room-error" role="alert">{{ actionError || error }} <button v-if="error" class="room-text-button" @click="reload">重试</button></p>
+    <FeedbackMessage :message="actionError || error" :action-label="error ? '重试' : undefined" @action="reload" /><button v-if="error" class="room-text-button" @click="reload">重新加载提醒</button>
     <form v-if="editing" class="reminder-editor" @submit.prevent="save">
       <fieldset :disabled="busy">
         <label class="settings-field">提醒内容<input v-model="form.task" required maxlength="500" placeholder="例如：给窗边的花浇水" /></label>
@@ -33,6 +33,7 @@ import { computed, onMounted, onBeforeUnmount, reactive, ref } from 'vue'
 import { ElMessageBox } from 'element-plus'
 import { isPermissionGranted, requestPermission } from '@tauri-apps/plugin-notification'
 import RoomDrawer from './RoomDrawer.vue'
+import FeedbackMessage from '../FeedbackMessage.vue'
 import RoomIcon from './RoomIcon.vue'
 import ChoicePicker from './ChoicePicker.vue'
 import { useReminders } from '../../composables/useReminders'

@@ -1,5 +1,5 @@
 <template>
-  <div><p v-if="error" class="room-error">{{ error }}</p><p v-if="notice" class="remote-notice">{{ notice }}</p><RemoteAction v-if="unresolved" icon="alert" tone="danger" @click="$emit('pending')">上次请求结果待核对</RemoteAction>
+  <div><RemoteFeedback :message="error" /><RemoteFeedback :message="notice" tone="success" /><RemoteAction v-if="unresolved" icon="alert" tone="danger" @click="$emit('pending')">上次请求结果待核对</RemoteAction>
     <div v-if="status" class="remote-service-status"><article><h3><RemoteIcon name="audio" />语音识别</h3><p>{{ status.asr?.available ? '可用' : '尚不可用' }}</p></article><article><h3><RemoteIcon name="volume" />文字朗读</h3><p>{{ status.tts?.available ? '可用' : '尚不可用' }}</p></article></div>
     <nav class="remote-subnav" aria-label="语音服务"><button v-for="item in panels" :key="item.id" :class="{ selected: panel === item.id }" :disabled="recording" @click="panel = item.id"><RemoteIcon :name="item.icon" />{{ item.label }}</button></nav>
     <section v-if="panel === 'asr'" class="remote-manager-card"><h2>{{ recording ? '正在录音…' : '语音识别' }}</h2><p class="remote-help">录音或上传音频，由当前 infOS 识别。不会自动发送消息。</p><div class="remote-purpose-actions"><RemoteAction :icon="recording ? 'stop' : 'audio'" :tone="recording ? 'danger' : 'primary'" :disabled="busy || unresolved || !status?.asr?.available" @click="recording ? stopRecording() : startRecording()">{{ recording ? '结束并识别' : '开始录音' }}</RemoteAction><RemoteAction icon="attach" :disabled="busy || recording || unresolved || !status?.asr?.available" @click="audioInput.click()">上传音频</RemoteAction><input ref="audioInput" type="file" accept="audio/*" hidden @change="importAudio" /></div><textarea v-if="transcript" v-model="transcript" class="remote-code-editor" rows="4" aria-label="识别结果" /><RemoteAction v-if="transcript" icon="copy" @click="copy">复制文字</RemoteAction></section>
@@ -9,6 +9,7 @@
   </div>
 </template>
 <script setup>
+import RemoteFeedback from './RemoteFeedback.vue'
 import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
 import { useRemoteManagement } from '../../composables/useRemoteManagement'
 import { field, configFields } from '../../services/remoteManagement'

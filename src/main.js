@@ -1,5 +1,6 @@
 import { createApp } from 'vue'
-import ElementPlus, { ElMessage } from 'element-plus'
+import ElementPlus from 'element-plus'
+import { appMessage as ElMessage } from './services/appFeedback'
 import 'element-plus/dist/index.css'
 import App from './App.vue'
 import router from './router/index.js'

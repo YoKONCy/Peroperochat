@@ -98,22 +98,10 @@
 .remote-progress { display: flex; gap: 12px; flex-wrap: wrap; font-size: 11px; color: var(--room-muted); }
 .remote-progress progress { accent-color: var(--room-accent); }
 .remote-load-history { display: block; border: 0; background: transparent; color: var(--remote-accent) !important; font-size: 11px !important; margin: 0 auto 22px; padding: 8px 12px; }
-.remote-jump-latest { position: absolute; right: 18px; bottom: 110px; z-index: 3; display: inline-flex; align-items: center; gap: 5px; font-size: 11px !important; border: 1px solid var(--remote-line); border-radius: 20px; padding: 8px 12px; color: var(--remote-accent) !important; background: #fffffff2; box-shadow: 0 3px 14px #4554650d; }
-.remote-jump-latest svg { width: 13px; height: 13px; }
 .remote-pending-summary { display: flex; align-items: center; gap: 8px; color: #a68a71; font-size: 11px; padding: 12px; background: #f8f3ed; border-radius: 8px; }
 .remote-pending-summary span { flex: 1; }
 .remote-pending-summary button { border: 0; background: transparent; color: inherit; }
 .remote-pending-summary > svg { width: 16px; height: 16px; }
-.remote-composer { position: relative; flex: none; padding: 10px 14px 5px; background: #ffffffed; border-top: 1px solid var(--remote-line); }
-.remote-composer-line { display: flex; align-items: flex-end; gap: 6px; padding: 6px 7px 6px 3px; border: 1px solid #e7ebf1; border-radius: 15px; background: #fafbfd; }
-.remote-composer-line:focus-within { border-color: var(--remote-accent); }
-.remote-composer-line > .room-icon-button { width: 34px; height: 35px; color: var(--remote-muted); }
-.remote-composer textarea { flex: 1; min-width: 0; min-height: 35px; max-height: 132px; resize: none; outline: 0; border: 0; padding: 7px 2px; color: var(--remote-ink); background: transparent; font: inherit; line-height: 1.6; }
-.remote-composer textarea::placeholder { color: #a1a9b7; }
-.remote-send { width: 35px; height: 35px; padding: 8px; display: grid; place-items: center; border: 0; border-radius: 11px; background: var(--remote-accent); color: #ffffff !important; flex: none; }
-.remote-send:disabled { background: #eaf0f4; color: #b5c4d0 !important; opacity: 1 !important; }
-.remote-send svg { width: 19px; height: 19px; }
-.remote-composer-status { display: block; text-align: center; font-size: 9px; color: #adb3bf; padding: 5px 0 2px; }
 .remote-draft-attachments { display: flex; gap: 6px; overflow-x: auto; padding: 2px 0 8px; }
 .remote-draft-attachments > span { display: flex; align-items: center; gap: 5px; max-width: 230px; white-space: nowrap; font-size: 10px; padding: 5px 8px; border: 1px solid var(--remote-line); border-radius: 8px; }
 .remote-draft-attachments svg { width: 13px; height: 13px; }
@@ -164,12 +152,6 @@
 .remote-connection-form label, .remote-appearance label { display: flex; flex-direction: column; gap: 8px; font-size: 12px; }
 .remote-connection-form .remote-checkbox { flex-direction: row; margin: 0; }
 .remote-connection-form > button { justify-self: start; }
-.remote-profile-list article { position: relative; display: flex; flex-wrap: wrap; align-items: center; border-bottom: 1px solid var(--room-line); }
-.remote-profile-select { border: 0; background: transparent; padding: 17px 0; display: flex; align-items: center; text-align: left; gap: 11px; flex: 1; min-width: 0; }
-.remote-profile-select > span:first-of-type { flex: 1; min-width: 0; }
-.remote-profile-select strong { display: block; font-size: 13px; }
-.remote-profile-select small { display: block; font-size: 10px; color: var(--room-muted); margin-top: 4px; overflow-wrap: anywhere; }
-.remote-profile-select > span:last-child { font-size: 10px; color: var(--room-accent); }
 .remote-inline-confirm { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; width: 100%; padding: 12px 0; font-size: 12px; color: var(--room-muted); }
 .remote-inline-confirm button { border: 1px solid var(--room-line); border-radius: 5px; background: white; padding: 6px 11px; color: var(--room-ink); }
 .remote-appearance { display: grid; gap: 15px; border-top: 1px solid var(--room-line); padding-top: 20px; margin-top: 20px; }
@@ -228,6 +210,6 @@
 .remote-empty > svg { width: 27px; height: 27px; color: var(--room-accent); opacity: .5; margin-bottom: 17px; }
 .remote-empty strong { font-size: 13px; font-weight: 500; color: var(--room-ink); }
 .remote-empty span { font-size: 11px; color: var(--room-muted); margin-top: 8px; line-height: 1.8; }
-@media (min-width: 760px) { .remote-header, .remote-greeting, .remote-transcript, .remote-composer, .remote-collection { padding-left: max(28px, calc((100% - 880px) / 2)); padding-right: max(28px, calc((100% - 880px) / 2)); } .remote-live2d { right: max(28px, calc((100% - 880px) / 2)); } .remote-greeting-portrait { right: max(48px, calc((100% - 840px) / 2)); } .remote-header::after { left: max(87px, calc((100% - 760px) / 2)); } .remote-navigation { padding-inline: max(18px, calc((100% - 600px) / 2)); } }
+@media (min-width: 760px) { .remote-header, .remote-greeting, .remote-transcript, .remote-collection { padding-left: max(28px, calc((100% - 880px) / 2)); padding-right: max(28px, calc((100% - 880px) / 2)); } .remote-live2d { right: max(28px, calc((100% - 880px) / 2)); } .remote-greeting-portrait { right: max(48px, calc((100% - 840px) / 2)); } .remote-header::after { left: max(87px, calc((100% - 760px) / 2)); } .remote-navigation { padding-inline: max(18px, calc((100% - 600px) / 2)); } }
 @media (max-width: 360px) { .remote-header { gap: 8px; padding-inline: 12px; } .remote-transcript { padding-inline: 12px; } .remote-greeting { padding-left: 18px; } .remote-greeting-copy { padding-right: 100px; } .remote-live2d { right: 2px; width: 130px; } .remote-greeting-portrait { right: 18px; width: 90px !important; height: 102px !important; } }
 @media (prefers-reduced-motion: reduce) { .remote-workspace *, .remote-welcome-enter-active, .remote-welcome-leave-active { animation: none !important; transition: none !important; } }

@@ -1,13 +1,14 @@
 <template>
-  <div class="remote-model-controls" :aria-busy="loading || saving">
-    <div class="remote-model-choice"><BrandIcon :brand="resolveModelBrand(settings?.effective?.modelId)" :size="19" fallback="model" /><RemoteSelect :model-value="String(settings?.modelConfigId ?? '')" label="本会话模型" :placeholder="loading ? '读取模型…' : '选择模型'" :options="modelOptions" :disabled="blocked" @update:model-value="selectModel" /></div>
-    <div class="remote-effort-choice"><RemoteIcon name="brain" /><RemoteSelect :model-value="settings?.reasoningEffort || ''" label="思考强度" :options="settings?.effortOptions || []" :disabled="blocked" @update:model-value="selectEffort" /></div>
-    <button v-if="error" class="room-text-button" type="button" @click="load"><RemoteIcon name="refresh" />重试配置</button>
-    <p v-if="error" class="remote-controls-error" role="alert">{{ error }}</p>
-    <button v-if="unresolved" class="room-text-button" type="button" @click="$emit('pending')">保存结果待核对</button>
+  <div :class="compact ? 'chat-model-controls' : 'remote-model-controls'" :aria-busy="loading || saving">
+    <div :class="compact ? 'chat-model-choice' : 'remote-model-choice'"><RemoteSelect :compact="compact" :display-label="compact ? modelLabel : undefined" :model-value="String(settings?.modelConfigId ?? '')" label="本会话模型" :placeholder="loading ? '读取模型…' : '选择模型'" :options="modelOptions" :disabled="blocked" @update:model-value="selectModel"><template #prefix><BrandIcon :brand="resolveModelBrand(settings?.effective?.modelId)" :size="compact ? 15 : 19" fallback="model" /></template></RemoteSelect></div>
+    <div :class="compact ? 'chat-effort-choice' : 'remote-effort-choice'"><RemoteSelect :compact="compact" :display-label="compact ? effortLabel : undefined" :model-value="settings?.reasoningEffort || ''" label="思考强度" :options="settings?.effortOptions || []" :disabled="blocked" @update:model-value="selectEffort"><template #prefix><RemoteIcon name="thought" /></template></RemoteSelect></div>
+    <button v-if="error" class="chat-model-warning" type="button" aria-label="模型设置暂未载入，点击重试" @click="load"><RemoteIcon name="refresh" /></button>
+    <RemoteFeedback :message="error" />
+    <button v-if="unresolved" class="chat-model-warning" type="button" aria-label="查看模型设置保存结果" @click="$emit('pending')"><RemoteIcon name="alert" /></button>
   </div>
 </template>
 <script setup>
+import RemoteFeedback from './RemoteFeedback.vue'
 import { ref, computed, watch, onMounted, onBeforeUnmount } from 'vue'
 import RemoteSelect from './RemoteSelect.vue'
 import RemoteIcon from './RemoteIcon.vue'
@@ -16,11 +17,18 @@ import { resolveModelBrand } from '../../utils/modelBrands'
 import { remoteClient } from '../../services/remote'
 import { manageRemote } from '../../stores/remote'
 import { currentToken, assertToken, sameToken } from '../../stores/mode'
-const props = defineProps({ threadId: String, disabled: Boolean })
+const props = defineProps({ threadId: String, disabled: Boolean, compact: Boolean })
 const emit = defineEmits(['changed', 'capabilities', 'pending', 'busy'])
 const token = currentToken(), settings = ref(null), loading = ref(false), saving = ref(false), error = ref(''), unresolved = ref(false)
 let serial = 0, disposed = false
 const blocked = computed(() => props.disabled || loading.value || saving.value || unresolved.value || !settings.value)
+const modelLabel = computed(() => settings.value?.effective?.name || settings.value?.models?.find(item => item.id === settings.value?.modelConfigId)?.name || settings.value?.effective?.modelId || (loading.value ? '载入模型…' : '选择模型'))
+const effortLabel = computed(() => {
+  if (!settings.value) return '思考'
+  const value = settings.value?.reasoningEffort || ''
+  const label = settings.value?.effortOptions?.find(item => item.value === value)?.label || '自动'
+  return `思考 · ${label.replace(/跟随模型|跟随全局/g, '自动')}`
+})
 const modelOptions = computed(() => [{ value: '', label: `全局主模型${!settings.value?.modelConfigId && settings.value?.effective?.name ? ` · ${settings.value.effective.name}` : ''}` }, ...(settings.value?.models || []).map(item => ({ value: String(item.id), label: item.name, description: item.modelId }))])
 async function load() {
   if (saving.value || !props.threadId || props.disabled) return

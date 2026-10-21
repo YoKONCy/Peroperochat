@@ -5,6 +5,7 @@
       <RemoteWorkspace v-else-if="isRemote" :key="`${modeState.snapshot.installationId}:${modeState.snapshot.activationEpoch}:${modeState.snapshot.activeTarget.profileId}`" />
     </div>
     <Transition name="mode-curtain"><ModeTransition v-if="transitionVisible" :waiting="transitionWaiting" /></Transition>
+    <FeedbackBubbles :fallback-theme="{ style: localStyle, reduceMotion: !displayPreferences.motion }" />
   </div>
 </template>
 
@@ -17,6 +18,8 @@ import { remoteState } from './stores/remote'
 import { useModeTransition } from './composables/useModeTransition'
 import RemoteWorkspace from './pages/RemoteWorkspace.vue'
 import ModeTransition from './components/ModeTransition.vue'
+import FeedbackBubbles from './components/FeedbackBubbles.vue'
+import { clearFeedback } from './services/appFeedback'
 import './styles/companion.css'
 import './styles/controls.css'
 import './styles/standalone.css'
@@ -31,6 +34,7 @@ const { visible: transitionVisible, waiting: transitionWaiting } = useModeTransi
 const localStyle = computed(() => appearanceStyle(activeAgentId.value))
 provide(LOCAL_APPEARANCE, computed(() => isStandalone.value ? { style: localStyle.value, reduceMotion: !displayPreferences.value.motion } : null))
 watch(tone, value => { document.documentElement.dataset.tone = value }, { immediate: true })
+watch(() => [route.fullPath, modeState.snapshot?.activationEpoch, modeState.snapshot?.phase], clearFeedback, { flush: 'sync' })
 </script>
 
 <style>

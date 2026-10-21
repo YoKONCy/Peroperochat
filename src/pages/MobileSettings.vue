@@ -10,7 +10,7 @@
       <section :id="`settings-panel-${tab}`" class="settings-content" role="tabpanel" :aria-labelledby="`settings-tab-${tab}`">
         <div :key="tab" class="settings-panel-body">
           <header v-if="tab !== 'overview'" class="settings-section-heading"><span class="settings-section-symbol"><RoomIcon :name="currentCategory.icon" /></span><div><h2>{{ currentCategory.label }}</h2><p>{{ currentCategory.description }}</p></div><span v-if="dirtySections[tab]" class="settings-unsaved">未保存</span></header>
-          <p v-if="loadError" class="room-error" role="alert">{{ loadError }} <button class="room-text-button" @click="load">重新读取</button></p>
+          <FeedbackMessage :message="loadError" action-label="重试" @action="load" /><button v-if="loadError" class="room-text-button" @click="load"><RoomIcon name="refresh" />重新加载设置</button>
           <p v-if="loading" class="control-hint" role="status">正在读取设置…</p>
 
           <div v-if="tab === 'overview'" class="settings-overview">
@@ -74,7 +74,9 @@
 <script setup>
 import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref } from 'vue'
 import { onBeforeRouteLeave, useRouter } from 'vue-router'
-import { ElMessage, ElMessageBox } from 'element-plus'
+import { ElMessageBox } from 'element-plus'
+import { appMessage as ElMessage } from '../services/appFeedback'
+import FeedbackMessage from '../components/FeedbackMessage.vue'
 import CompanionPage from '../components/companion/CompanionPage.vue'
 import RoomIcon from '../components/companion/RoomIcon.vue'
 import CharacterAvatar from '../components/companion/CharacterAvatar.vue'
