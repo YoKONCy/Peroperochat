@@ -16,7 +16,7 @@
 
 <br />
 
-<a href="docs/archived/design/standalone-concepts/standalone-light-v2.png"><img src="docs/archived/design/standalone-concepts/standalone-light-v2.png" width="100%" alt="独立模式设计稿：房间、对话面板、衣柜与设置" /></a>
+<a href=".github/assets/standalone-light-v2.png"><img src=".github/assets/standalone-light-v2.png" width="100%" alt="独立模式设计稿：房间、对话面板、衣柜与设置" /></a>
 <p align="right"><sub>独立模式设计稿（非最终界面截图）：房间 / 对话 / 衣柜 / 设置</sub></p>
 
 <p align="center">
@@ -95,7 +95,7 @@ PeroperoChat 是一个开源应用，基于 Vue 3、Tauri 2 与 Rust，支持 An
 连接 infOS 时，消息里的 Markdown、代码高亮、KaTeX 公式、Mermaid 图表、表格和隔离的 HTML／SVG 都能直接渲染；图片可在消息内浏览放大，文档可以小窗打开成独立阅读面板。
 
 <p align="center">
-<a href="docs/archived/design/chat-phase-one/rich-content-overview.png"><img src="docs/archived/design/chat-phase-one/rich-content-overview.png" width="52%" alt="远程对话富内容设计稿：Markdown、代码、表格、公式、图表与图片" /></a>
+<a href=".github/assets/rich-content-overview.png"><img src=".github/assets/rich-content-overview.png" width="52%" alt="远程对话富内容设计稿：Markdown、代码、表格、公式、图表与图片" /></a>
 </p>
 <p align="center"><sub>远程对话富内容设计稿（非最终界面截图）</sub></p>
 
@@ -124,7 +124,7 @@ PeroperoChat 是一个开源应用，基于 Vue 3、Tauri 2 与 Rust，支持 An
 远程模式需要支持队列接口的新版 infOS。
 
 <p align="center">
-<a href="docs/archived/design/chat-phase-one/conversation-overview.png"><img src="docs/archived/design/chat-phase-one/conversation-overview.png" width="46%" alt="远程对话设计稿" /></a>
+<a href=".github/assets/conversation-overview.png"><img src=".github/assets/conversation-overview.png" width="46%" alt="远程对话设计稿" /></a>
 </p>
 <p align="center"><sub>远程对话设计稿（非最终界面截图）：思考过程、工具轨迹、队列与消息操作</sub></p>
 
