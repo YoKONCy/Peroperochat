@@ -1,4 +1,8 @@
 /* 页面在固定舞台内交接，输入区与导航不参与位移。 */
+.conversation-confirm-actions{display:flex;justify-content:flex-end;gap:10px;margin-top:18px;flex-wrap:wrap}
+.conversation-confirm-actions>button{min-height:44px}
+.conversation-actions>button.conversation-delete-action{color:var(--room-danger,#b6506b)}
+.conversation-delete-description{font-size:13px;line-height:1.8;overflow-wrap:anywhere;color:var(--room-ink)}
 .remote-page-stage{position:relative;display:flex;flex:1;min-height:0;min-width:0;overflow:hidden;isolation:isolate}
 .remote-page-stage>.workspace-page{position:absolute;inset:0;display:flex;flex-direction:column;min-height:0;min-width:0;width:100%;margin:0;overflow:hidden}
 .remote-page-stage>.remote-section-body.workspace-page{display:block;overflow-y:auto;overscroll-behavior:contain;animation:none;scrollbar-width:thin}

@@ -341,5 +341,13 @@
   "移出列表": "Remove from list",
   "已复制": "Copied",
   "暂时没能复制，请长按文字复制。": "Could not copy. Press and hold the text to copy it.",
-  "重试": "Retry"
+  "重试": "Retry",
+  "管理会话：{0}": "Manage conversation: {0}",
+  "重命名": "Rename",
+  "删除会话": "Delete conversation",
+  "修改会话名称": "Rename conversation",
+  "会话名称": "Conversation name",
+  "删除这条会话？": "Delete this conversation?",
+  "将从 infOS 删除「{0}」，其他设备也会同步更新。": "This will delete “{0}” from infOS and sync the change to your other devices.",
+  "确认删除会话": "Delete conversation"
 }

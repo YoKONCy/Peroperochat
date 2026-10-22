@@ -62,7 +62,7 @@
       </div>
     </section></Transition>
 
-    <Transition name="workspace-page" @before-leave="deactivatePage" @before-enter="activatePage" @after-enter="restorePagePosition"><section v-if="visitedPages.includes('conversations')" v-show="tab === 'conversations'" class="remote-section-body workspace-page phase-conversation-page" data-page="conversations" :inert="tab !== 'conversations' ? true : undefined"><RemoteConversationHub ref="conversationHub" :active="tab === 'conversations'" :agent-id="selection?.agentId || remoteState.activeAgentId" @single="prepareSingleList" @create="createConversation" @pending="showManagementPending" @resource="openResource"><template #single><button v-if="recoveredDrafts.length" class="room-secondary-button" @click="recoveryPreview = null; recoveryNotice = ''; drawer = 'draft-recoveries'"><RoomIcon name="edit" />{{ t('保留的草稿') }} · {{ recoveredDrafts.length }}</button><label v-if="remoteState.agents.length > 8" class="phase-search"><RoomIcon name="search" /><input v-model="agentSearch" :placeholder="t('查找角色')" :aria-label="t('查找角色')" /></label><div class="phase-agent-picker"><button v-for="item in visibleAgents" :key="item.id" :class="{ selected: pickerAgent === item.id }" :aria-pressed="pickerAgent === item.id" @click="pickerAgent = item.id; threadPage = 1; loadThreads()"><RemoteAvatar :id="item.id" :label="item.name" fit="contain" /><span>{{ item.name }}</span></button></div><div class="remote-list-toolbar"><button v-if="selection" class="room-text-button" @click="drawer = 'thread-manage'"><RoomIcon name="more" />{{ t('会话管理') }}</button><button class="room-text-button" :disabled="!online || creating || !pickerAgent" @click="createConversation"><RoomIcon name="plus" />{{ t('新建会话') }}</button><button class="room-icon-button" :disabled="threadLoading" :aria-label="t('刷新')" @click="loadThreads"><RoomIcon name="refresh" /></button></div><RemoteFeedback :message="threadError" /><p v-if="threadLoading && !threads.length" class="phase-empty">{{ t('正在读取…') }}</p><p v-else-if="!threads.length" class="phase-empty">{{ t('这里还没有消息') }}</p><div class="phase-thread-list"><button v-for="item in threads" :key="item.id" @click="selectConversation({ threadId: item.id, agentId: item.agentId || pickerAgent, title: item.title || t('新的对话') })"><RemoteAvatar :id="item.agentId || pickerAgent" :label="remoteState.agents.find(agent => agent.id === (item.agentId || pickerAgent))?.name" /><span><strong>{{ item.title || t('新的对话') }}</strong><small>{{ time(item.updatedAt || item.createdAt) }}</small></span><RoomIcon name="next" /></button></div><div class="remote-pagination"><button :disabled="threadLoading || threadPage === 1" @click="threadPage--; loadThreads()">{{ t('上一页') }}</button><span>{{ threadPage }}</span><button :disabled="threadLoading || !moreThreads" @click="threadPage++; loadThreads()">{{ t('下一页') }}</button></div></template></RemoteConversationHub></section></Transition>
+    <Transition name="workspace-page" @before-leave="deactivatePage" @before-enter="activatePage" @after-enter="restorePagePosition"><section v-if="visitedPages.includes('conversations')" v-show="tab === 'conversations'" class="remote-section-body workspace-page phase-conversation-page" data-page="conversations" :inert="tab !== 'conversations' ? true : undefined"><RemoteConversationHub ref="conversationHub" :active="tab === 'conversations'" :agent-id="selection?.agentId || remoteState.activeAgentId" @single="prepareSingleList" @create="createConversation" @pending="showManagementPending" @resource="openResource"><template #single><button v-if="recoveredDrafts.length" class="room-secondary-button" @click="recoveryPreview = null; recoveryNotice = ''; drawer = 'draft-recoveries'"><RoomIcon name="edit" />{{ t('保留的草稿') }} · {{ recoveredDrafts.length }}</button><label v-if="remoteState.agents.length > 8" class="phase-search"><RoomIcon name="search" /><input v-model="agentSearch" :placeholder="t('查找角色')" :aria-label="t('查找角色')" /></label><div class="phase-agent-picker"><button v-for="item in visibleAgents" :key="item.id" :class="{ selected: pickerAgent === item.id }" :aria-pressed="pickerAgent === item.id" @click="pickerAgent = item.id; threadPage = 1; loadThreads()"><RemoteAvatar :id="item.id" :label="item.name" fit="contain" /><span>{{ item.name }}</span></button></div><div class="remote-list-toolbar"><button class="room-text-button" :disabled="!online || creating || !pickerAgent" @click="createConversation"><RoomIcon name="plus" />{{ t('新建会话') }}</button><button class="room-icon-button" :disabled="threadLoading" :aria-label="t('刷新')" @click="loadThreads"><RoomIcon name="refresh" /></button></div><RemoteFeedback :message="threadError" /><p v-if="threadLoading && !threads.length" class="phase-empty">{{ t('正在读取…') }}</p><p v-else-if="!threads.length" class="phase-empty">{{ t('这里还没有消息') }}</p><RemoteThreadList :threads="threads" :agents="remoteState.agents" :agent-id="pickerAgent" :selected-id="selection?.threadId" :online="online" :disabled="mutating || navigationPending" @open="selectConversation({ threadId: $event.id, agentId: $event.agentId || pickerAgent, title: $event.title || t('新的对话') })" @manage="openThreadActions" /><div class="remote-pagination"><button :disabled="threadLoading || threadPage === 1" @click="threadPage--; loadThreads()">{{ t('上一页') }}</button><span>{{ threadPage }}</span><button :disabled="threadLoading || !moreThreads" @click="threadPage++; loadThreads()">{{ t('下一页') }}</button></div></template></RemoteConversationHub></section></Transition>
 <Transition name="workspace-page" @before-leave="deactivatePage" @before-enter="activatePage" @after-enter="restorePagePosition">    <div v-if="tab === 'manage'" class="remote-section-body workspace-page" data-page="manage"><RemoteManager ref="manager" :key="`${selection?.agentId || remoteState.activeAgentId}:${selection?.threadId}`" :agent-id="selection?.agentId || remoteState.activeAgentId" :thread-id="selection?.threadId" :initial-section="managementSection" @section-change="managementSection = $event" @ready="restoreManagementPosition" @pending="showManagementPending" @resource="openResource" @thread="fromReference" @context="useWorkbenchContext" @appearance="drawer = 'appearance'" /></div></Transition>
     <Transition v-for="pageId in ['tasks', 'library', 'inbox']" :key="pageId" name="workspace-page" @before-leave="deactivatePage" @before-enter="activatePage"><section v-if="visitedPages.includes(pageId)" v-show="tab === pageId" class="remote-section-body workspace-page" :data-page="pageId" :inert="tab !== pageId ? true : undefined"><RemoteTaskHub v-if="pageId === 'tasks'" :ref="setTaskHub" :active="tab === 'tasks'" :agent-id="selection?.agentId || remoteState.activeAgentId" :thread-id="selection?.threadId" @manage="openManagement" @detail="detail = $event" @thread="fromReference" @pending="taskPending" @create-task="drawer = 'dispatch'" /><RemoteCollection v-else :active="tab === pageId" :kind="pageId" :agent-id="selection?.agentId || remoteState.activeAgentId" :thread-id="selection?.threadId" @manage="openManagement" @resource="openResource" @detail="detail = $event" @thread="fromReference" @pending="pending = $event; drawer = 'pending'" @create-task="drawer = 'dispatch'" /></section></Transition>
     </div>
@@ -81,10 +81,22 @@
 
     <RoomDrawer v-if="drawer === 'character'" :title="agent?.name || '角色'" subtitle="来自 infOS 的伙伴" :tone="tone" @close="drawer = null"><RemoteCharacter :agent="agent" :state="characterState" :image="cg" @collapse="drawer = null" /><p>{{ agent?.description || '选择会话后，可以查看角色信息。' }}</p><dl class="remote-metadata"><template v-for="(value, key) in agent?.publicProfile || {}" :key="key"><dt>{{ profileLabels[key] || key }}</dt><dd>{{ value }}</dd></template><template v-if="characterState?.mood"><dt>心情</dt><dd>{{ characterState.mood }}</dd></template><template v-if="characterState?.mind"><dt>此刻的想法</dt><dd>{{ characterState.mind }}</dd></template></dl><button class="room-secondary-button" @click="drawer = 'art'"><RoomIcon name="expand" />查看角色立绘</button><button class="room-primary-button" @click="drawer = 'appearance'">显示偏好与角色外观</button></RoomDrawer>
 
-    <RoomDrawer v-if="drawer === 'actions'" title="会话操作" :tone="tone" @close="drawer = null"><div class="conversation-actions"><button :disabled="!selection || !online" @click="drawer = 'thread-settings'"><RoomIcon name="settings" /><span>会话设置</span><RoomIcon name="next" /></button><button v-if="interactionMode === 'work'" :disabled="!selection" @click="drawer = null; detail = { title: '行动清单', query: { kind: 'plan', threadId: selection.threadId } }"><RoomIcon name="tasks" /><span>行动清单</span><RoomIcon name="next" /></button><button :disabled="!selection || busy || !online" @click="messageAction = null; drawer = 'rewind'"><RoomIcon name="refresh" /><span>回滚会话</span><RoomIcon name="next" /></button></div></RoomDrawer>
-    <RoomDrawer v-if="drawer === 'thread-manage'" title="会话管理" :subtitle="selection?.title" :tone="tone" @close="drawer = null"><div class="conversation-actions"><button :disabled="!selection || !online" @click="renameTitle = selection.title; drawer = 'rename'"><RoomIcon name="edit" /><span>重命名</span><RoomIcon name="next" /></button><button :disabled="!selection || busy || !online" @click="drawer = 'delete'"><RoomIcon name="trash" /><span>删除会话</span><RoomIcon name="next" /></button></div><details class="conversation-maintenance"><summary>维护选项<RoomIcon name="down" /></summary><button class="room-text-button" :disabled="!selection" @click="refreshConversation({ retryUnavailable: true })">刷新会话</button><button class="room-text-button" :disabled="!selection || busy || uploading" @click="drawer = 'reset'">重置本机阅读与草稿</button></details></RoomDrawer>
-    <RoomDrawer v-if="drawer === 'rename'" title="修改会话名称" :busy="mutating" :tone="tone" @close="drawer = null"><RemoteFeedback :message="error" /><form class="remote-connection-form" @submit.prevent="renameConversation"><label>会话名称<input v-model="renameTitle" required maxlength="100" /></label><button class="room-primary-button" :disabled="mutating || !online || !renameTitle.trim()">保存</button></form></RoomDrawer>
-    <RoomDrawer v-if="drawer === 'delete'" title="删除这条远程会话？" :busy="mutating" :tone="tone" @close="drawer = null"><RemoteFeedback :message="error" /><p>将按 infOS 的删除规则处理「{{ selection?.title }}」。该操作会影响其他客户端。</p><button class="room-danger-button" :disabled="mutating || !online" @click="deleteConversation">确认删除会话</button></RoomDrawer>
+    <RoomDrawer v-if="drawer === 'actions'" title="会话操作" :tone="tone" @close="drawer = null"><div class="conversation-actions"><button :disabled="!selection || !online" @click="drawer = 'thread-settings'"><RoomIcon name="settings" /><span>会话设置</span><RoomIcon name="next" /></button><button v-if="interactionMode === 'work'" :disabled="!selection" @click="drawer = null; detail = { title: '行动清单', query: { kind: 'plan', threadId: selection.threadId } }"><RoomIcon name="tasks" /><span>行动清单</span><RoomIcon name="next" /></button><button :disabled="!selection || busy || !online" @click="messageAction = null; drawer = 'rewind'"><RoomIcon name="refresh" /><span>回滚会话</span><RoomIcon name="next" /></button><button :disabled="!selection || !online" @click="openThreadActions(selection, 'rename')"><RoomIcon name="edit" /><span>{{ t('重命名') }}</span><RoomIcon name="next" /></button><button class="conversation-delete-action" :disabled="!selection || busy || uploading || !online" @click="openThreadActions(selection, 'delete')"><RoomIcon name="trash" /><span>{{ t('删除会话') }}</span><RoomIcon name="next" /></button></div></RoomDrawer>
+    <RoomDrawer v-if="drawer === 'thread-manage'" :title="t('会话管理')" :subtitle="managedThread?.title" :tone="tone" @close="drawer = null">
+      <div class="conversation-actions">
+        <button :disabled="!managedThread || !online" @click="renameTitle = managedThread.title; drawer = 'rename'"><RoomIcon name="edit" /><span>{{ t('重命名') }}</span><RoomIcon name="next" /></button>
+        <button class="conversation-delete-action" :disabled="!managedThread || managedThreadBusy || !online" @click="drawer = 'delete'"><RoomIcon name="trash" /><span>{{ t('删除会话') }}</span><RoomIcon name="next" /></button>
+      </div>
+      <details v-if="managedThreadIsCurrent" class="conversation-maintenance"><summary>维护选项<RoomIcon name="down" /></summary><button class="room-text-button" @click="refreshConversation({ retryUnavailable: true })">刷新会话</button><button class="room-text-button" :disabled="busy || uploading" @click="drawer = 'reset'">重置本机阅读与草稿</button></details>
+    </RoomDrawer>
+    <RoomDrawer v-if="drawer === 'rename'" :title="t('修改会话名称')" :busy="mutating" :tone="tone" @close="drawer = null">
+      <RemoteFeedback :message="error" />
+      <form class="remote-connection-form" @submit.prevent="renameConversation"><label>{{ t('会话名称') }}<input v-model="renameTitle" required maxlength="100" :disabled="mutating" /></label><div class="conversation-confirm-actions"><button type="button" class="room-secondary-button" :disabled="mutating" @click="drawer = null">{{ t('取消') }}</button><button class="room-primary-button" :disabled="mutating || !managedThread || !online || !renameTitle.trim()">{{ t('保存') }}</button></div></form>
+    </RoomDrawer>
+    <RoomDrawer v-if="drawer === 'delete'" :title="t('删除这条会话？')" :busy="mutating" :tone="tone" @close="drawer = null">
+      <RemoteFeedback :message="error" /><p class="conversation-delete-description">{{ t('将从 infOS 删除「{0}」，其他设备也会同步更新。', [managedThread?.title]) }}</p>
+      <div class="conversation-confirm-actions"><button type="button" class="room-secondary-button" :disabled="mutating" @click="drawer = null">{{ t('取消') }}</button><button class="room-danger-button" :disabled="mutating || !managedThread || managedThreadBusy || !online" @click="deleteConversation">{{ t('确认删除会话') }}</button></div>
+    </RoomDrawer>
     <RoomDrawer v-if="drawer === 'pending' && pending" title="核对发送结果" subtitle="先看看结果，避免重复发送" :tone="tone" :busy="reviewing" @close="drawer = null; reviewNote = ''; reviewed = false"><p v-if="pending.context?.operation" class="remote-notice">{{ managementOperationLabel(pending.context.operation) }}</p><p class="remote-help">{{ pending.context?.input?.content || pending.context?.input?.instruction || '这项操作的结果尚未确认。' }}</p><RemoteFeedback :message="error" /><RemoteFeedback :message="remoteState.pendingError" /><div class="remote-actions"><button class="room-secondary-button" @click="reconcile">重新核对</button><button v-if="pending.context?.input?.threadId" class="room-secondary-button" @click="fromReference({ threadId: pending.context.input.threadId, agentId: pending.context.input.agentId || selection?.agentId }); drawer = null">查看对应会话</button></div><template v-if="remotePendingRequests.has(pending.requestId)"><label class="remote-checkbox"><input v-model="reviewed" type="checkbox" />我已查看结果</label><textarea v-model="reviewNote" rows="3" maxlength="2048" placeholder="写下核对结果，例如已在会话中看到回复…" /><button class="room-primary-button" :disabled="!reviewed || !reviewNote.trim() || reviewing || pending.state !== 'unknown'" @click="review">保存核对记录</button></template><p v-else class="remote-help">此操作已经完成核对。</p></RoomDrawer>
     <RoomDrawer v-if="drawer === 'reset'" title="重置本机会话记录？" :tone="tone" @close="drawer = null"><p>将清除此会话在手机上的草稿、附件草稿和阅读位置，远程消息仍由 infOS 保存。</p><RemoteFeedback :message="error" /><button class="room-danger-button" :disabled="busy || uploading" @click="resetSession">确认重置</button></RoomDrawer>
     <RoomDrawer v-if="drawer === 'attachments'" title="添加内容" :tone="tone" @close="drawer = null"><div class="chat-options-grid"><button type="button" class="room-secondary-button" :disabled="!online || !verified || uploading || attachments.length >= 5" @click="fileInput.click(); drawer = null"><RoomIcon name="attach" />选择图片或文件</button><button type="button" class="room-secondary-button" @click="drawer = null; openManagement('workbench')"><RoomIcon name="folder" />引用工作区</button><button type="button" class="room-secondary-button" @click="drawer = 'image-mode'"><RoomIcon name="image" />图片识别方式</button></div></RoomDrawer>
@@ -117,6 +129,7 @@ import RemoteQueue from '../components/remote/RemoteQueue.vue'
 import RemoteAppearance from '../components/remote/RemoteAppearance.vue'
 import RemoteManager from '../components/remote/RemoteManager.vue'
 import RemoteConversationHub from '../components/remote/RemoteConversationHub.vue'
+import RemoteThreadList from '../components/remote/RemoteThreadList.vue'
 import RemoteTaskHub from '../components/remote/RemoteTaskHub.vue'
 import { t } from '../i18n/remote'
 import { useRemoteLocaleSync } from '../composables/useRemoteLocaleSync'
@@ -172,6 +185,15 @@ const cg = computed(() => characterCg(agent.value, appearance))
 const changingInteraction = ref(false), taskTitle = ref(''), taskInstruction = ref(''), dispatching = ref(false)
 const dispatchRequestId = ref(null), dispatchUnknown = ref(false)
 const pickerAgent = ref(null), threadPage = ref(1), threadLoading = ref(false), threadError = ref(''), threadQuery = ref(null), renameTitle = ref(''), agentSearch = ref('')
+const managedThread = ref(null)
+const managedThreadIsCurrent = computed(() => !!managedThread.value && managedThread.value.threadId === selection.value?.threadId)
+const managedThreadBusy = computed(() => {
+  const id = managedThread.value?.threadId
+  return !!id && (managedThreadIsCurrent.value && (busy.value || uploading.value || controlsBusy.value || changingInteraction.value)
+    || sending.value?.threadId === id
+    || remoteItems(remoteViews.get(JSON.stringify({ kind: 'active_executions' }))?.data).some(item => item.threadId === id && ['running', 'paused'].includes(item.state))
+    || [...remoteExecutions.values()].some(item => item.threadId === id && item.state === 'observing'))
+})
 const pending = ref(null), reviewing = ref(false), reviewed = ref(false), reviewNote = ref('')
 const tabs = [{ id: 'home', label: '首页', icon: 'home' }, { id: 'chat', label: '会话', icon: 'chat' }, { id: 'tasks', label: '任务', icon: 'tasks' }, { id: 'library', label: '资料', icon: 'files' }, { id: 'manage', label: '管理', icon: 'settings' }]
 const profileLabels = { gender: '性别', identity: '身份', appearance: '外貌', personality: '性格' }
@@ -630,8 +652,55 @@ function contentResized() {
   })
 }
 async function fromReference(value) { if (!value.threadId || !value.agentId) { error.value = '此事项没有可打开的会话'; return }; detail.value = null; await selectConversation(value) }
-async function renameConversation() { if (!selection.value || mutating.value) return; const request = version, item = { ...selection.value }, title = renameTitle.value.trim(); mutating.value = true; try { await performRemote({ kind: 'rename_thread', id: item.threadId, title }); guard(request); selection.value.title = title; await writePresentation({ kind: 'home' }, selection.value, token); guard(request); drawer.value = null } catch (failure) { if (!disposed && request === version) error.value = failure.message } finally { if (!disposed) mutating.value = false } }
-async function deleteConversation() { if (!selection.value || mutating.value) return; const request = version, item = { ...selection.value }; mutating.value = true; try { await persistCurrent(); guard(request); await performRemote({ kind: 'delete_thread', id: item.threadId }); guard(request); await writePresentation({ kind: 'home' }, null, token); guard(request); selection.value = null; sessionReady.value = false; pages.value = []; draft.value = ''; attachments.value = []; workspaceContext.value = null; drawer.value = null; await showThreads() } catch (failure) { if (!disposed && request === version) error.value = failure.message } finally { if (!disposed) mutating.value = false } }
+function openThreadActions(item, action = 'thread-manage') {
+  if (!item || mutating.value || navigationPending.value) return
+  const threadId = item.threadId || item.id, agentId = item.agentId || pickerAgent.value
+  if (!threadId || !agentId) return
+  // 管理目标独立于当前聊天，操作列表里的其他会话时不切换或清空当前草稿。
+  managedThread.value = { threadId, agentId, title: item.title || t('新的对话') }
+  renameTitle.value = managedThread.value.title
+  drawer.value = action
+}
+async function renameConversation() {
+  const title = renameTitle.value.trim()
+  if (!managedThread.value || mutating.value || !online.value || !title || title.length > 100) return
+  const request = version, item = { ...managedThread.value }
+  mutating.value = true
+  try {
+    await performRemote({ kind: 'rename_thread', id: item.threadId, title }); guard(request)
+    if (selection.value?.threadId === item.threadId) {
+      selection.value.title = title
+      await writePresentation({ kind: 'home' }, selection.value, token); guard(request)
+    }
+    managedThread.value.title = title
+    drawer.value = null
+    await loadThreads()
+  } catch (failure) { if (!disposed && request === version) error.value = failure.message }
+  finally { if (!disposed) mutating.value = false }
+}
+async function deleteConversation() {
+  if (!managedThread.value || mutating.value || managedThreadBusy.value || !online.value) return
+  const request = version, item = { ...managedThread.value }, isCurrent = managedThreadIsCurrent.value
+  mutating.value = true
+  try {
+    if (isCurrent) { await persistCurrent(); guard(request) }
+    await performRemote({ kind: 'delete_thread', id: item.threadId }); guard(request)
+    if (isCurrent) {
+      await writePresentation({ kind: 'home' }, null, token); guard(request)
+      // 使已在途的旧会话读取失效，避免删除后又把消息写回当前页面。
+      version++
+      clearTimeout(verificationTimer); clearTimeout(projectionTimer); clearTimeout(draftTimer); clearTimeout(scrollTimer)
+      selection.value = null; verified.value = false; sessionReady.value = false; queueReady.value = false
+      pages.value = []; draft.value = ''; attachments.value = []; workspaceContext.value = null
+      loading.value = false; loadingHistory.value = false; inputCapabilities.value = null
+    }
+    drawer.value = null; managedThread.value = null
+    if (tab.value === 'chat') { pickerAgent.value = item.agentId; threadPage.value = 1; await showThreads() }
+    else await loadThreads()
+    if (!threads.value.length && threadPage.value > 1) { threadPage.value--; await loadThreads() }
+  } catch (failure) { if (!disposed && request === version) error.value = failure.message }
+  finally { if (!disposed) mutating.value = false }
+}
 async function reconnect() { if (reconnecting.value) return; const request = version; reconnecting.value = true; try { await reconnectRemote(); guard(request); if (selection.value && !opening) await selectConversation({ ...selection.value }); else if (drawer.value === 'threads') await loadThreads() } catch (failure) { if (!disposed && request === version) error.value = failure.message } finally { if (!disposed) reconnecting.value = false } }
 async function reconcile() { reviewing.value = true; try { await reconcileRemotePendingRequests(); guard(); if (selection.value) await refreshConversation() } catch (failure) { if (!disposed) error.value = failure.message } finally { if (!disposed) reviewing.value = false } }
 async function review() {

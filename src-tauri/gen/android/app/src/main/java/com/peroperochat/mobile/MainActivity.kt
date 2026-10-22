@@ -4,9 +4,17 @@ import android.os.Bundle
 import android.content.Intent
 import android.os.Handler
 import android.os.Looper
+import android.webkit.WebView
 import androidx.activity.enableEdgeToEdge
 
 class MainActivity : TauriActivity() {
+    override fun onWebViewCreate(webView: WebView) {
+        super.onWebViewCreate(webView)
+        // 禁止系统缩放整个应用界面，内容预览仍由页面内控件缩放。
+        webView.settings.setSupportZoom(false)
+        webView.settings.builtInZoomControls = false
+        webView.settings.displayZoomControls = false
+    }
     private val visibilityHandler = Handler(Looper.getMainLooper())
     private val visibilityHeartbeat = object : Runnable {
         override fun run() {

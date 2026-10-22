@@ -40,6 +40,8 @@ watch(() => [route.fullPath, modeState.snapshot?.activationEpoch, modeState.snap
 <style>
 :root { color-scheme: light }
 * { box-sizing: border-box }
+/* 整页只允许平移滚动；图片与文档使用各自的内容缩放控件。 */
+html, body { touch-action: pan-x pan-y; }
 body { margin: 0; background-color: var(--room-page); }
 .mode-curtain-leave-active { transition: opacity .22s ease; pointer-events: none; }
 .mode-curtain-leave-to { opacity: 0; }
