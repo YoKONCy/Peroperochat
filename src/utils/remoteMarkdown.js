@@ -1,9 +1,12 @@
-import { marked } from 'marked'
+import { Marked } from 'marked'
+import { expressionExtensions } from './parenthetical'
 import DOMPurify from 'dompurify'
 import { open } from '@tauri-apps/plugin-shell'
 
+const parser = new Marked({ gfm: true, breaks: true, extensions: expressionExtensions })
+
 export function remoteMarkdown(value) {
-  const html = DOMPurify.sanitize(marked.parse(typeof value === 'string' ? value : '', { gfm: true, breaks: true }), {
+  const html = DOMPurify.sanitize(parser.parse(typeof value === 'string' ? value : ''), {
     USE_PROFILES: { html: true }, FORBID_TAGS: ['img', 'video', 'audio', 'iframe', 'object', 'embed', 'style', 'form', 'input', 'button'],
   })
   const fragment = document.createElement('template')

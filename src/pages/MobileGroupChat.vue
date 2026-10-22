@@ -24,13 +24,13 @@
             <p>{{ enabledMembers.length ? '日常小事、突然的灵感，都可以说给大家听。' : '打开成员设置，邀请伙伴参与回应。' }}</p>
           </div>
 
-          <article v-for="message in displayedMessages" :key="message.id" v-memo="[message.content, message.reasoning, message.toolTimeline, message.status, message.error, message.name, message.timestamp, selectedId === message.id, busy, agents[message.agentId]?.avatar, agents[message.agentId]?.name]" class="group-message" :class="{ 'is-user': message.role === 'user' }" :data-speaker="message.agentId === 'nana' ? 'nana' : 'pero'">
+          <article v-for="message in displayedMessages" :key="message.id" v-memo="[message.content, message.reasoning, message.usage, message.toolTimeline, message.status, message.error, message.name, message.timestamp, selectedId === message.id, busy, agents[message.agentId]?.avatar, agents[message.agentId]?.name]" class="group-message" :class="{ 'is-user': message.role === 'user' }" :data-speaker="message.agentId === 'nana' ? 'nana' : 'pero'">
             <CharacterAvatar v-if="message.role !== 'user'" class="group-message-avatar" :src="agents[message.agentId]?.avatar" :label="speakerName(message)" />
             <div class="group-message-column">
               <div class="group-byline"><strong>{{ speakerName(message) }}</strong><time>{{ formatTime(message.timestamp) }}</time><button class="room-icon-button" :aria-label="`操作${speakerName(message)}的消息`" :aria-expanded="selectedId === message.id" @click="selectedId = selectedId === message.id ? null : message.id"><RoomIcon name="more" /></button></div>
               <div class="group-bubble">
                 <ToolTimeline v-if="message.role === 'assistant' && message.toolTimeline?.length" :items="message.toolTimeline" />
-                <details v-if="message.reasoning" class="group-reasoning"><summary><RoomIcon name="thought" /><span>{{ message.status === 'pending' ? '正在思考' : '思考过程' }}</span><RoomIcon class="soft-fold-chevron" name="down" /></summary><div>{{ message.reasoning }}</div></details>
+                <MessageReasoning v-if="message.reasoning" :source="message.reasoning" :running="message.status === 'pending'" :generation="message.usage?.presentation" />
                 <div v-if="message.content === '__loading__'" class="group-typing" aria-label="正在思考"><i /><i /><i /></div>
                 <div v-else class="markdown-body" v-html="roomMarkdown(message.content)" />
                 <p v-if="message.error && visibleMessage(message.content) !== message.error" class="group-message-error">{{ message.error }}</p>
@@ -88,6 +88,7 @@ import { useRoomViewport } from '../composables/useRoomViewport'
 import { AGENTS as agents, activeAgentId } from '../stores/agents'
 import { useLocalConversation } from '../stores/conversations'
 import { localInvoke } from '../services/localChat'
+import MessageReasoning from '../components/companion/MessageReasoning.vue'
 import { roomMarkdown } from '../utils/roomMarkdown'
 import { visibleMessage } from '../utils/messageContent'
 

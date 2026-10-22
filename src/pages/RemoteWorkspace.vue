@@ -104,7 +104,7 @@
     <RemoteThreadSettings v-if="drawer === 'thread-settings' && selection" :key="selection.threadId" :thread-id="selection.threadId" :agent-id="selection.agentId" @close="drawer = null" @updated="refreshConversation" @pending="showManagementPending" />
     <RemoteMessageActions v-if="(drawer === 'message' || drawer === 'rewind') && selection" :key="`${selection.threadId}:${messageAction?.messageId || 'all'}`" :thread-id="selection.threadId" :agent-id="selection.agentId" :blocked="busy || !online" :message="drawer === 'rewind' ? null : messageAction" @close="drawer = null" @updated="conversationUpdated" @pending="showManagementPending" />
     <RemoteVoiceInput v-if="drawer === 'voice-input' && selection" :key="selection.threadId" :blocked="!online || !verified" @close="drawer = null" @transcript="applyTranscript" @pending="showManagementPending" @configure="drawer = null; openManagement('voice')" />
-    <RemoteDetail v-if="detail" :key="JSON.stringify(detail.query)" :detail="detail" @close="detail = null" @resource="openResource" @thread="fromReference" />
+    <RemoteDetail ref="detailPanel" v-if="detail" :key="JSON.stringify(detail.query)" :detail="detail" @close="detail = null" @resource="openResource" @thread="fromReference" @pending="showManagementPending" />
     <RemoteResource v-if="resource" :key="JSON.stringify(resource)" :resource="resourceInput" :name="resource.name" @close="resource = null" @resource="openResource" />
   </main>
 </template>
@@ -157,7 +157,7 @@ import { resolveRemoteResource } from '../services/remoteResources'
 
 const token = currentToken()
 useRemoteLocaleSync()
-const conversationHub = ref(null), taskHub = ref(null)
+const conversationHub = ref(null), taskHub = ref(null), detailPanel = ref(null)
 const managementSection = ref(null), messageAction = ref(null), manager = ref(null)
 const imageMode = ref('auto')
 const inputCapabilities = ref(null), composerTools = ref(null), controlsBusy = ref(false)
@@ -326,7 +326,7 @@ async function persistCurrent() {
 }
 function setTaskHub(value) { taskHub.value = value }
 function taskPending(value) { if (value) { pending.value = value; drawer.value = 'pending' } else showManagementPending() }
-async function preparePageLeave() { queuePanel.value?.prepareLeave?.(); await manager.value?.prepareLeave?.(); if (tab.value === 'conversations') await conversationHub.value?.prepareLeave?.(); if (tab.value === 'tasks') await taskHub.value?.prepareLeave?.() }
+async function preparePageLeave() { await detailPanel.value?.prepareLeave?.(); queuePanel.value?.prepareLeave?.(); await manager.value?.prepareLeave?.(); if (tab.value === 'conversations') await conversationHub.value?.prepareLeave?.(); if (tab.value === 'tasks') await taskHub.value?.prepareLeave?.() }
 async function prepareModeSwitch() {
   await preparePageLeave()
   if (uploading.value || dispatching.value || mutating.value || changingInteraction.value) throw new Error('当前操作尚未完成，请稍后再切换运行模式')

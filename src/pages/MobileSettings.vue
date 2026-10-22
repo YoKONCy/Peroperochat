@@ -40,7 +40,7 @@
 
           <form v-else-if="tab === 'model'" @submit.prevent="saveParameters">
             <fieldset :disabled="loading || !loaded || !!busy">
-              <section class="local-reasoning-settings"><header><RoomIcon name="thought" /><strong>思考强度</strong><small>按模型能力选择</small></header><ChoicePicker v-model="parameters.reasoningEffort" label="选择思考强度" :options="reasoningChoices" :disabled="loading || !loaded || !!busy" /></section>
+              <section class="local-reasoning-settings"><header><ReasoningIcon :level="reasoningLevel(parameters.reasoningEffort)" /><strong>思考强度</strong><small>按模型能力选择</small></header><ReasoningPicker v-model="parameters.reasoningEffort" :options="reasoningChoices" :disabled="loading || !loaded || !!busy" /></section>
               <div class="model-number-grid local-model-numbers">
                 <RemoteModelNumber tone="rose" :value="parameters.temperature" label="温度" help="较低更稳，较高更灵活" icon="sampling" :min="0" :max="2" @change="parameters.temperature = $event" />
                 <RemoteModelNumber tone="mint" :value="parameters.topP" label="Top P" help="控制用词的选择范围" icon="filter" :min="0" :max="1" @change="parameters.topP = $event" />
@@ -82,6 +82,9 @@ import RoomIcon from '../components/companion/RoomIcon.vue'
 import CharacterAvatar from '../components/companion/CharacterAvatar.vue'
 import CompanionEmblem from '../components/companion/CompanionEmblem.vue'
 import ChoicePicker from '../components/companion/ChoicePicker.vue'
+import ReasoningPicker from '../components/companion/ReasoningPicker.vue'
+import ReasoningIcon from '../components/companion/ReasoningIcon.vue'
+import { reasoningLevel } from '../utils/reasoningAppearance'
 import RoomSwitch from '../components/companion/RoomSwitch.vue'
 import RemoteModelNumber from '../components/remote/RemoteModelNumber.vue'
 import { uiSectionTone } from '../utils/uiPalette'

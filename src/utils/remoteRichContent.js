@@ -1,4 +1,5 @@
 import { Marked } from 'marked'
+import { expressionExtensions } from './parenthetical'
 import DOMPurify from 'dompurify'
 import { isResourceReference } from '../services/remoteResources'
 
@@ -90,7 +91,7 @@ export function renderRemoteMarkdown(source) {
       try { const url = new URL(token.href); if (!['https:', 'http:'].includes(url.protocol) || url.username || url.password) throw new Error(); return `<a href="${escapeRich(url.href)}" rel="noopener noreferrer">${label}</a>` } catch { return label }
     },
   }
-  const parser = new Marked({ gfm: true, breaks: true, renderer, tokenizer: { del: () => undefined } })
+  const parser = new Marked({ gfm: true, breaks: true, renderer, extensions: expressionExtensions, tokenizer: { del: () => undefined } })
   let fence = ''
   const normalized = source.split('\n').map(line => { const match = line.match(/^[ \t]*(`{3,}|~{3,})/); if (match) { if (!fence) fence = match[1]; else if (match[1][0] === fence[0] && match[1].length >= fence.length) fence = ''; return line }; return fence ? line : line.replace(/^[ \t]{4,}(?=#{1,6}(?:[ \t]+|$))/, '') }).join('\n')
   const clean = DOMPurify.sanitize(parser.parse(normalized), { ADD_ATTR: ['data-resource-source'], FORBID_TAGS: ['img', 'audio', 'video', 'iframe', 'object', 'embed', 'style', 'script', 'form', 'button'], FORBID_ATTR: ['style'] })

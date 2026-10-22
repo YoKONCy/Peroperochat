@@ -20,11 +20,11 @@
       <div v-if="!messages.length" class="chat-intro">
         <CharacterAvatar class="intro-avatar" :src="agent.avatar" :label="agent.name" /><p>想和 {{ agent.name }} 聊点什么？</p>
       </div>
-      <article v-for="{ message, index } in visibleMessages" :id="`room-message-${message.id}`" :key="message.id" v-memo="[index, message.content, message.reasoning, message.toolTimeline, message.status, message.error, selectedId === message.id, jumpedId === message.id, freshId === message.id, agent.name, agent.avatar, busy]" class="room-message" :class="[message.role, { 'is-selected': selectedId === message.id, 'is-jumped': jumpedId === message.id, 'is-new': freshId === message.id }]">
+      <article v-for="{ message, index } in visibleMessages" :id="`room-message-${message.id}`" :key="message.id" v-memo="[index, message.content, message.reasoning, message.usage, message.toolTimeline, message.status, message.error, selectedId === message.id, jumpedId === message.id, freshId === message.id, agent.name, agent.avatar, busy]" class="room-message" :class="[message.role, { 'is-selected': selectedId === message.id, 'is-jumped': jumpedId === message.id, 'is-new': freshId === message.id }]">
         <div class="message-byline"><CharacterAvatar v-if="message.role !== 'user'" class="message-avatar" :src="agent.avatar" :label="agent.name" /><span class="message-speaker">{{ message.role === 'user' ? '你' : agent.name }}</span><time>{{ formatTime(message.timestamp) }}</time></div>
         <div class="message-body" @contextmenu.prevent="selectedId = message.id" @pointerdown="startPress($event, message.id)" @pointermove="movePress" @pointerup="clearPress" @pointercancel="clearPress">
           <ToolTimeline v-if="message.role === 'assistant' && message.toolTimeline?.length" :items="message.toolTimeline" @resize="imageLoaded" />
-          <details v-if="message.reasoning" class="message-reasoning"><summary><RoomIcon name="thought" /><span>{{ message.status === 'pending' ? '正在思考' : '思考过程' }}</span><RoomIcon class="soft-fold-chevron" name="down" /></summary><div>{{ message.reasoning }}</div></details>
+          <MessageReasoning v-if="message.reasoning" :source="message.reasoning" :running="message.status === 'pending'" :generation="message.usage?.presentation" />
           <div v-if="message.content === '__loading__'" class="typing-indicator" aria-label="正在思考"><i /><i /><i /></div>
           <template v-else-if="Array.isArray(message.content)">
             <template v-for="(part, partIndex) in message.content" :key="partIndex">
@@ -62,6 +62,7 @@
 <script setup>
 import { computed, ref, watch, nextTick, onMounted, onBeforeUnmount } from 'vue'
 import RoomIcon from './RoomIcon.vue'
+import MessageReasoning from './MessageReasoning.vue'
 import RoomAccent from './RoomAccent.vue'
 import ToolTimeline from './ToolTimeline.vue'
 import CharacterAvatar from './CharacterAvatar.vue'

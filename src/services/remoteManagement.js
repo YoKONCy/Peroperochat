@@ -54,7 +54,7 @@ export const userConfigLabels = { 'owner.name': '你的名字', 'owner.persona':
 export function configFields(value) { return Object.keys(value).map(key => f(key, /apiKey/.test(key) ? 'secret' : /persona/.test(key) ? 'long' : 'text', { label: userConfigLabels[key] || key, help: /enabled|autoSave|soundEffects/.test(key) ? '填写 true 或 false' : undefined })) }
 export function records(data) { if (Array.isArray(data)) return data; for (const key of ['items', 'servers', 'skills', 'tools', 'models', 'providers', 'facts', 'documents', 'agents', 'reminders', 'entries']) if (Array.isArray(data?.[key])) return data[key]; return null }
 export function recordId(item) { return item?.id ?? item?.serverId ?? item?.key ?? item?.name }
-export function recordTitle(item) { const value = String(item?.name || item?.title || item?.key || item?.content || item?.narrative || item?.instruction || item?.label || item?.path || recordId(item) || '记录'); return value.length > 100 ? `${value.slice(0, 100)}…` : value }
+export function recordTitle(item) { const value = String(item?.name || item?.title || item?.key || item?.statement || item?.content || item?.narrative || item?.instruction || item?.label || item?.path || recordId(item) || '记录'); return value.length > 100 ? `${value.slice(0, 100)}…` : value }
 export async function downloadData(data, name = 'infos-export.json') {
   const content = JSON.stringify(data, null, 2)
   const file = new File([content], name, { type: 'application/json' })

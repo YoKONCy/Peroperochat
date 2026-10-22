@@ -1,7 +1,7 @@
 use std::time::Duration;
 use futures::StreamExt;
 use reqwest::{Client, Url};
-use serde_json::Value;
+use serde_json::{json,Value};
 use super::types::*;
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
@@ -170,10 +170,30 @@ pub async fn list_models(settings:&ModelSettings)->ChatResult<Value> {
     Err(ChatError::new("OUTPUT_LIMIT","模型列表分页过多，请缩小服务端列表"))
 }
 
+// 仅记录已发出请求的显示摘要；不从当前设置反推历史，也不把密钥或额外请求体带入消息。
+fn reasoning_presentation(format:&str,model:&str,body:&Value)->Value {
+    let effort=match format {
+        "responses"=>body.pointer("/reasoning/effort"),
+        "anthropic"=>body.pointer("/output_config/effort"),
+        "gemini"=>body.pointer("/generationConfig/thinkingConfig/thinkingLevel"),
+        _=>body.get("reasoning_effort"),
+    }.and_then(Value::as_str).map(str::to_ascii_lowercase);
+    let value=if let Some(effort)=effort {
+        if ["off","none","minimal","low","medium","high","xhigh","max"].contains(&effort.as_str()) {json!(effort)} else {json!("unknown")}
+    } else if body.pointer("/thinking/type").is_some_and(|v|v=="disabled") || body.pointer("/generationConfig/thinkingConfig/thinkingBudget").is_some_and(|v|v==0) {json!("off")}
+    else if body.pointer("/thinking/budget_tokens").is_some() || body.pointer("/generationConfig/thinkingConfig/thinkingBudget").is_some() || body.pointer("/thinking/type").is_some_and(|v|v=="enabled") {json!("unknown")}
+    else {Value::Null};
+    json!({"reasoningEffort":value,"modelId":model,"protocol":format})
+}
+fn with_presentation(mut completion:Completion,presentation:&Value)->Completion {
+    if !completion.usage.is_object() { completion.usage=json!({"upstream":completion.usage}); }
+    completion.usage["_ppcReasoning"]=presentation.clone();completion
+}
 pub async fn complete(settings:&ModelSettings,messages:&[ModelMessage],tools:&[Value],mut emit:impl FnMut(&str,&str)->ChatResult<()>)->ChatResult<Completion> {
     super::model_config::validate(settings)?;
     if settings.model.trim().is_empty() || settings.model.contains("请先") { return Err(ChatError::new("INVALID_CONFIG","请先在设置中选择模型")); }
     let body=super::wire::body(settings,messages,tools)?;
+    let presentation=reasoning_presentation(&settings.api_format,&settings.model,&body);
     let response=send(authorize(client()?.post(request_url(settings)?).json(&body),settings),settings).await?;
     let stream_type=response.headers().get(reqwest::header::CONTENT_TYPE).and_then(|h|h.to_str().ok()).unwrap_or("").contains("text/event-stream");
     if !stream_type {
@@ -181,21 +201,30 @@ pub async fn complete(settings:&ModelSettings,messages:&[ModelMessage],tools:&[V
         let result=super::wire::parse(&settings.api_format,&value)?;
         if !result.reasoning.is_empty() { emit("reasoning",&result.reasoning)?; }
         if !result.content.is_empty() { emit("delta",&result.content)?; }
-        return Ok(result);
+        return Ok(with_presentation(result,&presentation));
     }
     let mut stream=response.bytes_stream();let mut decoder=SseDecoder::default();let mut accumulator=super::provider_stream::Accumulator::default();
     while let Some(chunk)=tokio::time::timeout(Duration::from_secs(60),stream.next()).await.map_err(|_|ChatError::new("TIMEOUT","模型长时间没有响应"))? {
         for data in decoder.push(&chunk.map_err(network_error)?)? {
-            if accumulator.event(&settings.api_format,&data,&mut emit)? { return accumulator.finish(&settings.api_format); }
+            if accumulator.event(&settings.api_format,&data,&mut emit)? { return accumulator.finish(&settings.api_format).map(|value|with_presentation(value,&presentation)); }
         }
     }
     for data in decoder.finish()? { if accumulator.event(&settings.api_format,&data,&mut emit)? { break; } }
-    accumulator.finish(&settings.api_format)
+    accumulator.finish(&settings.api_format).map(|value|with_presentation(value,&presentation))
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn reasoning_presentation_uses_sent_fields_and_never_guesses_budget_levels() {
+        assert_eq!(reasoning_presentation("chat_completions","model-a",&json!({"reasoning_effort":"high"}))["reasoningEffort"],"high");
+        assert!(reasoning_presentation("responses","model-a",&json!({}))["reasoningEffort"].is_null());
+        assert_eq!(reasoning_presentation("anthropic","model-a",&json!({"thinking":{"type":"enabled","budget_tokens":4096}}))["reasoningEffort"],"unknown");
+        assert_eq!(reasoning_presentation("gemini","model-a",&json!({"generationConfig":{"thinkingConfig":{"thinkingLevel":"HIGH"}}}))["reasoningEffort"],"high");
+        let value=reasoning_presentation("chat_completions","model-a",&json!({"apiKey":"测试密钥","reasoning_effort":"off"}));assert!(!value.to_string().contains("测试密钥"));
+    }
 
     #[test]
     fn every_byte_boundary_preserves_chinese_and_crlf() {

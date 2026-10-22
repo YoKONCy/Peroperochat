@@ -1,5 +1,5 @@
 <template>
-  <RemoteMemoryDetail v-if="detail.query.kind === 'memory_source'" :key="detail.query.id" :detail="detail" @close="$emit('close')" @resource="$emit('resource', $event)" @thread="$emit('thread', $event)" />
+  <RemoteMemoryDetail ref="memoryReader" v-if="detail.query.kind === 'memory_source'" :key="detail.query.id" :detail="detail" @close="$emit('close')" @resource="$emit('resource', $event)" @thread="$emit('thread', $event)" @pending="$emit('pending')" />
   <RoomDrawer v-else :title="detail.title || '详情'" variant="editor" @close="$emit('close')"><div class="remote-detail" @click="openLink">
     <div class="remote-detail-toolbar"><button class="room-text-button" :disabled="loading || busy" @click="reload"><RoomIcon name="refresh" />刷新</button><span v-if="view?.cached" class="remote-help">上次保存</span></div>
     <RemoteFeedback :message="error || view?.error" /><p v-if="loading && !data" class="room-empty">正在读取…</p>
@@ -23,8 +23,11 @@ import RemoteTaskPlan from './RemoteTaskPlan.vue'
 import { readRemote, remoteViews, remoteState, performRemote } from '../../stores/remote'
 import { currentToken, assertToken } from '../../stores/mode'
 import { remoteMarkdown, remoteStatus, openRemoteLink } from '../../utils/remoteMarkdown'
+const memoryReader = ref(null)
+async function prepareLeave() { await memoryReader.value?.prepareLeave?.() }
+defineExpose({ prepareLeave })
 const props = defineProps({ detail: Object })
-const emit = defineEmits(['close', 'resource', 'thread'])
+const emit = defineEmits(['close', 'resource', 'thread', 'pending'])
 const token = currentToken(), loading = ref(false), error = ref(''), busy = ref(false), confirmCancel = ref(false)
 const view = computed(() => remoteViews.get(JSON.stringify(props.detail.query))), data = computed(() => view.value?.data)
 const task = computed(() => props.detail.taskId ? remoteViews.get(JSON.stringify({ kind: 'task', id: props.detail.taskId }))?.data : null)

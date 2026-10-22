@@ -1,7 +1,7 @@
 <template>
   <div :class="compact ? 'chat-model-controls' : 'remote-model-controls'" :aria-busy="loading || saving">
     <div :class="compact ? 'chat-model-choice' : 'remote-model-choice'"><RemoteSelect :compact="compact" :display-label="compact ? modelLabel : undefined" :model-value="String(settings?.modelConfigId ?? '')" label="本会话模型" :placeholder="loading ? '读取模型…' : '选择模型'" :options="modelOptions" :disabled="blocked" @update:model-value="selectModel"><template #prefix><BrandIcon :brand="resolveModelBrand(settings?.effective?.modelId)" :size="compact ? 15 : 19" fallback="model" /></template></RemoteSelect></div>
-    <div :class="compact ? 'chat-effort-choice' : 'remote-effort-choice'"><RemoteSelect :compact="compact" :display-label="compact ? effortLabel : undefined" :model-value="settings?.reasoningEffort || ''" label="思考强度" :options="settings?.effortOptions || []" :disabled="blocked" @update:model-value="selectEffort"><template #prefix><RemoteIcon name="thought" /></template></RemoteSelect></div>
+    <div :class="compact ? 'chat-effort-choice' : 'remote-effort-choice'"><ReasoningPicker :compact="compact" :model-value="settings?.reasoningEffort || ''" :effective="effectiveEffort" inherit :options="settings?.effortOptions || []" :disabled="blocked" @update:model-value="selectEffort" /></div>
     <button v-if="error" class="chat-model-warning" type="button" aria-label="模型设置暂未载入，点击重试" @click="load"><RemoteIcon name="refresh" /></button>
     <RemoteFeedback :message="error" />
     <button v-if="unresolved" class="chat-model-warning" type="button" aria-label="查看模型设置保存结果" @click="$emit('pending')"><RemoteIcon name="alert" /></button>
@@ -11,6 +11,8 @@
 import RemoteFeedback from './RemoteFeedback.vue'
 import { ref, computed, watch, onMounted, onBeforeUnmount } from 'vue'
 import RemoteSelect from './RemoteSelect.vue'
+import ReasoningPicker from '../companion/ReasoningPicker.vue'
+import { effectiveReasoning } from '../../utils/reasoningAppearance'
 import RemoteIcon from './RemoteIcon.vue'
 import BrandIcon from '../companion/BrandIcon.vue'
 import { resolveModelBrand } from '../../utils/modelBrands'
@@ -23,12 +25,7 @@ const token = currentToken(), settings = ref(null), loading = ref(false), saving
 let serial = 0, disposed = false
 const blocked = computed(() => props.disabled || loading.value || saving.value || unresolved.value || !settings.value)
 const modelLabel = computed(() => settings.value?.effective?.name || settings.value?.models?.find(item => item.id === settings.value?.modelConfigId)?.name || settings.value?.effective?.modelId || (loading.value ? '载入模型…' : '选择模型'))
-const effortLabel = computed(() => {
-  if (!settings.value) return '思考'
-  const value = settings.value?.reasoningEffort || ''
-  const label = settings.value?.effortOptions?.find(item => item.value === value)?.label || '自动'
-  return `思考 · ${label.replace(/跟随模型|跟随全局/g, '自动')}`
-})
+const effectiveEffort = computed(() => effectiveReasoning(settings.value))
 const modelOptions = computed(() => [{ value: '', label: `全局主模型${!settings.value?.modelConfigId && settings.value?.effective?.name ? ` · ${settings.value.effective.name}` : ''}` }, ...(settings.value?.models || []).map(item => ({ value: String(item.id), label: item.name, description: item.modelId }))])
 async function load() {
   if (saving.value || !props.threadId || props.disabled) return

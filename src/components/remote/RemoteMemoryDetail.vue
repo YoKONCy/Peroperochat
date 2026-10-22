@@ -5,6 +5,7 @@
       <RemoteFeedback :message="error" />
       <p v-if="loading && !memory" class="room-empty">正在展开记忆…</p>
       <template v-if="memory || detail.summary">
+        <RemoteAction v-if="memory && ['active', 'archived'].includes(memory.status)" icon="edit" tone="primary" :disabled="loading || sourceLoading" @click="editing = true">{{ t('编辑记忆', [], 'archive-edit') }}</RemoteAction>
         <h2>{{ summary || '一段记忆' }}</h2>
         <RemoteRichText v-if="narrative && narrative !== summary" :source="narrative" node-id="memory-body" :context="context" @resource="$emit('resource', $event)" />
         <p v-if="memory?.createdAt" class="memory-date">{{ date(memory.createdAt) }}</p>
@@ -20,6 +21,7 @@
       </section>
     </section>
   </RoomDrawer>
+  <RemoteArchiveEditor v-if="editing && memory" ref="archiveEditor" kind="memories" :record="memory" @close="editing = false" @saved="edited" @pending="$emit('pending')" />
 </template>
 <script setup>
 import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
@@ -27,13 +29,20 @@ import RoomDrawer from '../companion/RoomDrawer.vue'
 import RoomIcon from './RemoteIcon.vue'
 import RemoteRichText from './RemoteRichText.vue'
 import RemoteFeedback from './RemoteFeedback.vue'
+import RemoteArchiveEditor from './RemoteArchiveEditor.vue'
+import RemoteAction from './RemoteAction.vue'
+import { t } from '../../i18n/remote'
 import { remoteClient } from '../../services/remote'
 import { readRemote } from '../../stores/remote'
 import { currentToken, assertToken } from '../../stores/mode'
 const props = defineProps({ detail: { type: Object, required: true } })
-defineEmits(['close', 'resource', 'thread'])
+defineEmits(['close', 'resource', 'thread', 'pending'])
+const editing = ref(false), archiveEditor = ref(null)
+async function prepareLeave() { await archiveEditor.value?.prepareLeave?.(); editing.value = false }
+defineExpose({ prepareLeave })
+function edited(value) { memory.value = value; source.value = null; editing.value = false; error.value = '' }
 const token = currentToken(), memory = ref(null), source = ref(null), loading = ref(false), sourceLoading = ref(false), error = ref('')
-const summary = computed(() => memory.value?.summary || memory.value?.event?.summary || props.detail.summary || '')
+const summary = computed(() => memory.value?.summary || memory.value?.event?.summary || memory.value?.narrative?.slice(0, 100) || props.detail.summary || '')
 const narrative = computed(() => memory.value?.narrative || memory.value?.event?.narrative || '')
 const context = computed(() => ({ agentId: memory.value?.agentId || memory.value?.event?.agentId, threadId: memory.value?.origin?.threadId || memory.value?.event?.origin?.threadId }))
 let disposed = false, generation = 0
@@ -42,7 +51,7 @@ async function reload() {
   if (loading.value || sourceLoading.value) return
   const request = ++generation; loading.value = true; error.value = ''
   try {
-    const result = await remoteClient.manage({ operation: 'memories.get', id: String(props.detail.query.id), params: {}, body: null }, { token })
+    const result = await remoteClient.manage({ operation: 'memories.get', id: String(memory.value?.id || props.detail.query.id), params: {}, body: null }, { token })
     assertToken(token, 'remote')
     if (!disposed && request === generation) { memory.value = result.data; source.value = null }
   } catch (failure) { if (!disposed && request === generation) error.value = failure.message }
@@ -52,7 +61,7 @@ async function loadSource() {
   if (loading.value || sourceLoading.value) return
   const request = generation; sourceLoading.value = true; error.value = ''
   try {
-    const result = await readRemote({ kind: 'memory_source', id: props.detail.query.id })
+    const result = await readRemote({ kind: 'memory_source', id: memory.value?.id || props.detail.query.id })
     assertToken(token, 'remote')
     if (!disposed && request === generation) source.value = result
   } catch (failure) { if (!disposed && request === generation) error.value = failure.message }

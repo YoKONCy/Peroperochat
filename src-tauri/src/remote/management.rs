@@ -15,7 +15,40 @@ pub struct Request {
     pub body:Option<Value>,
 }
 
+// 手动修订与 infOS 保持相同字段边界；正文不进入本机回执，只保存请求指纹。
+fn validate_archive_edit(input:&Request)->ChatResult<()> {
+    #[derive(Deserialize)]
+    #[serde(deny_unknown_fields)]
+    struct Affect { tones:Vec<String>, valence:u8, arousal:u8 }
+    #[derive(Deserialize)]
+    #[serde(rename_all="camelCase",deny_unknown_fields)]
+    struct MemoryEdit { narrative:String, importance:u8, affect:Affect, participants:Vec<String>, places:Vec<String>, objects:Vec<String>, topics:Vec<String>, expected_status:String, #[serde(default)] regenerate_vector:bool, operation_id:String }
+    #[derive(Deserialize)]
+    #[serde(rename_all="camelCase",deny_unknown_fields)]
+    struct FactEdit { statement:String, source:Option<String>, confidence:Option<f64>, operation_id:String }
+    let invalid=||ChatError::new("INVALID_INPUT","请检查正文、数值与标签后再保存");
+    let text=|value:&str,max:usize,required:bool|!value.contains('\0') && value.trim().chars().count()<=max && (!required || !value.trim().is_empty());
+    let tags=|values:&Vec<String>|values.len()<=100 && values.iter().all(|value|text(value,200,true));
+    match input.operation.as_str() {
+        "memories.edit"=>{
+            let edit:MemoryEdit=serde_json::from_value(input.body.clone().ok_or_else(invalid)?).map_err(|_|invalid())?;
+            let _=edit.regenerate_vector;
+            if !text(&edit.narrative,20_000,true) || edit.importance>10 || edit.affect.valence>10 || edit.affect.arousal>10
+                || ![&edit.affect.tones,&edit.participants,&edit.places,&edit.objects,&edit.topics].into_iter().all(tags)
+                || !["active","archived"].contains(&edit.expected_status.as_str()) || uuid::Uuid::parse_str(&edit.operation_id).is_err() {return Err(invalid());}
+        },
+        "facts.edit"=>{
+            let edit:FactEdit=serde_json::from_value(input.body.clone().ok_or_else(invalid)?).map_err(|_|invalid())?;
+            if !text(&edit.statement,20_000,true) || edit.source.as_ref().is_some_and(|value|!text(value,2000,false))
+                || edit.confidence.is_some_and(|value|!value.is_finite() || !(0.0..=1.0).contains(&value)) || uuid::Uuid::parse_str(&edit.operation_id).is_err() {return Err(invalid());}
+        },
+        _=>{},
+    }
+    Ok(())
+}
+
 fn endpoint(input:&Request)->ChatResult<(Route,bool)> {
+    validate_archive_edit(input)?;
     let id=match &input.id {Some(id)=>segment(id)?,None=>String::new()};
     // 路径与方法只能从此目录产生，不接受任意 URL、HTTP 方法或子应用入口。
     let (method,path,keys,write):(&str,String,&[&str],bool)=match input.operation.as_str() {
@@ -71,6 +104,7 @@ fn endpoint(input:&Request)->ChatResult<(Route,bool)> {
         "prompts.export"=>("POST","/prompts/export/sillytavern".into(),&[],false),
         "memories.list"=>("GET","/memories".into(),&["agentId","agentIds","query","channels","statuses","modes","importanceMin","importanceMax","tones","participants","places","objects","topics","eventAtFrom","eventAtTo","createdAtFrom","createdAtTo","sort","order","page","pageSize"],false),
         "memories.get"=>("GET",format!("/memories/{id}"),&[],false),
+        "memories.edit"=>("PATCH",format!("/memories/{id}"),&[],true),
         "memories.source"=>("GET",format!("/memories/{id}/source"),&[],false),
         "memories.archive"=>("POST",format!("/memories/{id}/archive"),&[],true),
         "memories.restore"=>("POST",format!("/memories/{id}/restore"),&[],true),
@@ -80,6 +114,7 @@ fn endpoint(input:&Request)->ChatResult<(Route,bool)> {
         "memories.deletions"=>("GET","/memories/deletions/status".into(),&[],false),
         "memories.retry_deletion"=>("POST",format!("/memories/deletions/{id}/retry"),&[],true),
         "facts.list"=>("GET","/knowledge/facts".into(),&["query"],false),
+        "facts.edit"=>("PATCH",format!("/knowledge/facts/{id}"),&[],true),
         "facts.retract"=>("POST",format!("/knowledge/facts/{id}/retract"),&[],true),
         "facts.delete"=>("DELETE",format!("/knowledge/facts/{id}"),&[],true),
         "documents.list"=>("GET","/knowledge/documents".into(),&["query","page","pageSize"],false),
@@ -339,6 +374,20 @@ mod tests {
         let context=audit_context(&first,&endpoint(&first).unwrap().0);
         assert!(!context.to_string().contains("测试密钥"));assert!(context.get("body").is_none());
         assert_ne!(context["sha256"],audit_context(&second,&endpoint(&second).unwrap().0)["sha256"]);
+    }
+    #[test]
+    fn archive_edits_follow_revision_routes_and_reject_invalid_payloads() {
+        let memory=json!({"narrative":"我记得这次散步。","importance":5,"affect":{"tones":["轻松"],"valence":7,"arousal":2},"participants":[],"places":[],"objects":[],"topics":[],"expectedStatus":"archived","regenerateVector":false,"operationId":"00000000-0000-4000-8000-000000000001"});
+        let request=input("memories.edit",Some("memory-a"),Some(memory.clone()));
+        let (route,write)=endpoint(&request).unwrap();assert!(write);assert_eq!(route.method,reqwest::Method::PATCH);assert_eq!(route.path,"/memories/memory-a");assert_eq!(route.body,Some(memory.clone()));
+        for (key,value) in [("importance",json!(11)),("narrative",json!("  ")),("expectedStatus",json!("deleted")),("operationId",json!("not-uuid")),("topics",json!(["字".repeat(201)])),("unexpected",json!(true))] {
+            let mut body=memory.clone();body[key]=value;assert!(endpoint(&input("memories.edit",Some("memory-a"),Some(body))).is_err());
+        }
+        let fact=json!({"statement":"周二进行复盘。","source":"用户补充","confidence":0.9,"operationId":"00000000-0000-4000-8000-000000000002"});
+        let (route,write)=endpoint(&input("facts.edit",Some("fact-a"),Some(fact.clone()))).unwrap();assert!(write);assert_eq!(route.method,reqwest::Method::PATCH);assert_eq!(route.path,"/knowledge/facts/fact-a");
+        let context=audit_context(&request,&endpoint(&request).unwrap().0);assert!(!context.to_string().contains("散步"));
+        let mut invalid=fact;invalid["confidence"]=json!(1.1);assert!(endpoint(&input("facts.edit",Some("fact-a"),Some(invalid))).is_err());
+        assert!(endpoint(&input("facts.edit",None,None)).is_err());
     }
     #[test]
     fn mutation_payload_and_query_values_are_bounded() {

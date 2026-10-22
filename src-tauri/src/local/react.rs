@@ -22,7 +22,8 @@ pub async fn run(db:&DbState,settings:&ModelSettings,agent_id:&str,mut messages:
         if completion.calls.is_empty() {
             completion.content=context::visible_text(&completion.content);
             if completion.content.trim().is_empty() { return Err(ChatError::new("EMPTY_RESPONSE","模型没有返回可显示的回复")); }
-            completion.reasoning=reasoning;completion.usage=json!({"steps":usage});return Ok(completion);
+            let presentation=completion.usage["_ppcReasoning"].clone();
+            completion.reasoning=reasoning;completion.usage=json!({"steps":usage,"presentation":presentation});return Ok(completion);
         }
         if !settings.tools_enabled || step+1==settings.max_steps { return Err(ChatError::new("TOOL_LIMIT","模型工具调用达到本轮上限，请重新发送")); }
         messages.push(ModelMessage { role:"assistant".into(),content:json!(completion.content),calls:completion.calls.clone(),

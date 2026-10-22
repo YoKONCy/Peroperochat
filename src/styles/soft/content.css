@@ -92,4 +92,20 @@
 :is(.companion-surface, .remote-themed)[data-ui='soft'] .connection-identity small { font-size: var(--ui-caption); }
 :is(.companion-surface, .remote-themed)[data-ui='soft'] .mode-switch-entry { border-radius: 20px; border-color: var(--ui-line); background: linear-gradient(115deg, var(--ui-glass), var(--ui-soft)); box-shadow: var(--ui-shadow); }
 :is(.companion-surface, .remote-themed)[data-ui='soft'] .mode-switch-copy strong { font-weight: 700; }
-:is(.companion-surface, .remote-themed)[data-ui='soft'] .mode-switch-destination { border-radius: 11px; background: var(--ui-paper); color: var(--ui-accent); }
+:is(.companion-surface, .remote-themed)[data-ui='soft'] .mode-switch-destination { padding: 0; border: 0; border-radius: 0; background: transparent; box-shadow: none; color: var(--ui-accent); opacity: .8; }
+
+/* 输入卡片本身承接焦点，不在文字区叠加一圈方框；按钮仍保留自己的键盘焦点提示。 */
+:is(.companion-surface, .remote-themed)[data-ui='soft'] :is(.chat-input-line, .room-composer, .group-composer) > textarea,
+:is(.companion-surface, .remote-themed)[data-ui='soft'] :is(.chat-input-line, .room-composer, .group-composer) > textarea:is(:focus, :focus-visible) {
+  appearance: none;
+  -webkit-appearance: none;
+  outline: none;
+  outline-offset: 0;
+  border: 0;
+  box-shadow: none;
+  background: transparent;
+  caret-color: var(--ui-accent);
+}
+:is(.companion-surface, .remote-themed)[data-ui='soft'] :is(.chat-composer, .room-composer, .group-composer):focus-within {
+  border-color: color-mix(in srgb, var(--ui-accent) 45%, var(--ui-line));
+}

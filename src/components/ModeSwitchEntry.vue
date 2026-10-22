@@ -8,7 +8,7 @@
       <path class="mode-door-star" d="m43 5 1.5 4.5L49 11l-4.5 1.5L43 17l-1.5-4.5L37 11l4.5-1.5Z" />
     </svg>
     <span class="mode-switch-copy"><small><i />{{ remote ? 'infOS 客户端' : '独立陪伴空间' }}</small><strong>{{ remote ? '切换回独立空间' : '前往 infOS' }}</strong></span>
-    <span class="mode-switch-destination">{{ remote ? '本机陪伴' : '远程客户端' }}<svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M4 8h15m-4-4 4 4-4 4M20 16H5m4-4-4 4 4 4" /></svg></span>
+    <span class="mode-switch-destination" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none"><path d="M4 8h15m-4-4 4 4-4 4M20 16H5m4-4-4 4 4 4" /></svg></span>
   </button>
 </template>
 
@@ -24,7 +24,7 @@ defineEmits(['open'])
 .mode-door-back { fill: var(--switch-accent); opacity: .1; }.mode-door-front { fill: var(--switch-accent); opacity: .06; }.mode-door-line { stroke: var(--switch-accent); stroke-width: 1.25; stroke-linejoin: round; opacity: .65; }
 .mode-door-travel { stroke: var(--switch-accent); stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; transition: transform .18s ease; }.mode-door-star { fill: var(--switch-accent); opacity: .65; }
 .mode-switch-copy { display: grid; gap: 6px; min-width: 0; flex: 1; }.mode-switch-copy small { display: flex; align-items: center; gap: 5px; font-size: 9px; opacity: .65; }.mode-switch-copy i { width: 4px; height: 4px; border-radius: 50%; background: var(--switch-accent); }.mode-switch-copy strong { font-size: 14px; font-weight: 600; }
-.mode-switch-destination { display: flex; align-items: center; gap: 8px; color: var(--switch-accent); font-size: 10px; flex: none; }.mode-switch-destination svg { width: 20px; height: 20px; stroke: currentColor; stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; }
+.mode-switch-destination { display: grid; place-items: center; flex: none; width: 28px; height: 28px; color: var(--switch-accent); }.mode-switch-destination svg { width: 22px; height: 22px; stroke: currentColor; stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; }
 .mode-switch-entry:focus-visible { outline: 2px solid var(--switch-accent); outline-offset: 3px; }.mode-switch-entry:active .mode-door-travel { transform: translateX(3px); }
 @media (prefers-reduced-motion: reduce) { .mode-door-travel { transition: none; } }
 </style>
