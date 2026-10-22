@@ -55,7 +55,7 @@
                 <button type="button" class="room-text-button" :disabled="artLoading" @click="pickArt('standing_image')">选择 PNG／JPEG／WebP 图片</button>
                 <span class="form-hint">显示模式可随时切换为通用 Pio。角色包导入、导出时保留此素材地址。</span>
               </el-form-item>
-              <el-form-item label="图片排版"><el-select v-model="formData.illustration_layout"><el-option label="透明立绘" value="standing" /><el-option label="完整 CG 卡片" value="card" /></el-select></el-form-item>
+              <el-form-item label="图片排版"><el-select v-model="formData.illustration_layout" append-to=".app[data-ui=soft]"><el-option label="透明立绘" value="standing" /><el-option label="完整 CG 卡片" value="card" /></el-select></el-form-item>
               <el-form-item label="房间背景">
                 <div class="room-background-editor">
                   <el-input v-if="!formData.room_background.startsWith('data:')" v-model="formData.room_background" placeholder="图片地址，留空使用默认房间" />
@@ -96,7 +96,7 @@
                 <template #label>
                   <div class="label-with-help">
                     <span>系统提示词</span>
-                    <el-tooltip content="定义 AI 的基本行为规则和安全约束">
+                    <el-tooltip append-to=".app[data-ui=soft]" content="定义 AI 的基本行为规则和安全约束">
                       <RoomIcon name="help" />
                     </el-tooltip>
                   </div>
@@ -113,7 +113,7 @@
                 <template #label>
                   <div class="label-with-help">
                     <span>人设提示词</span>
-                    <el-tooltip content="定义角色的性格、外貌、背景等特征">
+                    <el-tooltip append-to=".app[data-ui=soft]" content="定义角色的性格、外貌、背景等特征">
                       <RoomIcon name="help" />
                     </el-tooltip>
                   </div>
@@ -130,7 +130,7 @@
                 <template #label>
                   <div class="label-with-help">
                     <span>后置提示词</span>
-                    <el-tooltip content="附加在用户消息后的提示，用于引导回复格式">
+                    <el-tooltip append-to=".app[data-ui=soft]" content="附加在用户消息后的提示，用于引导回复格式">
                       <RoomIcon name="help" />
                     </el-tooltip>
                   </div>

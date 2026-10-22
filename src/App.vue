@@ -1,5 +1,5 @@
 <template>
-  <div class="app companion-surface" :class="{ 'standalone-design': isStandalone }" :data-tone="tone" :data-reduce-motion="isStandalone && !displayPreferences.motion" :style="isStandalone ? localStyle : undefined">
+  <div class="app companion-surface" data-ui="soft" :class="{ 'standalone-design': isStandalone }" :data-tone="tone" :data-reduce-motion="isStandalone && !displayPreferences.motion" :style="isStandalone ? localStyle : undefined">
     <div v-if="contentReady" class="app-mode-content" :inert="transitionVisible ? true : undefined" :aria-hidden="transitionVisible ? true : undefined">
       <router-view v-if="isStandalone" v-slot="{ Component }"><Transition name="app-route" mode="out-in"><component :is="Component" :key="route.path" /></Transition></router-view>
       <RemoteWorkspace v-else-if="isRemote" :key="`${modeState.snapshot.installationId}:${modeState.snapshot.activationEpoch}:${modeState.snapshot.activeTarget.profileId}`" />
@@ -23,9 +23,12 @@ import { clearFeedback } from './services/appFeedback'
 import './styles/companion.css'
 import './styles/controls.css'
 import './styles/standalone.css'
+import './styles/soft/index.css'
+import { useSoftInteractions } from './composables/useSoftInteractions'
 import { appearanceStyle, displayPreferences, LOCAL_APPEARANCE } from './stores/appearance'
 const tone = computed(() => isStandalone.value && activeAgentId.value === 'nana' ? 'nana' : 'pero')
 const route = useRoute()
+useSoftInteractions()
 const localDataRecovery = computed(() => isStandalone.value && route.path === '/settings' && route.query.section === 'data')
 const contentReady = computed(() => isRemote.value || isStandalone.value && !modeState.restoring && (!modeState.restoreError || localDataRecovery.value))
 const transitionLoading = computed(() => modeState.loading || modeState.restoring || !!modeState.snapshot && ['activating', 'quiescing'].includes(modeState.snapshot.phase) || isRemote.value && (remoteState.initializing || remoteState.restoringView))

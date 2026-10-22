@@ -1,10 +1,11 @@
 <template>
   <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.65" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-    <path :d="paths[name] || paths.chat" />
+    <g v-if="softIcon(name)" v-html="softIcon(name)" /><path v-else :d="paths[name] || paths.chat" />
   </svg>
 </template>
 
 <script setup>
+import { softIcon } from '../../constants/softIcons'
 defineProps({ name: { type: String, default: 'chat' } })
 const paths = {
   palette: 'M12 3a9 9 0 1 0 0 18h1a2 2 0 0 0 1-4c-2-1-1-3 1-3h3a3 3 0 0 0 3-3 9 9 0 0 0-9-8ZM7 11h.01M10 7h.01M15 8h.01',

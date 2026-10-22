@@ -1,6 +1,6 @@
 [package]
 name = "peroperochat"
-version = "1.4.8"
+version = "1.4.9"
 description = "Your better friend"
 authors = ["you"]
 edition = "2021"

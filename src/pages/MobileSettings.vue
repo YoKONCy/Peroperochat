@@ -40,15 +40,15 @@
 
           <form v-else-if="tab === 'model'" @submit.prevent="saveParameters">
             <fieldset :disabled="loading || !loaded || !!busy">
-              <div class="settings-field-grid">
-                <label class="settings-field">Temperature<input v-model.number="parameters.temperature" type="number" min="0" max="2" step="0.01" placeholder="由模型决定" /><small>较高时回复更有变化，留空则不发送。</small></label>
-                <label class="settings-field">Top P<input v-model.number="parameters.topP" type="number" min="0" max="1" step="0.01" placeholder="由模型决定" /><small>控制采样范围，留空则不发送。</small></label>
-                <label class="settings-field">思考强度<ChoicePicker v-model="parameters.reasoningEffort" label="选择思考强度" :options="reasoningChoices" :disabled="loading || !loaded || !!busy" /><small>可用档位取决于所选模型</small></label>
-                <label class="settings-field">最多输出 Token<input v-model.number="parameters.maxTokens" type="number" min="128" max="65536" required /></label>
-                <label class="settings-field">上下文窗口<input v-model.number="parameters.contextWindow" type="number" min="1152" max="2000000" required /><small>应与模型能力一致，并留出回复空间。</small></label>
-                <label class="settings-field">历史对话轮次<input v-model.number="parameters.memoryRounds" type="number" min="1" max="200" required /><small>一轮包含一条输入和一条回复。</small></label>
+              <section class="local-reasoning-settings"><header><RoomIcon name="thought" /><strong>思考强度</strong><small>按模型能力选择</small></header><ChoicePicker v-model="parameters.reasoningEffort" label="选择思考强度" :options="reasoningChoices" :disabled="loading || !loaded || !!busy" /></section>
+              <div class="model-number-grid local-model-numbers">
+                <RemoteModelNumber :value="parameters.temperature" label="温度" help="较低更稳，较高更灵活" icon="sampling" :min="0" :max="2" @change="parameters.temperature = $event" />
+                <RemoteModelNumber :value="parameters.topP" label="Top P" help="控制用词的选择范围" icon="filter" :min="0" :max="1" @change="parameters.topP = $event" />
+                <RemoteModelNumber :value="parameters.maxTokens" label="最大输出" help="一次回复的长度上限" icon="reply-length" unit="Token" :min="128" :max="65536" integer required @change="parameters.maxTokens = $event" />
+                <RemoteModelNumber :value="parameters.contextWindow" label="上下文窗口" help="可使用的完整上下文" icon="context-window" unit="Token" :min="1152" :max="2000000" integer required @change="parameters.contextWindow = $event" />
+                <RemoteModelNumber class="local-history-number" :value="parameters.memoryRounds" label="历史对话轮次" help="一轮包含一条输入和一条回复" icon="chat" unit="轮" :min="1" :max="200" integer required @change="parameters.memoryRounds = $event" />
               </div>
-              <label class="settings-toggle"><span><strong>流式回复</strong><small>边生成边显示消息</small></span><RoomSwitch v-model="parameters.stream" label="流式回复" /></label>
+              <label class="settings-toggle local-stream-toggle"><RoomIcon name="pulse" /><span><strong>流式回复</strong><small>边生成，边显示</small></span><RoomSwitch v-model="parameters.stream" label="流式回复" /></label>
               <footer class="settings-save"><span>未编辑的高级参数会保留</span><button class="room-primary-button" :disabled="!dirtySections.model">{{ busy === 'save-model' ? '正在保存…' : '保存参数' }}</button></footer>
             </fieldset>
           </form>
@@ -74,7 +74,7 @@
 <script setup>
 import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref } from 'vue'
 import { onBeforeRouteLeave, useRouter } from 'vue-router'
-import { ElMessageBox } from 'element-plus'
+import { appMessageBox as ElMessageBox } from '../services/appMessageBox'
 import { appMessage as ElMessage } from '../services/appFeedback'
 import FeedbackMessage from '../components/FeedbackMessage.vue'
 import CompanionPage from '../components/companion/CompanionPage.vue'
@@ -83,6 +83,7 @@ import CharacterAvatar from '../components/companion/CharacterAvatar.vue'
 import CompanionEmblem from '../components/companion/CompanionEmblem.vue'
 import ChoicePicker from '../components/companion/ChoicePicker.vue'
 import RoomSwitch from '../components/companion/RoomSwitch.vue'
+import RemoteModelNumber from '../components/remote/RemoteModelNumber.vue'
 import BrandIcon from '../components/companion/BrandIcon.vue'
 import RoomAppearanceSettings from '../components/companion/RoomAppearanceSettings.vue'
 import { displayPreferences } from '../stores/appearance'
@@ -120,7 +121,7 @@ const provider = ref('custom')
 const models = ref([])
 const modelSearch = ref('')
 const importInput = ref(null)
-const reasoningChoices = [{ value: '', label: '跟随模型默认值' }, ...['off', 'none', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max'].map(value => ({ value, label: value }))]
+const reasoningChoices = [{ value: '', label: '跟随模型默认值' }, ...Object.entries({ off: '关闭', none: '不思考', minimal: '极低', low: '低', medium: '中', high: '高', xhigh: '极高', max: '最高' }).map(([value, label]) => ({ value, label }))]
 const protocolChoices = [
   { value: 'chat_completions', label: 'OpenAI Chat Completions', shortLabel: 'OpenAI Chat', description: 'OpenAI 兼容聊天接口' },
   { value: 'responses', label: 'OpenAI Responses', shortLabel: 'Responses', description: 'OpenAI Responses 接口' },

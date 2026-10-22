@@ -10,7 +10,7 @@
         />
       </div>
       <div class="toolbar-actions">
-        <el-tooltip content="导入角色" placement="top">
+        <el-tooltip append-to=".app[data-ui=soft]" content="导入角色" placement="top">
           <button class="tool-btn" aria-label="导入角色" @click="triggerImport">
             <RoomIcon name="upload" />
           </button>
@@ -60,7 +60,7 @@
 
 <script setup>
 import { ref, computed } from 'vue'
-import { ElMessageBox } from 'element-plus'
+import { appMessageBox as ElMessageBox } from '../../services/appMessageBox'
 import { appMessage as ElMessage } from '../../services/appFeedback'
 import RoleCard from './RoleCard.vue'
 import RoomIcon from '../companion/RoomIcon.vue'

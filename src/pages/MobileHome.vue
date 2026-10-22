@@ -73,7 +73,7 @@
 <script setup>
 import { computed, reactive, ref, watch, onMounted, onBeforeUnmount, nextTick } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { ElMessageBox } from 'element-plus'
+import { appMessageBox as ElMessageBox } from '../services/appMessageBox'
 import { appMessage as ElMessage } from '../services/appFeedback'
 import FeedbackMessage from '../components/FeedbackMessage.vue'
 import Live2DWidget from '../components/Live2DWidget.vue'

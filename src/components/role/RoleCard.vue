@@ -26,22 +26,22 @@
     </div>
     
     <div class="role-actions" @click.stop>
-      <el-tooltip content="编辑" placement="top">
+      <el-tooltip append-to=".app[data-ui=soft]" content="编辑" placement="top">
         <button class="action-btn" aria-label="编辑角色" @click="$emit('edit', role.id)">
           <RoomIcon name="edit" />
         </button>
       </el-tooltip>
-      <el-tooltip content="复制" placement="top">
+      <el-tooltip append-to=".app[data-ui=soft]" content="复制" placement="top">
         <button class="action-btn" aria-label="复制角色" @click="$emit('duplicate', role.id)">
           <RoomIcon name="copy" />
         </button>
       </el-tooltip>
-      <el-tooltip content="导出" placement="top">
+      <el-tooltip append-to=".app[data-ui=soft]" content="导出" placement="top">
         <button class="action-btn" aria-label="导出角色" @click="$emit('export', role.id)">
           <RoomIcon name="download" />
         </button>
       </el-tooltip>
-      <el-tooltip content="删除" placement="top">
+      <el-tooltip append-to=".app[data-ui=soft]" content="删除" placement="top">
         <button class="action-btn delete" aria-label="删除角色" @click="$emit('delete', role.id)">
           <RoomIcon name="trash" />
         </button>

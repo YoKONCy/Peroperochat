@@ -1,9 +1,9 @@
 <template>
-  <main class="remote-workspace remote-themed" :class="{ 'is-chat-room': tab === 'chat' }" :data-keyboard-open="keyboardOpen" :data-remote-theme="theme.mode" :data-decoration="theme.decoration" :data-bubble="theme.bubble" :data-reduce-motion="theme.reduceMotion" :style="[viewportStyle, theme.style]" :inert="drawer || detail || resource ? true : undefined">
+  <main class="remote-workspace remote-themed" data-ui="soft" :class="{ 'is-chat-room': tab === 'chat' }" :data-keyboard-open="keyboardOpen" :data-remote-theme="theme.mode" :data-decoration="theme.decoration" :data-bubble="theme.bubble" :data-reduce-motion="theme.reduceMotion" :style="[viewportStyle, theme.style]" :inert="drawer || detail || resource ? true : undefined">
     <header v-if="tab === 'chat'" class="chat-room-header">
       <button type="button" class="chat-header-back" aria-label="返回上一页" @click="returnFromChat"><RoomIcon name="back" /></button>
       <button type="button" class="chat-header-avatar" :aria-label="`${agent?.name || '角色'}资料`" @click="drawer = 'character'"><RemoteAvatar :id="agent?.id" :label="agent?.name" /></button>
-      <div class="chat-header-heading"><button type="button" class="chat-header-name" aria-label="选择角色与会话" @click="showThreads">{{ agent?.name || '选择会话' }}<RoomIcon v-if="theme.decoration !== 'none'" name="bow" /></button><button type="button" class="chat-header-topic" @click="showThreads"><i :data-online="online" /><span>{{ selection?.title || '选一段对话，接着聊' }}</span><RoomIcon name="down" /></button></div>
+      <div class="chat-header-heading"><button type="button" class="chat-header-name" aria-label="选择角色与会话" @click="showThreads"><span>{{ agent?.name || '选择会话' }}</span><RoomIcon v-if="theme.decoration !== 'none'" name="bow" /></button><button type="button" class="chat-header-topic" @click="showThreads"><i :data-online="online" /><span>{{ selection?.title || '选一段对话，接着聊' }}</span><RoomIcon name="down" /></button></div>
       <button type="button" class="chat-header-more" aria-label="当前会话操作" @click="drawer = 'actions'"><RoomIcon name="more" /></button>
     </header>
     <header v-else-if="!['home', 'conversations'].includes(tab)" class="remote-header phase-global-header">

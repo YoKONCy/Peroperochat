@@ -30,7 +30,7 @@
 </template>
 <script setup>
 import { computed, onMounted, onBeforeUnmount, reactive, ref } from 'vue'
-import { ElMessageBox } from 'element-plus'
+import { appMessageBox as ElMessageBox } from '../../services/appMessageBox'
 import { isPermissionGranted, requestPermission } from '@tauri-apps/plugin-notification'
 import RoomDrawer from './RoomDrawer.vue'
 import FeedbackMessage from '../FeedbackMessage.vue'

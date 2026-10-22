@@ -1,4 +1,13 @@
 /* 页面在固定舞台内交接，输入区与导航不参与位移。 */
+.model-config-save{padding:12px 0!important;margin-top:16px!important;background:var(--room-surface);gap:10px}
+.model-config-save>span{display:inline-flex;align-items:center;gap:6px;font-size:11px;line-height:1.6}
+.model-config-save>span::before{content:'';width:6px;height:6px;flex:none;border-radius:50%;background:var(--room-line)}
+.model-config-save.has-changes>span{color:var(--room-accent)}
+.model-config-save.has-changes>span::before{background:var(--room-accent);box-shadow:0 0 0 3px color-mix(in srgb,var(--room-accent) 9%,transparent)}
+.model-config-save>.remote-purpose-action{min-height:44px;min-width:114px;border-radius:12px;justify-content:center;font-size:12px;box-shadow:0 3px 10px color-mix(in srgb,var(--room-accent) 12%,transparent)}
+.model-record-actions{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px;padding-top:15px;border-top:1px solid var(--room-line)}
+.model-record-actions>.remote-purpose-action{min-width:0;min-height:44px;border-radius:12px;justify-content:center;font-size:11px}
+.model-record-actions>.remote-purpose-action.is-danger{grid-column:1/-1;background:transparent;box-shadow:none;margin-top:3px}
 .conversation-confirm-actions{display:flex;justify-content:flex-end;gap:10px;margin-top:18px;flex-wrap:wrap}
 .conversation-confirm-actions>button{min-height:44px}
 .conversation-actions>button.conversation-delete-action{color:var(--room-danger,#b6506b)}

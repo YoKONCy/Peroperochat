@@ -1,0 +1,135 @@
+/* 组件只消费语义令牌；角色、配色包及明暗模式仍决定实际颜色。 */
+:is(.companion-surface, .remote-themed)[data-ui='soft'] {
+  --ui-accent: var(--room-accent);
+  --ui-secondary: var(--room-accent-bright);
+  --ui-ink: var(--room-ink);
+  --ui-muted: var(--room-muted);
+  --ui-paper: var(--room-surface);
+  --ui-page: color-mix(in srgb, var(--ui-accent) 10%, var(--ui-paper));
+  --ui-soft: color-mix(in srgb, var(--ui-accent) 21%, var(--ui-paper));
+  --ui-warm: color-mix(in srgb, var(--ui-secondary) 30%, var(--ui-paper));
+  --ui-thought: color-mix(in srgb, var(--ui-accent) 16%, var(--ui-warm));
+  --ui-line: color-mix(in srgb, var(--ui-accent) 31%, var(--ui-paper));
+  --ui-contour: color-mix(in srgb, var(--ui-accent) 46%, var(--ui-paper));
+  --ui-card-face: color-mix(in srgb, var(--ui-accent) 5%, var(--ui-paper));
+  --ui-field: color-mix(in srgb, var(--ui-accent) 12%, var(--ui-paper));
+  --ui-shelf: color-mix(in srgb, var(--ui-accent) 25%, var(--ui-paper));
+  --ui-emphasis: color-mix(in srgb, var(--ui-accent) 76%, var(--ui-ink));
+  --ui-edge: color-mix(in srgb, var(--ui-paper) 86%, transparent);
+  --ui-glass: color-mix(in srgb, var(--ui-paper) 94%, transparent);
+  --ui-on-accent: white;
+  --ui-action: color-mix(in srgb, var(--ui-accent) 85%, var(--ui-ink));
+  --ui-action-top: color-mix(in srgb, var(--ui-accent) 94%, var(--ui-ink));
+  --ui-text: var(--remote-font-size, 14px);
+  --ui-body: calc(var(--ui-text) + 1px);
+  --ui-label: max(12px, calc(var(--ui-text) - 1px));
+  --ui-caption: max(11px, calc(var(--ui-text) - 3px));
+  --ui-heading: calc(var(--ui-text) + 5px);
+  --ui-shadow: 0 4px 0 var(--ui-shelf), 0 8px 18px color-mix(in srgb, var(--ui-ink) 7%, transparent), inset 0 1px 0 var(--ui-edge);
+  --ui-floating-shadow: 0 4px 0 var(--ui-shelf), 0 9px 25px color-mix(in srgb, var(--ui-ink) 13%, transparent);
+  --ui-press-shadow: 0 4px 0 color-mix(in srgb, var(--ui-accent) 66%, var(--ui-ink)), inset 0 1px 0 color-mix(in srgb, white 40%, transparent);
+  --ui-focus: 0 0 0 3px color-mix(in srgb, var(--ui-accent) 15%, transparent);
+  --ui-radius: 18px;
+  --ui-spring: cubic-bezier(.22, .95, .3, 1.12);
+  --ui-ease: cubic-bezier(.2, .75, .25, 1);
+  --room-spring: var(--ui-spring);
+  --room-ease: var(--ui-ease);
+  --el-color-primary: var(--ui-accent);
+  --el-color-primary-light-3: color-mix(in srgb, var(--ui-accent) 70%, var(--ui-paper));
+  --el-color-primary-light-5: color-mix(in srgb, var(--ui-accent) 50%, var(--ui-paper));
+  --el-color-primary-light-7: var(--ui-soft);
+  --el-color-primary-light-8: var(--ui-soft);
+  --el-color-primary-light-9: var(--ui-soft);
+  --el-bg-color: var(--ui-paper);
+  --el-bg-color-overlay: var(--ui-paper);
+  --el-fill-color-blank: var(--ui-paper);
+  --el-fill-color-light: var(--ui-soft);
+  --el-text-color-primary: var(--ui-ink);
+  --el-text-color-regular: var(--ui-ink);
+  --el-text-color-secondary: var(--ui-muted);
+  --el-border-color: var(--ui-line);
+  --el-border-color-light: var(--ui-line);
+  --el-border-radius-base: 12px;
+  font-family: 'Segoe UI Variable Text', 'Segoe UI', 'PingFang SC', 'Microsoft YaHei UI', 'Noto Sans SC', system-ui, sans-serif;
+  font-size: var(--ui-text);
+  font-synthesis: none;
+  -webkit-font-smoothing: antialiased;
+  -webkit-tap-highlight-color: transparent;
+}
+.remote-themed[data-ui='soft'][data-remote-theme] {
+  --ui-accent: var(--accent);
+  --ui-secondary: var(--accent-secondary);
+  --ui-ink: var(--ink);
+  --ui-paper: var(--surface);
+  --ui-muted: var(--muted);
+  --ui-page: color-mix(in srgb, var(--tint) 45%, var(--ui-soft));
+  --muted: color-mix(in srgb, var(--ink) 65%, var(--surface));
+  --line: var(--ui-line);
+  --wash: var(--ui-soft);
+  --panel: var(--ui-card-face);
+  --bevel: color-mix(in srgb, var(--accent) 37%, var(--surface));
+  --button-face: var(--accent);
+  --room-page: var(--ui-page);
+  --room-subtle: var(--ui-soft);
+  --room-line: var(--ui-line);
+  --room-glass: var(--ui-glass);
+  --room-user-bubble: var(--ui-warm);
+  --room-shadow: var(--ui-shadow);
+  --chat-body: var(--ui-body);
+  --chat-label: var(--ui-label);
+  --chat-caption: var(--ui-caption);
+  --chat-page: var(--ui-page);
+  --chat-paper: var(--surface);
+  --chat-glass: var(--ui-glass);
+  --chat-line: var(--ui-line);
+  --chat-thinking: var(--ui-thought);
+  --chat-shadow: color-mix(in srgb, var(--ink) 8%, transparent);
+  --chat-dim: var(--muted);
+  --el-color-primary: var(--accent);
+  --el-bg-color: var(--surface);
+  --el-bg-color-overlay: var(--surface);
+  --el-fill-color-blank: var(--surface);
+  --el-fill-color-light: var(--ui-soft);
+  --el-text-color-primary: var(--ink);
+  --el-text-color-regular: var(--ink);
+  --el-text-color-secondary: var(--muted);
+  --el-border-color: var(--line);
+  --el-border-color-light: var(--line);
+  --el-border-radius-base: 12px;
+  background: var(--ui-page);
+}
+.remote-themed[data-ui='soft'][data-remote-theme='dark'] {
+  --surface: color-mix(in srgb, var(--tint) 85%, var(--accent));
+  --ink: color-mix(in srgb, var(--accent-secondary) 9%, white);
+  --ui-on-accent: var(--tint);
+  --ui-action: var(--accent);
+  --ui-action-top: color-mix(in srgb, var(--accent) 94%, white);
+  --ui-line: color-mix(in srgb, var(--accent) 30%, var(--surface));
+  --ui-shelf: color-mix(in srgb, var(--tint) 78%, var(--surface));
+  --ui-press-shadow: 0 4px 0 color-mix(in srgb, var(--accent) 43%, var(--tint)), inset 0 1px 0 color-mix(in srgb, white 23%, transparent);
+  color-scheme: dark;
+}
+.standalone-design[data-ui='soft'], .standalone-design[data-ui='soft'] .companion-surface {
+  --room-ink: var(--local-ink);
+  --room-accent: var(--local-accent);
+  --room-accent-soft: var(--ui-soft);
+  --room-accent-bright: color-mix(in srgb, var(--local-accent) 55%, white);
+  --room-muted: color-mix(in srgb, var(--local-ink) 67%, white);
+  --room-page: color-mix(in srgb, var(--local-wash) 80%, white);
+  --room-subtle: color-mix(in srgb, var(--local-accent) 6%, white);
+  --room-line: var(--ui-line);
+  --room-bubble: var(--room-surface);
+  --room-user-bubble: var(--ui-warm);
+  --room-shadow: var(--ui-shadow);
+  --room-radius: var(--ui-radius);
+  --el-border-radius-base: 12px;
+}
+:is(.companion-surface, .remote-themed)[data-ui='soft'] .icon-wash { fill: currentColor; fill-opacity: .25; stroke: none; }
+:is(.companion-surface, .remote-themed)[data-ui='soft'] .icon-detail { stroke: var(--ui-secondary); opacity: .9; stroke-width: 1.2; }
+:is(.companion-surface, .remote-themed)[data-ui='soft'] .character-avatar { object-fit: contain; flex-shrink: 0; }
+:is(.companion-surface, .remote-themed)[data-ui='soft'] :where(h1, h2, h3, h4) { letter-spacing: -.015em; text-wrap: pretty; }
+:is(.companion-surface, .remote-themed)[data-ui='soft'] :where(button, summary) { -webkit-tap-highlight-color: transparent; touch-action: manipulation; }
+:is(.companion-surface, .remote-themed)[data-ui='soft'] :where(button, input, textarea, select) { font-family: inherit; }
+:is(.companion-surface, .remote-themed)[data-ui='soft'] :where(button, a, input, textarea, select, summary):focus-visible { outline: 2px solid var(--ui-accent); outline-offset: 3px; }
+:is(.companion-surface, .remote-themed)[data-ui='soft'] :where(button, input, textarea, select):disabled { cursor: default; }
+:is(.companion-surface, .remote-themed)[data-ui='soft'] :where(button, label, h1, h2, h3, strong) { overflow-wrap: anywhere; }

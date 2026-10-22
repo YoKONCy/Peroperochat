@@ -30,7 +30,7 @@ export function useRemoteTheme(character) {
     const style = selectedStyle.value
     const color = style?.[mode.value === 'dark' ? 'darkAccent' : 'lightAccent'] || accent
     return { mode: mode.value, reduceMotion: display.reduceMotion, bubble: style?.bubble || 'standard', decoration: style?.decoration === 'standard' || !style?.decoration ? mode.value === 'dark' ? 'constellation' : 'ribbon' : style.decoration,
-      style: { '--remote-font-size': (display.fontSize || 14) + 'px', '--remote-chat-size': ((display.fontSize || 14) + 2) + 'px', '--accent': color, '--tint': tint, '--accent-secondary': style?.secondary || secondary, '--remote-accent': color, '--remote-tint': tint, '--room-accent': color } }
+      style: { '--remote-font-size': (display.fontSize || 14) + 'px', '--remote-chat-size': ((display.fontSize || 14) + 1) + 'px', '--accent': color, '--tint': tint, '--accent-secondary': style?.secondary || secondary, '--remote-accent': color, '--remote-tint': tint, '--room-accent': color } }
   })
   provide(REMOTE_THEME, theme)
   function systemChanged(event) { systemDark.value = event.matches }

@@ -1,0 +1,58 @@
+/* 动效只响应操作或真实状态变化；不对历史消息和流式正文逐项重播。 */
+:is(.companion-surface, .remote-themed)[data-ui='soft'] button:not(:disabled) { transition: background-color 150ms, border-color 150ms, color 150ms, box-shadow 160ms, transform 170ms var(--ui-spring); }
+:is(.companion-surface, .remote-themed)[data-ui='soft'] button:not(:disabled):not(.room-static-character):not(.latest-button):active { transform: translateY(1px) scale(.97); }
+:is(.companion-surface, .remote-themed)[data-ui='soft'] :is(.room-primary-button, .remote-purpose-action.is-primary, .chat-send, .composer-send, .group-send):not(:disabled):active { transform: translateY(4px) scale(.98); box-shadow: inset 0 1px 0 var(--ui-edge); }
+:is(.companion-surface, .remote-themed)[data-ui='soft'] :is(.remote-inline-picture, .remote-file-miniature):not(:disabled):active { transform: none; }
+:is(.companion-surface, .remote-themed)[data-ui='soft'] button svg { transform-origin: center; transform-box: view-box; }
+:is(.companion-surface, .remote-themed)[data-ui='soft'] :is(.remote-select, .choice-picker) > svg:last-child { transition: rotate 190ms var(--ui-spring); }
+:is(.companion-surface, .remote-themed)[data-ui='soft'] :is(.remote-select, .choice-picker)[aria-expanded='true'] > svg:last-child { rotate: 180deg; transform: none; }
+:is(.companion-surface, .remote-themed)[data-ui='soft'] .room-switch-track, :is(.companion-surface, .remote-themed)[data-ui='soft'] .room-switch-track::after { transition: background-color 160ms, border-color 160ms, width 160ms var(--ui-spring), transform 210ms var(--ui-spring); }
+:is(.companion-surface, .remote-themed)[data-ui='soft'] .remote-navigation button > span { transition: background-color 180ms, border-color 180ms, transform 240ms var(--ui-spring), box-shadow 180ms; }
+:is(.companion-surface, .remote-themed)[data-ui='soft'] .remote-navigation button > span > svg { transition: transform 220ms var(--ui-spring); }
+:is(.companion-surface, .remote-themed)[data-ui='soft'] .remote-navigation button:active > span { transform: translateY(1px) scale(.92); }
+:is(.companion-surface, .remote-themed)[data-ui='soft'] :is(.remote-trace-chevron, .tool-timeline-chevron, .soft-fold-chevron) { transition: transform 190ms var(--ui-spring); }
+:is(.companion-surface, .remote-themed)[data-ui='soft'] :is(.message-reasoning, .group-reasoning)[open] > summary > .soft-fold-chevron { transform: rotate(180deg); }
+:is(.companion-surface, .remote-themed)[data-ui='soft'] :is(.remote-reasoning, .remote-tool-trace, .phase-fold, .model-advanced, .tool-timeline, .message-reasoning, .group-reasoning)[open] > :not(summary) { animation: soft-unfold 190ms var(--ui-ease); }
+:is(.companion-surface, .remote-themed)[data-ui='soft'] .model-editor-panel.is-active, :is(.companion-surface, .remote-themed)[data-ui='soft'] .settings-panel-body { animation: soft-panel-arrive 210ms var(--ui-ease); }
+:is(.companion-surface, .remote-themed)[data-ui='soft'] .remote-page-stage { --page-enter-x: 18px; --page-leave-x: -10px; }
+:is(.companion-surface, .remote-themed)[data-ui='soft'] .remote-page-stage[data-direction='backward'] { --page-enter-x: -18px; --page-leave-x: 10px; }
+:is(.companion-surface, .remote-themed)[data-ui='soft'] .workspace-page-enter-active { transition: opacity 190ms, transform 260ms var(--ui-spring); }
+:is(.companion-surface, .remote-themed)[data-ui='soft'] .workspace-page-leave-active { transition: opacity 140ms, transform 190ms var(--ui-ease); pointer-events: none; }
+:is(.companion-surface, .remote-themed)[data-ui='soft'] .workspace-page-enter-from { opacity: 0; transform: translate3d(var(--page-enter-x), 4px, 0) scale(.994); }
+:is(.companion-surface, .remote-themed)[data-ui='soft'] .workspace-page-leave-to { opacity: 0; transform: translate3d(var(--page-leave-x), -2px, 0); }
+:is(.companion-surface, .remote-themed)[data-ui='soft'] .app-route-enter-active { transition: opacity 180ms, transform 260ms var(--ui-spring); }
+:is(.companion-surface, .remote-themed)[data-ui='soft'] .app-route-leave-active { transition: opacity 130ms, transform 170ms var(--ui-ease); pointer-events: none; }
+:is(.companion-surface, .remote-themed)[data-ui='soft'] .app-route-enter-from { opacity: 0; transform: translate3d(0, 9px, 0) scale(.995); }
+:is(.companion-surface, .remote-themed)[data-ui='soft'] .app-route-leave-to { opacity: 0; transform: translate3d(0, -4px, 0); }
+:is(.companion-surface, .remote-themed)[data-ui='soft'].room-drawer-enter-active { transition: opacity 180ms; }
+:is(.companion-surface, .remote-themed)[data-ui='soft'].room-drawer-leave-active { transition: opacity 150ms; }
+:is(.companion-surface, .remote-themed)[data-ui='soft'].room-drawer-enter-active .room-drawer-panel { transition: transform 290ms var(--ui-spring); }
+:is(.companion-surface, .remote-themed)[data-ui='soft'].room-drawer-leave-active .room-drawer-panel { transition: transform 180ms var(--ui-ease); }
+:is(.companion-surface, .remote-themed)[data-ui='soft'].room-drawer-enter-from .room-drawer-panel { transform: translate3d(0, 28px, 0) scale(.985); }
+:is(.companion-surface, .remote-themed)[data-ui='soft'].room-drawer-leave-to .room-drawer-panel { transform: translate3d(0, 18px, 0) scale(.99); }
+:is(.companion-surface, .remote-themed)[data-ui='soft'] .room-drawer-header > button:hover:not(:disabled) svg { transform: none; }
+:is(.companion-surface, .remote-themed)[data-ui='soft'] .phase-pane-enter-active { transition: opacity 150ms, transform 210ms var(--ui-spring); }
+:is(.companion-surface, .remote-themed)[data-ui='soft'] .phase-pane-leave-active { transition: opacity 110ms; }
+:is(.companion-surface, .remote-themed)[data-ui='soft'] .phase-pane-enter-from { opacity: 0; transform: translateY(6px); }
+:is(.companion-surface, .remote-themed)[data-ui='soft'] .little-feedback-enter-active { animation: soft-feedback-arrive 300ms var(--ui-spring) both; }
+:is(.companion-surface, .remote-themed)[data-ui='soft'] .little-feedback-leave-active { transition: opacity 150ms, transform 180ms var(--ui-ease); }
+@keyframes soft-unfold { from { opacity: .45; transform: translateY(-3px); } to { opacity: 1; transform: none; } }
+@keyframes soft-panel-arrive { from { opacity: .45; transform: translateY(5px); } to { opacity: 1; transform: none; } }
+@keyframes soft-feedback-arrive { 0% { opacity: 0; transform: translateY(9px) scale(.94); } 70% { opacity: 1; transform: translateY(-2px) scale(1.015); } 100% { opacity: 1; transform: none; } }
+@media (hover: hover) and (pointer: fine) {
+  :is(.companion-surface, .remote-themed)[data-ui='soft'] :is(.phase-quick-grid, .remote-manager-grid, .room-menu-list, .settings-overview-group) > button:not(:disabled):hover { transform: translateY(-2px); border-color: var(--ui-accent); }
+  :is(.companion-surface, .remote-themed)[data-ui='soft'] :is(.phase-quick-grid, .remote-manager-grid, .room-menu-list, .settings-overview-group) > button:not(:disabled):active { transform: translateY(1px) scale(.98); }
+}
+/* 与系统及本机偏好保持一致；减弱动效时也取消 SVG 的点击动画。 */
+:is(.companion-surface, .remote-themed)[data-ui='soft'][data-reduce-motion='true'] *, :is(.companion-surface, .remote-themed)[data-ui='soft'][data-reduce-motion='true'] *::before, :is(.companion-surface, .remote-themed)[data-ui='soft'][data-reduce-motion='true'] *::after { transition: none !important; animation: none !important; scroll-behavior: auto !important; }
+@media (prefers-reduced-motion: reduce) {
+  :is(.companion-surface, .remote-themed)[data-ui='soft'] *, :is(.companion-surface, .remote-themed)[data-ui='soft'] *::before, :is(.companion-surface, .remote-themed)[data-ui='soft'] *::after { transition: none !important; animation: none !important; scroll-behavior: auto !important; }
+}
+@media (forced-colors: active) {
+  :is(.companion-surface, .remote-themed)[data-ui='soft'] :is(button, input, textarea, select, .remote-file-card, .model-number, .model-capability) { box-shadow: none; border-color: ButtonText; }
+  :is(.companion-surface, .remote-themed)[data-ui='soft'] input[type='checkbox']:not([role='switch']):not(.el-checkbox__original) { appearance: auto; }
+  :is(.companion-surface, .remote-themed)[data-ui='soft'] .room-switch-track { border-color: ButtonText; background: Canvas; }
+  :is(.companion-surface, .remote-themed)[data-ui='soft'] .room-switch > input:checked + .room-switch-track { background: Highlight; }
+  :is(.companion-surface, .remote-themed)[data-ui='soft'] .room-switch-track::after { background: ButtonText; }
+  :is(.companion-surface, .remote-themed)[data-ui='soft'] .room-switch > input:checked + .room-switch-track::after { background: HighlightText; }
+}

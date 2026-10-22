@@ -34,7 +34,7 @@
 
 <script setup>
 import { ref, computed, watch, onBeforeUnmount } from 'vue'
-import { ElMessageBox } from 'element-plus'
+import { appMessageBox as ElMessageBox } from '../../services/appMessageBox'
 import { appMessage as ElMessage } from '../../services/appFeedback'
 import FeedbackMessage from '../FeedbackMessage.vue'
 import { queryDiary, writeDiary, deleteDiary } from '../../services/standalone'

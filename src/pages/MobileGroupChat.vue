@@ -30,7 +30,7 @@
               <div class="group-byline"><strong>{{ speakerName(message) }}</strong><time>{{ formatTime(message.timestamp) }}</time><button class="room-icon-button" :aria-label="`操作${speakerName(message)}的消息`" :aria-expanded="selectedId === message.id" @click="selectedId = selectedId === message.id ? null : message.id"><RoomIcon name="more" /></button></div>
               <div class="group-bubble">
                 <ToolTimeline v-if="message.role === 'assistant' && message.toolTimeline?.length" :items="message.toolTimeline" />
-                <details v-if="message.reasoning" class="group-reasoning"><summary>{{ message.status === 'pending' ? '正在思考' : '思考过程' }}</summary><div>{{ message.reasoning }}</div></details>
+                <details v-if="message.reasoning" class="group-reasoning"><summary><RoomIcon name="thought" /><span>{{ message.status === 'pending' ? '正在思考' : '思考过程' }}</span><RoomIcon class="soft-fold-chevron" name="down" /></summary><div>{{ message.reasoning }}</div></details>
                 <div v-if="message.content === '__loading__'" class="group-typing" aria-label="正在思考"><i /><i /><i /></div>
                 <div v-else class="markdown-body" v-html="roomMarkdown(message.content)" />
                 <p v-if="message.error && visibleMessage(message.content) !== message.error" class="group-message-error">{{ message.error }}</p>
@@ -74,7 +74,7 @@
 <script setup>
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
-import { ElMessageBox } from 'element-plus'
+import { appMessageBox as ElMessageBox } from '../services/appMessageBox'
 import { appMessage as ElMessage } from '../services/appFeedback'
 import FeedbackMessage from '../components/FeedbackMessage.vue'
 import CompanionHeader from '../components/companion/CompanionHeader.vue'

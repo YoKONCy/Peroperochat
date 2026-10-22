@@ -1,0 +1,20 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>PeroperoChat · 二次元视觉方向对照</title>
+  <link rel="stylesheet" href="design.css" />
+  <script src="icons.js" defer></script>
+  <script src="design.js" defer></script>
+</head>
+<body data-theme="light" data-view="compare">
+  <header class="studio-header"><a class="studio-brand" href="#"><span id="studio-mark"></span><strong>Peropero<span>Chat</span></strong></a><span class="studio-title">视觉方向对照<span>交互设计稿 · 示例数据</span></span><button class="motion-button" id="motion" aria-pressed="false">减少动态</button></header>
+  <main>
+    <div class="studio-toolbar"><nav aria-label="设计方向"><button class="selected" data-view="compare" aria-pressed="true">并排对照</button><button data-view="a" aria-pressed="false">A · 清透活泼</button><button data-view="b" aria-pressed="false">B · 柔软可爱</button></nav><div class="theme-controls" aria-label="配色"><button class="selected" data-theme="light" aria-pressed="true"><span class="theme-dot blue"></span>Pero 浅色</button><button data-theme="dark" aria-pressed="false"><span class="theme-dot purple"></span>Nana 暗色</button></div></div>
+    <div class="study-note"><span>同一内容，两种气质。</span><p>可以点击思考、工具、文件卡片与模型分区，也可以编辑参数、切换开关。</p><button id="queue-demo">演示排队</button></div>
+    <div class="directions" id="directions"></div>
+    <footer class="studio-footer"><span>两套方向都支持浅色 / 暗色；角色头像、名称与配色为示例。</span><span>仅独立设计稿，没有接入应用或服务端。</span></footer>
+  </main>
+</body>
+</html>

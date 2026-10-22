@@ -20,10 +20,11 @@
       <section class="phase-card"><h3><RemoteIcon name="language" />{{ t('infOS 界面语言') }}</h3><RemoteFields :model-value="modelValue" :fields="pick(['user.language'])" :disabled="disabled" @update:model-value="update" /><p class="phase-context"><RemoteIcon name="globe" />{{ t('与当前 infOS 同步，也会影响连接它的其他客户端。') }}</p></section>
       <button type="button" class="phase-destination-button" @click="$emit('appearance')"><RemoteIcon name="palette" /><span>{{ t('调整本机外观') }}<small>{{ t('仅用于这台设备') }}</small></span><RemoteIcon name="next" /></button>
     </template>
-    <template v-else-if="['agents', 'models', 'providers'].includes(kind) && tabs.length">
+    <RemoteModelEditor v-else-if="kind === 'models' && fields.some(field => field.key === 'modelId')" :model-value="modelValue" :fields="fields" :record-id="recordId" :disabled="disabled" @update:model-value="update" />
+    <template v-else-if="['agents', 'providers'].includes(kind) && tabs.length">
       <header v-if="kind === 'agents'" class="phase-profile-hero"><button type="button" class="phase-profile-avatar" :aria-label="t('更换头像')" :disabled="disabled || !recordId" @click="$emit('avatar')"><RemoteAvatar :id="recordId" :label="modelValue.name" fit="contain" /><span v-if="recordId"><RemoteIcon name="image" /></span></button><div><h3>{{ modelValue.name }}</h3><p>{{ modelValue.description }}</p></div></header>
       <nav v-if="tabs.length > 1" class="phase-tabs" :aria-label="t(kind === 'agents' ? '角色资料' : '模型与连接')"><button v-for="item in tabs" :key="item.id" type="button" :aria-pressed="tab === item.id" :class="{ selected: tab === item.id }" @click="tab = item.id"><RemoteIcon :name="item.icon" />{{ t(item.label) }}</button></nav>
-      <Transition name="phase-pane" mode="out-in"><section :key="tab" class="phase-card"><RemoteFields :model-value="modelValue" :fields="tabFields" :disabled="disabled" @update:model-value="update" /></section></Transition>
+      <Transition name="phase-pane" mode="out-in"><section :key="tab" class="phase-card"><RemoteFields :model-value="modelValue" :fields="tabFields" :disabled="disabled" @update:model-value="update" /><RemoteModelCatalog v-if="kind === 'providers'" kind="providers" :model-value="modelValue" :record-id="recordId" :connection-dirty="connectionDirty" :disabled="disabled" /></section></Transition>
       <details v-if="remaining.length" class="phase-fold" :open="remaining.some(field => field.required) || undefined"><summary><RemoteIcon name="settings" />{{ t('其他参数') }}<RemoteIcon name="down" /></summary><RemoteFields :model-value="modelValue" :fields="remaining" :disabled="disabled" @update:model-value="update" /></details>
     </template>
     <RemoteFormSections v-else :model-value="modelValue" :kind="kind" :fields="fields" :disabled="disabled" @update:model-value="update" />
@@ -34,10 +35,12 @@ import { computed, ref, watch } from 'vue'
 import RemoteAvatar from './RemoteAvatar.vue'
 import RemoteIcon from './RemoteIcon.vue'
 import RemoteFields from './RemoteFields.vue'
+import RemoteModelCatalog from './RemoteModelCatalog.vue'
+import RemoteModelEditor from './RemoteModelEditor.vue'
 import RemoteFormSections from './RemoteFormSections.vue'
 import { remoteState } from '../../stores/remote'
 import { t } from '../../i18n/remote'
-const props = defineProps({ modelValue: Object, fields: { type: Array, default: () => [] }, kind: String, recordId: [String, Number], disabled: Boolean })
+const props = defineProps({ modelValue: Object, fields: { type: Array, default: () => [] }, kind: String, recordId: [String, Number], connectionDirty: Boolean, disabled: Boolean })
 const emit = defineEmits(['update:modelValue', 'appearance', 'avatar'])
 const tab = ref('main')
 watch(() => [props.kind, props.recordId], () => { tab.value = 'main' })
@@ -58,15 +61,10 @@ const definitions = computed(() => props.kind === 'agents' ? [
   { id: 'interaction', label: '互动', icon: 'chat', keys: ['waifuTexts'] },
 ] : props.kind === 'providers' ? [
   { id: 'main', label: '连接', icon: 'connection', keys: ['name', 'brand', 'protocol', 'authMode', 'apiBase', 'apiKey'] },
-] : [
-  { id: 'main', label: '常用', icon: 'model', keys: ['name', 'modelId', 'brand', 'providerConnectionId', 'isDefault', 'reasoningEffort', 'temperature', 'topP', 'maxTokens', 'contextWindowTokens'] },
-  { id: 'capability', label: '能力', icon: 'image', keys: ['enableVision', 'enableAudioInput', 'returnNativeReasoning', 'stream', 'wireApi', 'reasoningDialect'] },
-  { id: 'connection', label: '连接', icon: 'connection', keys: ['provider', 'providerConnectionId', 'connectionOverride', 'connectionProtocol', 'connectionAuthMode', 'apiBase', 'apiKey', 'protocol', 'authMode'] },
-])
+] : [])
 const tabs = computed(() => definitions.value.filter(item => pick(item.keys).length))
 const tabFields = computed(() => {
-  let fields = pick(tabs.value.find(item => item.id === tab.value)?.keys || tabs.value[0]?.keys || [])
-  if (props.kind === 'models' && props.modelValue.providerConnectionId && !props.modelValue.connectionOverride) fields = fields.filter(field => !['provider', 'apiBase', 'apiKey', 'connectionProtocol', 'connectionAuthMode'].includes(field.key))
+  const fields = pick(tabs.value.find(item => item.id === tab.value)?.keys || tabs.value[0]?.keys || [])
   return fields.map(field => field.key === 'providerConnectionId' ? { ...field, label: t('服务商连接') } : field)
 })
 const remaining = computed(() => props.fields.filter(field => !definitions.value.some(item => item.keys.includes(field.key))))

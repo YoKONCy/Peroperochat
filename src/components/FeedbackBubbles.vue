@@ -1,6 +1,6 @@
 <template>
   <Teleport :to="feedbackSurface || 'body'">
-    <div id="app-feedback-layer" class="feedback-layer companion-surface" :class="{ 'remote-themed': current?.remote }" :data-remote-theme="current?.remote ? theme?.mode : undefined" :data-reduce-motion="theme?.reduceMotion" :style="[viewportStyle, theme?.style]" aria-live="polite" aria-atomic="true">
+    <div id="app-feedback-layer" class="feedback-layer companion-surface" data-ui="soft" :class="{ 'remote-themed': current?.remote, 'standalone-design': !current?.remote }" :data-remote-theme="current?.remote ? theme?.mode : undefined" :data-reduce-motion="theme?.reduceMotion" :style="[viewportStyle, theme?.style]" aria-live="polite" aria-atomic="true">
       <Transition name="little-feedback" mode="out-in">
         <div v-if="current" :key="current.id" class="little-feedback" :data-tone="current.tone" @keydown.esc.stop.prevent="closeFeedback(current?.id, true)" @pointerenter="holdFeedback('pointer')" @pointerleave="resumeFeedback('pointer')" @focusin="holdFeedback('focus')" @focusout="resumeFeedback('focus')">
           <span class="feedback-seal" aria-hidden="true"><RemoteIcon :name="icon" /><i /></span>
