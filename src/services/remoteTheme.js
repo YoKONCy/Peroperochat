@@ -1,6 +1,7 @@
 import { computed, reactive, ref, onBeforeUnmount, provide } from 'vue'
 import { currentToken, assertToken } from '../stores/mode'
 import { readPresentation, writePresentation } from './remotePresentation'
+import { uiPaletteVariables } from '../utils/uiPalette'
 
 export const REMOTE_THEME = Symbol('remote-theme')
 export const remotePalettes = [
@@ -30,7 +31,7 @@ export function useRemoteTheme(character) {
     const style = selectedStyle.value
     const color = style?.[mode.value === 'dark' ? 'darkAccent' : 'lightAccent'] || accent
     return { mode: mode.value, reduceMotion: display.reduceMotion, bubble: style?.bubble || 'standard', decoration: style?.decoration === 'standard' || !style?.decoration ? mode.value === 'dark' ? 'constellation' : 'ribbon' : style.decoration,
-      style: { '--remote-font-size': (display.fontSize || 14) + 'px', '--remote-chat-size': ((display.fontSize || 14) + 1) + 'px', '--accent': color, '--tint': tint, '--accent-secondary': style?.secondary || secondary, '--remote-accent': color, '--remote-tint': tint, '--room-accent': color } }
+      style: { ...uiPaletteVariables(color, mode.value), '--remote-font-size': (display.fontSize || 14) + 'px', '--remote-chat-size': ((display.fontSize || 14) + 1) + 'px', '--accent': color, '--tint': tint, '--accent-secondary': style?.secondary || secondary, '--remote-accent': color, '--remote-tint': tint, '--room-accent': color } }
   })
   provide(REMOTE_THEME, theme)
   function systemChanged(event) { systemDark.value = event.matches }

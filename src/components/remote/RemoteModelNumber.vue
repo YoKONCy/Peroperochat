@@ -1,5 +1,5 @@
 <template>
-  <div class="model-number" :class="{ 'is-custom': value != null, 'is-long': String(value ?? '').length > 5 }">
+  <div class="model-number" :data-ui-tone="tone" :class="{ 'is-custom': value != null, 'is-long': String(value ?? '').length > 5 }">
     <div class="model-number-heading"><RemoteIcon :name="icon" /><label :for="inputId">{{ t(label) }}</label><button v-if="!required" type="button" :disabled="disabled || value == null" :aria-label="t('将{0}恢复默认', [t(label)])" @click="$emit('change', null)">{{ t(value == null ? '默认' : '重置') }}</button></div>
     <div class="model-number-value"><input :id="inputId" :value="value ?? ''" :disabled="disabled" :required="required" type="number" :inputmode="integer ? 'numeric' : 'decimal'" :min="min" :max="max" :step="integer ? 1 : 'any'" :placeholder="t('默认')" @input="change" /><span v-if="unit">{{ unit }}</span></div>
     <small>{{ t(help) }}</small>
@@ -9,7 +9,7 @@
 import { useId } from 'vue'
 import RemoteIcon from './RemoteIcon.vue'
 import { t } from '../../i18n/remote'
-defineProps({ value: Number, label: String, help: String, icon: String, unit: String, min: Number, max: Number, integer: Boolean, disabled: Boolean, required: Boolean })
+defineProps({ value: Number, label: String, help: String, icon: String, unit: String, min: Number, max: Number, integer: Boolean, disabled: Boolean, required: Boolean, tone: { type: String, default: 'blue' } })
 const emit = defineEmits(['change'])
 const inputId = `model-number-${useId()}`
 function change(event) {

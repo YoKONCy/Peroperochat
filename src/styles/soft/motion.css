@@ -1,7 +1,7 @@
 /* 动效只响应操作或真实状态变化；不对历史消息和流式正文逐项重播。 */
 :is(.companion-surface, .remote-themed)[data-ui='soft'] button:not(:disabled) { transition: background-color 150ms, border-color 150ms, color 150ms, box-shadow 160ms, transform 170ms var(--ui-spring); }
 :is(.companion-surface, .remote-themed)[data-ui='soft'] button:not(:disabled):not(.room-static-character):not(.latest-button):active { transform: translateY(1px) scale(.97); }
-:is(.companion-surface, .remote-themed)[data-ui='soft'] :is(.room-primary-button, .remote-purpose-action.is-primary, .chat-send, .composer-send, .group-send):not(:disabled):active { transform: translateY(4px) scale(.98); box-shadow: inset 0 1px 0 var(--ui-edge); }
+:is(.companion-surface, .remote-themed)[data-ui='soft'] :is(.room-primary-button, .remote-purpose-action.is-primary, .chat-send, .composer-send, .group-send, .chromatic-action):not(:disabled):active { transform: translateY(4px) scale(.98); box-shadow: inset 0 1px 0 var(--ui-edge); }
 :is(.companion-surface, .remote-themed)[data-ui='soft'] :is(.remote-inline-picture, .remote-file-miniature):not(:disabled):active { transform: none; }
 :is(.companion-surface, .remote-themed)[data-ui='soft'] button svg { transform-origin: center; transform-box: view-box; }
 :is(.companion-surface, .remote-themed)[data-ui='soft'] :is(.remote-select, .choice-picker) > svg:last-child { transition: rotate 190ms var(--ui-spring); }

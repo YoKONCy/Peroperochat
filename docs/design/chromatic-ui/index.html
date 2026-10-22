@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>PeroperoChat · 轻彩层次设计稿</title>
+  <link rel="stylesheet" href="design.css" />
+  <script src="../anime-ui-directions/icons.js" defer></script>
+  <script src="palette.js" defer></script>
+  <script src="design.js" defer></script>
+</head>
+<body>
+  <header class="studio"><div class="brand"><span id="brand-icon"></span><div><strong>PeroperoChat</strong><small>轻彩层次 · UI 设计稿 03</small></div></div><div class="studio-controls"><button id="mode" aria-pressed="false">切换暗色</button><button id="motion" aria-pressed="false">减少动态</button></div></header>
+  <main>
+    <div class="intro"><div><span class="eyebrow">SOFT COLORS, LITTLE STORIES</span><h1>把角色和色彩，放回生活里。</h1><p>真实头像 · 安静底色 · 功能辅色 · 有轻重的操作层</p></div><div class="swatches" id="swatches" aria-label="选择配色包"></div></div>
+    <nav class="screen-filter" id="filters" aria-label="查看页面"></nav>
+    <div class="screens" id="screens"></div>
+    <section class="color-guide"><div><span class="eyebrow">COLOR & LAYERS</span><h2>丰富，不等于每个按钮都涂满。</h2><p>主色只引导重点；相同含义保持相同功能色。信息页用卡片和内容色，聊天页留给阅读。角色头像、名字、立绘均为可替换内容。</p></div><div class="color-roles" id="color-roles"></div></section>
+    <footer class="studio-footer">独立 HTML / CSS / SVG 设计稿 · 示例内容与交互，未接入服务端 · 未修改应用代码</footer>
+  </main>
+  <dialog id="sheet"><form method="dialog"><button class="sheet-close" id="sheet-close" aria-label="关闭"></button></form><div id="sheet-content"></div></dialog>
+</body>
+</html>

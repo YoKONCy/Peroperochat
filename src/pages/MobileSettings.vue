@@ -15,11 +15,11 @@
 
           <div v-if="tab === 'overview'" class="settings-overview">
             <button class="settings-overview-profile" @click="router.push('/roles')"><CharacterAvatar :src="agent.avatar" :label="agent.name" /><span><strong>{{ agent.name }}</strong><small>独立模式</small><small>每一位伙伴，都有自己的日常</small></span><RoomIcon name="arrow" /></button>
-            <section class="settings-overview-group"><button v-for="item in categories.filter(item => ['api', 'model', 'user', 'role'].includes(item.id))" :key="item.id" @click="tab = item.id"><span class="overview-symbol"><RoomIcon :name="item.icon" /></span><span><strong>{{ item.label }}</strong><small>{{ item.description }}</small></span><RoomIcon name="arrow" /></button></section>
-            <section class="settings-overview-group"><button @click="tab = 'appearance'"><span class="overview-symbol"><RoomIcon name="palette" /></span><span><strong>显示与主题</strong><small>{{ displayPreferences.displayMode === 'live2d' ? '通用 Pio Live2D' : '静态立绘与 CG' }} · 配色与玻璃材质</small></span><i class="overview-color" /><RoomIcon name="arrow" /></button></section>
+            <section class="settings-overview-group"><button v-for="item in categories.filter(item => ['api', 'model', 'user', 'role'].includes(item.id))" :key="item.id" :data-ui-tone="uiSectionTone(item.id)" @click="tab = item.id"><span class="overview-symbol"><RoomIcon :name="item.icon" /></span><span><strong>{{ item.label }}</strong><small>{{ item.description }}</small></span><RoomIcon name="arrow" /></button></section>
+            <section class="settings-overview-group"><button data-ui-tone="violet" @click="tab = 'appearance'"><span class="overview-symbol"><RoomIcon name="palette" /></span><span><strong>显示与主题</strong><small>{{ displayPreferences.displayMode === 'live2d' ? '通用 Pio Live2D' : '静态立绘与 CG' }} · 配色与玻璃材质</small></span><i class="overview-color" /><RoomIcon name="arrow" /></button></section>
             <section class="settings-overview-group"><button @click="router.push({ path: '/', query: { panel: 'remote' } })"><span class="overview-symbol"><RoomIcon name="remote" /></span><span><strong>运行模式与远程连接</strong><small>独立陪伴 / infOS 客户端</small></span><RoomIcon name="arrow" /></button></section>
-            <section class="settings-overview-group"><button @click="router.push({ path: '/', query: { panel: 'reminders' } })"><span class="overview-symbol"><RoomIcon name="bell" /></span><span><strong>日常提醒</strong><small>时间、待办与通知状态</small></span><RoomIcon name="arrow" /></button><button @click="tab = 'memory'"><span class="overview-symbol"><RoomIcon name="diary" /></span><span><strong>日记</strong><small>与 {{ agent.name }} 的点滴记录</small></span><RoomIcon name="arrow" /></button></section>
-            <section class="settings-overview-group"><button @click="tab = 'data'"><span class="overview-symbol"><RoomIcon name="document" /></span><span><strong>数据与备份</strong><small>导出、恢复与本地数据管理</small></span><RoomIcon name="arrow" /></button></section>
+            <section class="settings-overview-group"><button @click="router.push({ path: '/', query: { panel: 'reminders' } })"><span class="overview-symbol"><RoomIcon name="bell" /></span><span><strong>日常提醒</strong><small>时间、待办与通知状态</small></span><RoomIcon name="arrow" /></button><button data-ui-tone="violet" @click="tab = 'memory'"><span class="overview-symbol"><RoomIcon name="diary" /></span><span><strong>日记</strong><small>与 {{ agent.name }} 的点滴记录</small></span><RoomIcon name="arrow" /></button></section>
+            <section class="settings-overview-group"><button data-ui-tone="amber" @click="tab = 'data'"><span class="overview-symbol"><RoomIcon name="document" /></span><span><strong>数据与备份</strong><small>导出、恢复与本地数据管理</small></span><RoomIcon name="arrow" /></button></section>
           </div>
           <RoomAppearanceSettings v-if="tab === 'appearance'" />
           <form v-if="tab === 'api'" @submit.prevent="saveApi">
@@ -42,11 +42,11 @@
             <fieldset :disabled="loading || !loaded || !!busy">
               <section class="local-reasoning-settings"><header><RoomIcon name="thought" /><strong>思考强度</strong><small>按模型能力选择</small></header><ChoicePicker v-model="parameters.reasoningEffort" label="选择思考强度" :options="reasoningChoices" :disabled="loading || !loaded || !!busy" /></section>
               <div class="model-number-grid local-model-numbers">
-                <RemoteModelNumber :value="parameters.temperature" label="温度" help="较低更稳，较高更灵活" icon="sampling" :min="0" :max="2" @change="parameters.temperature = $event" />
-                <RemoteModelNumber :value="parameters.topP" label="Top P" help="控制用词的选择范围" icon="filter" :min="0" :max="1" @change="parameters.topP = $event" />
+                <RemoteModelNumber tone="rose" :value="parameters.temperature" label="温度" help="较低更稳，较高更灵活" icon="sampling" :min="0" :max="2" @change="parameters.temperature = $event" />
+                <RemoteModelNumber tone="mint" :value="parameters.topP" label="Top P" help="控制用词的选择范围" icon="filter" :min="0" :max="1" @change="parameters.topP = $event" />
                 <RemoteModelNumber :value="parameters.maxTokens" label="最大输出" help="一次回复的长度上限" icon="reply-length" unit="Token" :min="128" :max="65536" integer required @change="parameters.maxTokens = $event" />
-                <RemoteModelNumber :value="parameters.contextWindow" label="上下文窗口" help="可使用的完整上下文" icon="context-window" unit="Token" :min="1152" :max="2000000" integer required @change="parameters.contextWindow = $event" />
-                <RemoteModelNumber class="local-history-number" :value="parameters.memoryRounds" label="历史对话轮次" help="一轮包含一条输入和一条回复" icon="chat" unit="轮" :min="1" :max="200" integer required @change="parameters.memoryRounds = $event" />
+                <RemoteModelNumber tone="violet" :value="parameters.contextWindow" label="上下文窗口" help="可使用的完整上下文" icon="context-window" unit="Token" :min="1152" :max="2000000" integer required @change="parameters.contextWindow = $event" />
+                <RemoteModelNumber tone="amber" class="local-history-number" :value="parameters.memoryRounds" label="历史对话轮次" help="一轮包含一条输入和一条回复" icon="chat" unit="轮" :min="1" :max="200" integer required @change="parameters.memoryRounds = $event" />
               </div>
               <label class="settings-toggle local-stream-toggle"><RoomIcon name="pulse" /><span><strong>流式回复</strong><small>边生成，边显示</small></span><RoomSwitch v-model="parameters.stream" label="流式回复" /></label>
               <footer class="settings-save"><span>未编辑的高级参数会保留</span><button class="room-primary-button" :disabled="!dirtySections.model">{{ busy === 'save-model' ? '正在保存…' : '保存参数' }}</button></footer>
@@ -84,6 +84,7 @@ import CompanionEmblem from '../components/companion/CompanionEmblem.vue'
 import ChoicePicker from '../components/companion/ChoicePicker.vue'
 import RoomSwitch from '../components/companion/RoomSwitch.vue'
 import RemoteModelNumber from '../components/remote/RemoteModelNumber.vue'
+import { uiSectionTone } from '../utils/uiPalette'
 import BrandIcon from '../components/companion/BrandIcon.vue'
 import RoomAppearanceSettings from '../components/companion/RoomAppearanceSettings.vue'
 import { displayPreferences } from '../stores/appearance'

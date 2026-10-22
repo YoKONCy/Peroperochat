@@ -1,6 +1,7 @@
 import { computed, ref, shallowRef } from 'vue'
 import { localInvoke } from '../services/localChat'
 import { onModeInvalidated, currentToken, assertToken } from './mode'
+import { uiPaletteVariables } from '../utils/uiPalette'
 
 const defaults = { displayMode: 'illustration', palette: 'auto', glass: 80, figureSize: 57, motion: true }
 export const appearance = shallowRef(null)
@@ -46,6 +47,6 @@ export const appearancePalettes = {
 export function appearanceStyle(agentId) {
   const value = displayPreferences.value
   const palette = appearancePalettes[value.palette === 'auto' ? agentId === 'nana' ? 'violet' : 'sky' : value.palette] || appearancePalettes.sky
-  return { '--local-accent': palette.accent, '--local-wash': palette.wash, '--local-ink': palette.ink, '--local-glass': value.glass / 100, '--figure-ratio': value.figureSize / 100 }
+  return { ...uiPaletteVariables(palette.accent), '--local-accent': palette.accent, '--local-wash': palette.wash, '--local-ink': palette.ink, '--local-glass': value.glass / 100, '--figure-ratio': value.figureSize / 100 }
 }
 export const LOCAL_APPEARANCE = Symbol('独立模式显示主题')

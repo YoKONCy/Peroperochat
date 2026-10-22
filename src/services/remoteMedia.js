@@ -1,6 +1,7 @@
 import { remoteClient } from './remote'
 import { currentToken, assertToken, onModeInvalidated } from '../stores/mode'
 import { reactive } from 'vue'
+import { avatarImageMime } from '../utils/avatarImage'
 
 const urls = new Set()
 const avatars = new Map()
@@ -36,7 +37,10 @@ export async function acquireRemoteAvatar(id) {
   let entry = avatars.get(key)
   if (!entry) {
     entry = { refs: 0, media: null }
-    entry.promise = new Promise((resolve, reject) => { avatarQueue.push({ id, token, resolve, reject }); pumpAvatars() }).then(media => { entry.media = media; return media })
+    entry.promise = new Promise((resolve, reject) => { avatarQueue.push({ id, token, resolve, reject }); pumpAvatars() }).then(media => {
+      if (!media.previewable || !media.mimeType.startsWith('image/')) { media.release(); throw new Error('头像图片暂时无法显示') }
+      entry.media = media; return media
+    })
     avatars.set(key, entry)
   }
   entry.refs++
@@ -65,9 +69,10 @@ export async function loadRemoteResource(resource, options = {}) {
   const result = await remoteClient.resource(resource, { ...options, token })
   assertToken(token, 'remote')
   // HTML、SVG 等主动内容只作为文本或下载数据；不注入应用 DOM。
-  const mime = result.mimeType.split(';')[0].trim().toLowerCase()
+  const bytes = new Uint8Array(result.bytes)
+  const mime = resource.kind === 'agent_avatar' ? avatarImageMime(bytes) : result.mimeType.split(';')[0].trim().toLowerCase()
   const passive = /^(image\/(png|jpeg|webp|gif|avif|bmp|x-icon)|audio\/[a-z0-9.+-]+|video\/[a-z0-9.+-]+|application\/pdf)$/.test(mime)
-  const blob = new Blob([new Uint8Array(result.bytes)], { type: passive ? mime : 'text/plain' })
+  const blob = new Blob([bytes], { type: passive ? mime : 'text/plain' })
   const url = URL.createObjectURL(blob)
   urls.add(url)
   return {

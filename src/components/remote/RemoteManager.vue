@@ -4,7 +4,7 @@
     <RemoteFeedback v-if="!selected && !dialog" :message="error" /><RemoteFeedback :message="notice" tone="success" />
     <RemoteAction v-if="unresolved" icon="alert" tone="danger" @click="$emit('pending')">上次操作结果待核对</RemoteAction>
     <template v-if="!section">
-      <RemoteManagementHome @open="openDestination" />
+      <RemoteManagementHome :agent="remoteState.agents.find(item => item.id === agentId)" :online="remoteState.connection === 'online'" @open="openDestination" />
     </template>
     <template v-else-if="section.special">
       <RemoteWorkbench v-if="section.id === 'workbench'" ref="special" :agent-id="agentId" :thread-id="threadId" @pending="$emit('pending')" @resource="$emit('resource', $event)" @context="$emit('context', $event)" />

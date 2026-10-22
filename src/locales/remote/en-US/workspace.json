@@ -409,5 +409,19 @@
   "请求模型返回思考摘要": "Request the model’s reasoning summary",
   "将{0}恢复默认": "Reset {0} to default",
   "重置": "Reset",
-  "调参": "Parameters"
+  "调参": "Parameters",
+  "最近会话": "Recent conversations",
+  "其他会话": "Other conversations",
+  "最近聊过": "Recently chatted",
+  "接着聊": "Continue",
+  "已连接 infOS": "Connected to infOS",
+  "离线中": "Offline",
+  "小事，一件件做好。": "One little thing at a time.",
+  "当前列表，共 {0} 项": "{0} tasks in this list",
+  "文件预览": "File preview",
+  "资料分类": "Collections",
+  "随时打开": "Ready to open",
+  "一起积累": "Collected together",
+  "随时翻一翻": "Ready to browse",
+  "第 {0} 页": "Page {0}"
 }

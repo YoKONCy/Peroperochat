@@ -1,6 +1,6 @@
 <template>
   <span class="character-avatar" :class="{ 'is-empty': !source || failed, 'shows-full-image': fit === 'contain' }">
-    <img v-if="source && !failed" :key="source" :src="source" :alt="label" decoding="async" @error="failed = true" />
+    <img v-if="source && !failed" :key="source" :src="source" :alt="label" decoding="async" @load="$emit('load')" @error="imageFailed" />
     <RoomIcon v-else name="profile" :aria-label="label || '角色头像'" />
   </span>
 </template>
@@ -9,9 +9,14 @@
 import { computed, ref, watch } from 'vue'
 import RoomIcon from './RoomIcon.vue'
 const props = defineProps({ src: { type: String, default: '' }, label: { type: String, default: '' }, fit: { type: String, default: 'cover' } })
+const emit = defineEmits(['load', 'error'])
 const source = computed(() => typeof props.src === 'string' ? props.src.trim() : '')
 const failed = ref(false)
 watch(source, () => { failed.value = false })
+function imageFailed(event) {
+  if (event.currentTarget.getAttribute('src') !== source.value) return
+  failed.value = true; emit('error', source.value)
+}
 </script>
 
 <style scoped>

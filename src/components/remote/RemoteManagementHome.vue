@@ -1,16 +1,18 @@
 <template>
   <div class="phase2 phase-management-home">
-    <section class="phase-welcome"><span class="phase-eyeline"><i class="phase-dot" />{{ profileName || 'infOS' }}</span><h2>{{ t('把日常，调成喜欢的样子。') }}</h2><p>{{ t('角色、模型和陪伴，都在手边。') }}</p><RemoteIcon name="ribbon" artwork class="phase-welcome-art" /></section>
+    <section class="phase-welcome chromatic-management-hero" data-ui-tone="rose"><RemoteAvatar v-if="agent?.id" :id="agent.id" :label="agent.name" /><div><h2>{{ t('把日常，调成喜欢的样子。') }}</h2><p>{{ t('角色、模型和陪伴，都在手边。') }}</p><span class="chromatic-tag" :data-ui-tone="online ? 'mint' : 'amber'"><RemoteIcon name="connection" />{{ t(online ? '已连接 infOS' : '离线中') }}</span></div></section>
     <label class="phase-search"><RemoteIcon name="search" /><input v-model="search" :placeholder="t('输入关键词查找')" :aria-label="t('输入关键词查找')" /></label>
-    <template v-for="group in groups" :key="group.id"><h3 v-if="group.items.length" class="phase-section-title"><RemoteIcon :name="group.icon" />{{ t(group.title) }}</h3><div :class="group.id === 'daily' ? 'phase-quick-grid' : group.id === 'insights' ? 'phase-insight-links' : 'phase-destinations'"><button v-for="item in group.items" :key="item.id" type="button" @click="$emit('open', item.id)"><span class="phase-tile-icon"><RemoteIcon :name="item.icon" /></span><span><strong>{{ t(item.label) }}</strong><small>{{ t(item.description) }}</small></span><RemoteIcon name="next" /></button></div></template>
+    <template v-for="group in groups" :key="group.id"><h3 v-if="group.items.length" class="phase-section-title"><RemoteIcon :name="group.icon" />{{ t(group.title) }}</h3><div :class="group.id === 'daily' ? 'phase-quick-grid' : group.id === 'insights' ? 'phase-insight-links' : 'phase-destinations'"><button v-for="item in group.items" :key="item.id" type="button" :data-ui-tone="destinationTone(item.id)" @click="$emit('open', item.id)"><span class="phase-tile-icon"><RemoteIcon :name="item.icon" /></span><span><strong>{{ t(item.label) }}</strong><small>{{ t(item.description) }}</small></span><RemoteIcon name="next" /></button></div></template>
     <p v-if="!groups.some(group => group.items.length)" class="phase-empty">{{ t('没有找到对应内容') }}</p>
   </div>
 </template>
 <script setup>
 import { computed, ref } from 'vue'
 import RemoteIcon from './RemoteIcon.vue'
+import RemoteAvatar from './RemoteAvatar.vue'
 import { t } from '../../i18n/remote'
-defineProps({ profileName: String })
+import { uiSectionTone as destinationTone } from '../../utils/uiPalette'
+defineProps({ profileName: String, agent: Object, online: Boolean })
 defineEmits(['open'])
 const search = ref('')
 const groups = computed(() => [

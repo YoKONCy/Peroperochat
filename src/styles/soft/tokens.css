@@ -2,18 +2,18 @@
 :is(.companion-surface, .remote-themed)[data-ui='soft'] {
   --ui-accent: var(--room-accent);
   --ui-secondary: var(--room-accent-bright);
-  --ui-ink: var(--room-ink);
-  --ui-muted: var(--room-muted);
-  --ui-paper: var(--room-surface);
-  --ui-page: color-mix(in srgb, var(--ui-accent) 10%, var(--ui-paper));
-  --ui-soft: color-mix(in srgb, var(--ui-accent) 21%, var(--ui-paper));
-  --ui-warm: color-mix(in srgb, var(--ui-secondary) 30%, var(--ui-paper));
-  --ui-thought: color-mix(in srgb, var(--ui-accent) 16%, var(--ui-warm));
-  --ui-line: color-mix(in srgb, var(--ui-accent) 31%, var(--ui-paper));
-  --ui-contour: color-mix(in srgb, var(--ui-accent) 46%, var(--ui-paper));
-  --ui-card-face: color-mix(in srgb, var(--ui-accent) 5%, var(--ui-paper));
-  --ui-field: color-mix(in srgb, var(--ui-accent) 12%, var(--ui-paper));
-  --ui-shelf: color-mix(in srgb, var(--ui-accent) 25%, var(--ui-paper));
+  --ui-ink: var(--ui-neutral-ink, var(--room-ink));
+  --ui-muted: var(--ui-neutral-muted, var(--room-muted));
+  --ui-paper: var(--ui-neutral-paper, var(--room-surface));
+  --ui-page: var(--ui-neutral-page, var(--room-page));
+  --ui-soft: color-mix(in srgb, var(--ui-accent) 13%, var(--ui-paper));
+  --ui-warm: var(--ui-rose-soft);
+  --ui-thought: var(--ui-violet-soft);
+  --ui-line: var(--ui-neutral-line);
+  --ui-contour: color-mix(in srgb, var(--ui-accent) 10%, var(--ui-line));
+  --ui-card-face: color-mix(in srgb, var(--ui-accent) 2%, var(--ui-paper));
+  --ui-field: color-mix(in srgb, var(--ui-accent) 5%, var(--ui-paper));
+  --ui-shelf: var(--ui-neutral-shelf);
   --ui-emphasis: color-mix(in srgb, var(--ui-accent) 76%, var(--ui-ink));
   --ui-edge: color-mix(in srgb, var(--ui-paper) 86%, transparent);
   --ui-glass: color-mix(in srgb, var(--ui-paper) 94%, transparent);
@@ -56,14 +56,16 @@
   -webkit-font-smoothing: antialiased;
   -webkit-tap-highlight-color: transparent;
 }
-.remote-themed[data-ui='soft'][data-remote-theme] {
+.remote-themed.remote-themed[data-ui='soft'][data-remote-theme] {
   --ui-accent: var(--accent);
   --ui-secondary: var(--accent-secondary);
-  --ui-ink: var(--ink);
-  --ui-paper: var(--surface);
-  --ui-muted: var(--muted);
-  --ui-page: color-mix(in srgb, var(--tint) 45%, var(--ui-soft));
-  --muted: color-mix(in srgb, var(--ink) 65%, var(--surface));
+  --ui-ink: var(--ui-neutral-ink);
+  --ui-paper: var(--ui-neutral-paper);
+  --ui-muted: var(--ui-neutral-muted);
+  --ui-page: var(--ui-neutral-page);
+  --surface: var(--ui-neutral-paper);
+  --ink: var(--ui-neutral-ink);
+  --muted: var(--ui-neutral-muted);
   --line: var(--ui-line);
   --wash: var(--ui-soft);
   --panel: var(--ui-card-face);
@@ -98,25 +100,26 @@
   --el-border-radius-base: 12px;
   background: var(--ui-page);
 }
-.remote-themed[data-ui='soft'][data-remote-theme='dark'] {
-  --surface: color-mix(in srgb, var(--tint) 85%, var(--accent));
-  --ink: color-mix(in srgb, var(--accent-secondary) 9%, white);
+.remote-themed.remote-themed[data-ui='soft'][data-remote-theme='dark'] {
+  --surface: var(--ui-neutral-paper);
+  --ink: var(--ui-neutral-ink);
   --ui-on-accent: var(--tint);
   --ui-action: var(--accent);
   --ui-action-top: color-mix(in srgb, var(--accent) 94%, white);
-  --ui-line: color-mix(in srgb, var(--accent) 30%, var(--surface));
-  --ui-shelf: color-mix(in srgb, var(--tint) 78%, var(--surface));
+  --ui-line: var(--ui-neutral-line);
+  --ui-shelf: var(--ui-neutral-shelf);
   --ui-press-shadow: 0 4px 0 color-mix(in srgb, var(--accent) 43%, var(--tint)), inset 0 1px 0 color-mix(in srgb, white 23%, transparent);
   color-scheme: dark;
 }
 .standalone-design[data-ui='soft'], .standalone-design[data-ui='soft'] .companion-surface {
-  --room-ink: var(--local-ink);
+  --room-ink: var(--ui-neutral-ink);
   --room-accent: var(--local-accent);
   --room-accent-soft: var(--ui-soft);
   --room-accent-bright: color-mix(in srgb, var(--local-accent) 55%, white);
-  --room-muted: color-mix(in srgb, var(--local-ink) 67%, white);
-  --room-page: color-mix(in srgb, var(--local-wash) 80%, white);
-  --room-subtle: color-mix(in srgb, var(--local-accent) 6%, white);
+  --room-muted: var(--ui-neutral-muted);
+  --room-page: var(--ui-neutral-page);
+  --room-surface: var(--ui-neutral-paper);
+  --room-subtle: var(--ui-field);
   --room-line: var(--ui-line);
   --room-bubble: var(--room-surface);
   --room-user-bubble: var(--ui-warm);
