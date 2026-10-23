@@ -1,0 +1,130 @@
+/* 背景只铺一层；底色透明不影响文字、图标或媒体本身。 */
+.app-background-layer { position: absolute; inset: 0; overflow: hidden; pointer-events: none; z-index: -1; background: var(--ui-page); }
+.app-background-layer > img, .background-preview-image > img { width: 100%; height: 100%; object-fit: var(--bg-fit, cover); object-position: var(--bg-position, 50% 50%); opacity: var(--bg-image-opacity, .95); filter: blur(var(--bg-image-blur, 0px)) brightness(var(--bg-brightness, 1)) saturate(var(--bg-saturation, 1)) contrast(var(--bg-contrast, 1)); }
+.app-background-layer > i, .background-preview-image > i { position: absolute; inset: 0; background: color-mix(in srgb, var(--ui-page) calc(var(--bg-overlay, .18) * 100%), transparent); }
+.app.standalone-design[data-background='active'], .remote-workspace[data-background='active'] { isolation: isolate; }
+.app.standalone-design[data-background='active'] > .app-background-layer { position: fixed; }
+.app.standalone-design[data-background='active'] > .app-mode-content { position: relative; }
+:is(.standalone-design.companion-surface, .remote-themed)[data-ui='soft'][data-background='active'] { --ui-glass: var(--bg-panel-fill); --room-glass: var(--bg-shell-fill); }
+.app.standalone-design[data-ui='soft'][data-background='active'] .companion-surface { --room-glass: var(--bg-shell-fill); --ui-glass: var(--bg-panel-fill); }
+
+/* 路由外壳和列表透出同一张背景，不为每一层容器重复填色。 */
+:is(.standalone-design.companion-surface, .remote-themed)[data-ui='soft'][data-background='active'] :is(.companion-page, .companion-page-body, .remote-page-stage, .remote-section-body, .remote-transcript, .chat-messages, .settings-page, .settings-layout, .settings-content, .settings-panel-body, .phase-management-shell, .file-library, .remote-collection) { background: transparent; }
+:is(.standalone-design.companion-surface, .remote-themed)[data-ui='soft'][data-background='active'] :is(.remote-header, .chat-room-header, .companion-page-header, .remote-navigation, .room-selector, .room-header-actions > .room-icon-button, .room-display-toggle) {
+  background: var(--bg-shell-fill);
+  backdrop-filter: blur(var(--bg-material-blur));
+  -webkit-backdrop-filter: blur(var(--bg-material-blur));
+  border-color: var(--ui-line);
+}
+:is(.standalone-design.companion-surface, .remote-themed)[data-ui='soft'][data-background='active'] :is(.chat-composer-dock, .room-chat-dock) { background: transparent; }
+.app.standalone-design[data-ui='soft'][data-background='active'] :is(.group-space, .group-timeline, .group-messages, .group-dock, .blackjack-container) { background: transparent; }
+.app.standalone-design[data-ui='soft'][data-background='active'] .group-scenery { display: none; }
+:is(.standalone-design.companion-surface, .remote-themed)[data-ui='soft'][data-background='active'] :is(.chat-composer, .room-composer, .group-composer, .phase-group-composer, .phase-compose-line) {
+  background: var(--bg-reading-fill);
+  backdrop-filter: blur(var(--bg-material-blur));
+  -webkit-backdrop-filter: blur(var(--bg-material-blur));
+  border-color: var(--ui-contour);
+}
+:is(.standalone-design.companion-surface, .remote-themed)[data-ui='soft'][data-background='active'] :is(.phase-card, .remote-record, .remote-manager-card, .remote-manager-record, .conversation-thread-row, .conversation-thread-row.is-current, .file-browser-row, .phase-room-tile, .phase-destinations, .model-number, .model-number:nth-child(even), .model-editor-section, .settings-card, .settings-overview-group, .role-card, .role-card.is-active, .role-list .create-card, .remote-greeting, .remote-resume-card, .remote-home-task, .remote-home-file, .remote-file-card) {
+  background: var(--bg-panel-fill);
+  border-color: var(--ui-line);
+}
+:is(.standalone-design.companion-surface, .remote-themed)[data-ui='soft'][data-background='active'] :is(.phase-quick-grid > button, .phase-quick-grid > button:nth-child(even), .chromatic-library-categories > button, .model-capability.enabled) {
+  background: linear-gradient(130deg, color-mix(in srgb, var(--ui-tone) 10%, transparent), var(--bg-panel-fill));
+}
+:is(.standalone-design.companion-surface, .remote-themed)[data-ui='soft'][data-background='active'] :is(.chromatic-management-hero, .phase-room-overview, .phase-profile-hero, .model-editor-hero, .settings-overview-profile, .game-area) {
+  background: linear-gradient(120deg, color-mix(in srgb, var(--ui-tone, var(--ui-accent)) 14%, transparent), var(--bg-panel-fill));
+}
+:is(.standalone-design.companion-surface, .remote-themed)[data-ui='soft'][data-background='active'] .phase-card :is(.remote-form-section, .remote-field-group),
+:is(.standalone-design.companion-surface, .remote-themed)[data-ui='soft'][data-background='active'] .remote-manager-card :is(.remote-form-section, .remote-field-group, .model-editor-section) { background: transparent; }
+:is(.standalone-design.companion-surface, .remote-themed)[data-ui='soft'][data-background='active'] .phase-group-composer .phase-compose-line { background: var(--bg-inset-reading-fill); backdrop-filter: none; -webkit-backdrop-filter: none; }
+:is(.standalone-design.companion-surface, .remote-themed)[data-ui='soft'][data-background='active'] :is(.remote-search, .phase-search, .control-input, .remote-field > input, .remote-field > textarea, .remote-field > select, .settings-field > input, .settings-field > textarea, .settings-field > select, .remote-select:not(.remote-select-chip):not(.is-compact)) { background: var(--bg-field-fill); }
+.app.standalone-design[data-ui='soft'][data-background='active'] :is(.last-reply, .reminder-strip, .group-roster) { background: var(--bg-reading-fill); backdrop-filter: none; }
+.app.standalone-design[data-ui='soft'][data-background='active'] .room-quick-actions button { background: var(--bg-shell-fill); backdrop-filter: none; }
+
+/* 正文保留较厚底色。嵌套阅读区只补足可读度，避免越来越白或越来越黑。 */
+:is(.standalone-design.companion-surface, .remote-themed)[data-ui='soft'][data-background='active'] .chat-turn:not(.is-user) > .remote-surface > .remote-rich-text,
+:is(.standalone-design.companion-surface, .remote-themed)[data-ui='soft'][data-background='active'] :is(.room-message.assistant .message-body, .group-bubble, .phase-group-bubble, .file-document-paper, .remote-file-paper, .room-chat:not(.room-chat--rest)) { background: var(--bg-reading-fill); }
+:is(.standalone-design.companion-surface, .remote-themed)[data-ui='soft'][data-background='active'] .group-bubble::before { background: var(--bg-reading-fill); }
+:is(.standalone-design.companion-surface, .remote-themed)[data-ui='soft'][data-background='active'] .room-chat .room-message.assistant .message-body { background: transparent; }
+:is(.standalone-design.companion-surface, .remote-themed)[data-ui='soft'][data-background='active'] :is(.room-message.user .message-body, .group-message.is-user .group-bubble) { background: linear-gradient(135deg, color-mix(in srgb, var(--ui-warm) 92%, transparent), color-mix(in srgb, var(--ui-soft) 90%, transparent)); }
+:is(.standalone-design.companion-surface, .remote-themed)[data-ui='soft'][data-background='active'] .chat-turn.is-user > .remote-surface { background: color-mix(in srgb, var(--ui-soft) 90%, transparent); }
+:is(.standalone-design.companion-surface, .remote-themed)[data-ui='soft'][data-background='active'] :is(.expression-reasoning[data-effort], .remote-reasoning) { background: linear-gradient(110deg, color-mix(in srgb, var(--effort-soft, var(--ui-thought)) 90%, transparent), var(--bg-reading-fill)); }
+:is(.standalone-design.companion-surface, .remote-themed)[data-ui='soft'][data-background='active'] .remote-file-card-meta { background: var(--bg-inset-reading-fill); }
+:is(.standalone-design.companion-surface, .remote-themed)[data-ui='soft'][data-background='active'] .room-drawer-panel { background: var(--bg-raised-fill); border-color: var(--ui-line); }
+:is(.standalone-design.companion-surface, .remote-themed)[data-ui='soft'][data-background='active'] :is(.remote-edit-footer, .room-drawer-footer, .phase-settings-save, .model-config-save, .file-save-dock) { background: var(--bg-raised-fill); }
+
+/* 房间图片与应用背景分开处理，默认场景仍由 Rust 选择时段。 */
+.app.standalone-design[data-ui='soft'][data-background='active'] .room-background { object-fit: var(--bg-fit, cover); object-position: var(--bg-position, 50% 50%); opacity: var(--bg-image-opacity, .95); filter: blur(var(--bg-image-blur, 0px)) brightness(var(--bg-brightness, 1)) saturate(var(--bg-saturation, 1)) contrast(var(--bg-contrast, 1)); }
+.app.standalone-design[data-ui='soft'][data-background='active'] .room-vignette { background: color-mix(in srgb, var(--ui-page) calc(var(--bg-overlay, .18) * 100%), transparent); }
+
+/* 设置页的小预览有独立状态；拖动和调参不改变已保存的应用外观。 */
+.background-editor { margin: 20px 0; padding: 17px; border: 1px solid var(--ui-line); border-radius: 23px 23px 10px 23px; background: var(--ui-paper); color: var(--ui-ink); box-shadow: var(--ui-shadow); min-width: 0; }
+.background-editor-heading { display: flex; gap: 10px; align-items: center; margin-bottom: 17px; }
+.background-editor-heading > svg { width: 32px; height: 35px; padding: 6px; background: var(--ui-blue-soft); color: var(--ui-blue); border: 1px solid var(--ui-blue-edge); border-radius: 12px 12px 6px 12px; transform: rotate(-4deg); }
+.background-editor-heading h3 { font-size: var(--ui-text); margin: 0; font-weight: 650; }
+.background-editor-heading p { font-size: var(--ui-caption); color: var(--ui-muted); margin: 5px 0 0; line-height: 1.6; }
+.background-editor fieldset { padding: 0; margin: 0; border: 0; min-width: 0; }
+.background-editor fieldset:disabled > :is(.background-image-actions, .background-presets, .background-sliders, .background-more, .background-enable) { opacity: .65; }
+.background-scope, .background-fit { display: flex; gap: 4px; padding: 4px; border-radius: 12px; background: var(--ui-field); border: 1px solid var(--ui-line); }
+.background-scope > button, .background-fit > button { flex: 1; min-width: 0; min-height: 37px; padding: 7px; font-size: var(--ui-caption); border: 1px solid transparent; border-radius: 9px; color: var(--ui-muted); background: transparent; overflow-wrap: anywhere; }
+.background-scope > button.selected, .background-fit > button[aria-pressed='true'] { background: var(--ui-paper); border-color: var(--ui-contour); color: var(--ui-accent); box-shadow: inset 0 1px 0 var(--ui-edge); }
+.background-scope-note, .background-small-note { font-size: var(--ui-caption); color: var(--ui-muted); line-height: 1.8; margin: 11px 1px 15px; }
+.background-inherit, .background-enable { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 49px; margin: 8px 0; font-size: var(--ui-label); }
+.background-preview-wrap { border: 1px solid var(--ui-line); border-radius: 18px; overflow: hidden; margin-top: 14px; }
+.background-preview { position: relative; isolation: isolate; height: 238px; min-width: 0; background: var(--ui-page); touch-action: none; cursor: grab; overflow: hidden; color: var(--ui-ink); }
+.background-preview:active { cursor: grabbing; }
+.background-preview-image { position: absolute; inset: 0; z-index: -1; overflow: hidden; }
+.background-preview:not([data-background='active']) .background-preview-image { display: none; }
+.background-preview-ui { padding: 13px 15px; pointer-events: none; font-size: 11px; }
+.background-preview-ui > header { display: flex; justify-content: space-between; align-items: center; color: var(--ui-accent); padding: 6px 9px 10px; margin: -13px -15px 13px; background: var(--ui-paper); }
+.background-preview-ui > header > svg { width: 21px; height: 21px; }
+.preview-message-user { margin-left: auto; width: fit-content; max-width: 85%; padding: 8px 12px; border: 1px solid var(--ui-contour); background: var(--ui-soft); border-radius: 14px 14px 4px 14px; }
+.preview-message-assistant { margin-top: 12px; max-width: 91%; padding: 10px 12px; border: 1px solid var(--ui-line); border-radius: 4px 15px 15px 15px; background: var(--ui-paper); line-height: 1.8; }
+.preview-message-assistant strong { color: var(--ui-accent); font-size: 10px; }
+.preview-message-assistant p { margin: 4px 0 0; font-size: 11px; }
+.preview-input { position: absolute; bottom: 11px; left: 12px; right: 12px; display: flex; align-items: center; gap: 9px; min-height: 36px; padding: 8px 10px; border: 1px solid var(--ui-contour); border-radius: 14px; background: var(--ui-paper); color: var(--ui-muted); font-size: 10px; }
+.preview-input > svg { width: 17px; height: 17px; color: var(--ui-accent); }
+.preview-input > svg:last-child { margin-left: auto; }
+.preview-card-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 11px; }
+.preview-card-grid > div { display: grid; gap: 12px; padding: 15px; border: 1px solid var(--ui-tone-edge); border-radius: 15px 15px 5px 15px; background: var(--ui-paper); }
+.preview-card-grid svg { color: var(--ui-tone); width: 25px; height: 25px; }
+.preview-card-grid strong { font-size: 11px; font-weight: 550; }
+.preview-management-row { margin-top: 13px; display: flex; align-items: center; gap: 9px; padding: 11px; background: var(--ui-paper); border: 1px solid var(--ui-line); border-radius: 13px; }
+.preview-management-row > svg { width: 17px; height: 17px; color: var(--ui-violet); }
+.preview-management-row > svg:last-child { margin-left: auto; color: var(--ui-muted); }
+.background-preview[data-background='active'] .background-preview-ui > header { background: var(--bg-shell-fill); backdrop-filter: blur(var(--bg-material-blur)); }
+.background-preview[data-background='active'] :is(.preview-message-assistant, .preview-input) { background: var(--bg-reading-fill); }
+.background-preview[data-background='active'] :is(.preview-card-grid > div, .preview-management-row) { background: var(--bg-panel-fill); }
+.background-preview-controls { display: flex; align-items: center; justify-content: space-between; padding: 4px 8px; gap: 8px; background: var(--ui-field); border-top: 1px solid var(--ui-line); }
+.background-preview-controls > div { display: flex; gap: 3px; }
+.background-preview-controls button { min-height: 34px; min-width: 32px; padding: 5px 9px; border: 0; border-radius: 8px; background: transparent; color: var(--ui-muted); font-size: var(--ui-caption); }
+.background-preview-controls button[aria-pressed='true'] { background: var(--ui-paper); color: var(--ui-accent); }
+.background-preview-controls svg { width: 16px; height: 16px; }
+.background-image-actions { display: flex; align-items: center; gap: 10px; margin-top: 14px; flex-wrap: wrap; }
+.background-image-actions > button { display: flex; align-items: center; gap: 7px; font-size: var(--ui-caption); }
+.background-image-actions svg { width: 17px; height: 17px; }
+.background-presets { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin: 8px 0 22px; }
+.background-presets > button { display: grid; gap: 7px; justify-items: center; min-width: 0; padding: 12px 5px; border: 1px solid var(--ui-line); border-radius: 14px 14px 6px 14px; background: var(--ui-field); color: var(--ui-muted); }
+.background-presets > button > svg { width: 22px; height: 22px; color: var(--ui-accent); }
+.background-presets strong { font-size: var(--ui-caption); font-weight: 550; }
+.background-presets > button.selected { background: var(--ui-soft); border-color: var(--ui-contour); color: var(--ui-accent); box-shadow: inset 0 1px 0 var(--ui-edge); }
+.background-sliders { display: grid; gap: 22px; }
+.background-sliders label > span { display: flex; justify-content: space-between; gap: 10px; font-size: var(--ui-label); }
+.background-sliders output { color: var(--ui-muted); font-size: var(--ui-caption); font-variant-numeric: tabular-nums; }
+.background-sliders input[type='range'] { display: block; width: 100%; margin: 11px 0 0; }
+.background-more { border-top: 1px solid var(--ui-line); margin-top: 25px; padding-top: 5px; }
+.background-more > summary { list-style: none; display: flex; align-items: center; gap: 7px; min-height: 45px; font-size: var(--ui-label); color: var(--ui-muted); cursor: pointer; }
+.background-more > summary svg { width: 16px; height: 16px; color: var(--ui-accent); }
+.background-more > summary > svg:last-child { margin-left: auto; transition: transform 180ms var(--ui-ease); }
+.background-more[open] > summary > svg:last-child { transform: rotate(180deg); }
+.background-more .background-fit { margin: 10px 0 23px; }
+.background-editor-footer { display: flex; align-items: center; gap: 8px; margin-top: 22px; border-top: 1px solid var(--ui-line); padding-top: 14px; }
+.background-editor-footer > span { flex: 1; }
+.background-editor-footer > button { width: auto; min-height: 38px; padding: 8px 11px; font-size: var(--ui-caption); white-space: nowrap; }
+.background-switch-confirm { margin-top: 14px; background: var(--ui-amber-soft); border: 1px solid var(--ui-amber-edge); border-radius: 13px; padding: 12px; font-size: var(--ui-caption); line-height: 1.8; }
+.background-switch-confirm p { margin: 0 0 7px; }
+.background-switch-confirm > button { margin-right: 8px; }
+@media (max-width: 359px) { .background-editor { padding: 12px; } .background-editor-footer { flex-wrap: wrap; } .background-editor-footer > span { display: none; } .background-editor-footer > button:first-child { margin-right: auto; } }
+@media (prefers-reduced-motion: reduce) { .background-more > summary > svg:last-child { transition: none; } }
+[data-reduce-motion='true'] .background-more > summary > svg:last-child { transition: none; }

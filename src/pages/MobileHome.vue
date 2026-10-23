@@ -1,7 +1,7 @@
 <template>
   <div class="companion-home companion-surface" :data-tone="tone" :class="[`companion-home--${panelMode}`, `display-${displayPreferences.displayMode}`, { 'is-keyboard': keyboardOpen, 'is-wardrobe': drawer === 'wardrobe' }]" :style="roomStyle" @keydown="onHomeKeydown">
     <div class="room-main" :inert="drawer ? true : undefined">
-      <div class="room-scenery" aria-hidden="true"><Transition name="room-change"><img v-if="background" :key="background" :src="background" alt="" decoding="async" class="room-background" @error="backgroundFailed = true" /></Transition><div class="room-vignette" /></div>
+      <div class="room-scenery" aria-hidden="true"><Transition name="room-change"><img v-if="background" :key="background" ref="roomImage" :src="background" alt="" decoding="async" class="room-background" @load="roomImageReady" @error="roomImageFailed" /></Transition><div class="room-vignette" /></div>
       <header class="room-header">
         <button class="room-selector" aria-label="切换角色与房间" @click="drawer = 'roles'">
           <CharacterAvatar :key="activeAgentId" class="header-avatar" :src="agent.avatar" :label="agent.name" />
@@ -71,7 +71,8 @@
 </template>
 
 <script setup>
-import { computed, reactive, ref, watch, onMounted, onBeforeUnmount, nextTick } from 'vue'
+import { computed, reactive, ref, watch, onMounted, onBeforeUnmount, nextTick, inject } from 'vue'
+import { APP_BACKGROUND } from '../services/appBackground'
 import { useRoute, useRouter } from 'vue-router'
 import { appMessageBox as ElMessageBox } from '../services/appMessageBox'
 import { appMessage as ElMessage } from '../services/appFeedback'
@@ -111,10 +112,30 @@ const projection = ref({})
 // 房间快照只在切屏时刷新，聊天状态、换装和环境事件不能顺带切换时段。
 const roomScene = ref(null)
 const backgroundFailed = ref(false)
+const appBackground = inject(APP_BACKGROUND, null), roomImage = ref(null)
+let roomDisposed = false
+if (appBackground) appBackground.roomReady.visible = true
 const presentation = computed(() => projection.value.presentation || { illustration: agent.value.standing_image || '', layout: agent.value.illustration_layout || 'standing' })
-const requestedBackground = computed(() => roomScene.value?.background || '')
+const requestedBackground = computed(() => appBackground?.characterImage || roomScene.value?.background || '')
 const background = computed(() => backgroundFailed.value ? roomScene.value?.defaultBackground || '/companion/sunlit-room.png' : requestedBackground.value)
+watch(() => roomScene.value?.background, value => { if (appBackground) appBackground.roomReady.defaultSource = value || '' }, { immediate: true })
 watch(requestedBackground, () => { backgroundFailed.value = false })
+function roomImageReady(event) {
+  if (roomDisposed || !appBackground || event.target.getAttribute('src') !== background.value) return
+  appBackground.roomReady.source = background.value; appBackground.roomReady.ready = true
+}
+function roomImageFailed(event) {
+  if (roomDisposed || event.target.getAttribute('src') !== background.value) return
+  backgroundFailed.value = true
+  if (appBackground) appBackground.roomReady.ready = false
+}
+watch([background, activeAgentId], async () => {
+  if (!appBackground) return
+  appBackground.roomReady.source = background.value; appBackground.roomReady.ready = false
+  await nextTick()
+  if (!roomDisposed && roomImage.value?.complete && roomImage.value.naturalWidth) roomImageReady({ target: roomImage.value })
+}, { immediate: true })
+onBeforeUnmount(() => { roomDisposed = true; if (appBackground) { appBackground.roomReady.ready = false; appBackground.roomReady.visible = false; appBackground.roomReady.defaultSource = '' } })
 const chatPanel = ref(null)
 const restDockSpace = ref(null)
 const fileInput = ref(null)

@@ -1,5 +1,6 @@
 <template>
-  <main class="remote-workspace remote-themed" data-ui="soft" :class="{ 'is-chat-room': tab === 'chat' }" :data-keyboard-open="keyboardOpen" :data-remote-theme="theme.mode" :data-decoration="theme.decoration" :data-bubble="theme.bubble" :data-reduce-motion="theme.reduceMotion" :style="[viewportStyle, theme.style]" :inert="drawer || detail || resource ? true : undefined">
+  <main class="remote-workspace remote-themed" data-ui="soft" :class="{ 'is-chat-room': tab === 'chat' }" :data-background="background.active ? 'active' : undefined" :data-keyboard-open="keyboardOpen" :data-remote-theme="theme.mode" :data-decoration="theme.decoration" :data-bubble="theme.bubble" :data-reduce-motion="theme.reduceMotion" :style="[viewportStyle, theme.style]" :inert="drawer || detail || resource ? true : undefined">
+    <AppBackgroundLayer :background="background" />
     <header v-if="tab === 'chat'" class="chat-room-header">
       <button type="button" class="chat-header-back" aria-label="返回上一页" @click="returnFromChat"><RoomIcon name="back" /></button>
       <button type="button" class="chat-header-avatar" :aria-label="`${agent?.name || '角色'}资料`" @click="drawer = 'character'"><RemoteAvatar :id="agent?.id" :label="agent?.name" /></button>
@@ -52,7 +53,7 @@
         <RemoteComposerTools ref="composerTools" :key="selection.threadId" :thread-id="selection.threadId" :agent-id="selection.agentId" :content="draft" :blocked="!online || !verified || uploading || !!sending" :running="busy" :interaction-mode="interactionMode" :mode-disabled="!online || !verified || busy || controlsBusy || changingInteraction" :image-label="imageModeOptions.find(item => item.value === imageMode)?.label" @interaction="setInteraction" @image-mode="drawer = 'image-mode'" @settings="drawer = 'thread-settings'" @voice="drawer = 'voice-input'" @new-thread="quickNewConversation" @clear="draft = ''; draftChanged()" @workbench="openManagement('workbench')" @changed="refreshConversation" @capabilities="inputCapabilities = $event" @busy="controlsBusy = $event" @pending="showManagementPending" @restore="restoreRegeneration">
         <div v-if="workspaceContext" class="remote-draft-attachments"><span><RoomIcon name="files" />工作台 · {{ workspaceContextLabel }}<button type="button" aria-label="移除工作台引用" @click="workspaceContext = null; draftChanged()"><RoomIcon name="close" /></button></span></div>
         <div v-if="attachments.length" class="remote-draft-attachments"><span v-for="(file, index) in attachments" :key="file.id"><RoomIcon name="document" />{{ file.name }}<button type="button" :aria-label="`移除附件 ${file.name}`" @click="attachments.splice(index, 1); draftChanged()"><RoomIcon name="close" /></button></span></div>
-        <div class="chat-input-line"><button type="button" class="room-icon-button" :disabled="!online || !verified || uploading || attachments.length >= 5" aria-label="添加附件或引用" @click="drawer = 'attachments'"><RoomIcon name="plus" /></button><textarea ref="composer" v-model="draft" :disabled="!sessionReady" rows="1" maxlength="131072" :placeholder="`和 ${agent?.name || '伙伴'} 接着聊…`" @input="draftChanged" @keydown="composeKey" /><button v-if="busy" type="button" class="chat-send" aria-label="停止远程回复" :disabled="stopping || !online || sending?.phase === 'preparing'" @click="stop"><RoomIcon name="stop" /></button><button type="submit" class="chat-send" :disabled="!canSend" :aria-label="busy ? '加入消息队列' : '发送消息'"><RoomIcon name="send" /></button></div>
+        <div class="chat-input-line"><button type="button" class="room-icon-button" :disabled="!online || !verified || uploading || attachments.length >= 5" aria-label="选择图片或文件" @click="fileInput?.click()"><RoomIcon name="plus" /></button><textarea ref="composer" v-model="draft" :disabled="!sessionReady" rows="1" maxlength="131072" :placeholder="`和 ${agent?.name || '伙伴'} 接着聊…`" @input="draftChanged" @keydown="composeKey" /><button v-if="busy" type="button" class="chat-send" aria-label="停止远程回复" :disabled="stopping || !online || sending?.phase === 'preparing'" @click="stop"><RoomIcon name="stop" /></button><button type="submit" class="chat-send" :disabled="!canSend" :aria-label="busy ? '加入消息队列' : '发送消息'"><RoomIcon name="send" /></button></div>
         <p v-if="uploading" class="chat-input-status" role="status">附件上传中…</p>
         <p v-else-if="!online || (!verified && !loading) || agent?.isEnabled === false" class="chat-input-status" role="status">{{ !online ? '暂时离线，草稿会保留。' : agent?.isEnabled === false ? '角色已停用，仍可阅读对话。' : '对话尚未连上，暂时不能发送。' }}<button v-if="online && !verified && agent?.isEnabled !== false" type="button" @click="verifySelected">重新连接</button></p>
         </RemoteComposerTools>
@@ -98,7 +99,6 @@
     </RoomDrawer>
     <RoomDrawer v-if="drawer === 'pending' && pending" title="核对发送结果" subtitle="先看看结果，避免重复发送" :tone="tone" :busy="reviewing" @close="drawer = null; reviewNote = ''; reviewed = false"><p v-if="pending.context?.operation" class="remote-notice">{{ managementOperationLabel(pending.context.operation) }}</p><p class="remote-help">{{ pending.context?.input?.content || pending.context?.input?.instruction || '这项操作的结果尚未确认。' }}</p><RemoteFeedback :message="error" /><RemoteFeedback :message="remoteState.pendingError" /><div class="remote-actions"><button class="room-secondary-button" @click="reconcile">重新核对</button><button v-if="pending.context?.input?.threadId" class="room-secondary-button" @click="fromReference({ threadId: pending.context.input.threadId, agentId: pending.context.input.agentId || selection?.agentId }); drawer = null">查看对应会话</button></div><template v-if="remotePendingRequests.has(pending.requestId)"><label class="remote-checkbox"><input v-model="reviewed" type="checkbox" />我已查看结果</label><textarea v-model="reviewNote" rows="3" maxlength="2048" placeholder="写下核对结果，例如已在会话中看到回复…" /><button class="room-primary-button" :disabled="!reviewed || !reviewNote.trim() || reviewing || pending.state !== 'unknown'" @click="review">保存核对记录</button></template><p v-else class="remote-help">此操作已经完成核对。</p></RoomDrawer>
     <RoomDrawer v-if="drawer === 'reset'" title="重置本机会话记录？" :tone="tone" @close="drawer = null"><p>将清除此会话在手机上的草稿、附件草稿和阅读位置，远程消息仍由 infOS 保存。</p><RemoteFeedback :message="error" /><button class="room-danger-button" :disabled="busy || uploading" @click="resetSession">确认重置</button></RoomDrawer>
-    <RoomDrawer v-if="drawer === 'attachments'" title="添加内容" :tone="tone" @close="drawer = null"><div class="chat-options-grid"><button type="button" class="room-secondary-button" :disabled="!online || !verified || uploading || attachments.length >= 5" @click="fileInput.click(); drawer = null"><RoomIcon name="attach" />选择图片或文件</button><button type="button" class="room-secondary-button" @click="drawer = null; openManagement('workbench')"><RoomIcon name="folder" />引用工作区</button><button type="button" class="room-secondary-button" @click="drawer = 'image-mode'"><RoomIcon name="image" />图片识别方式</button></div></RoomDrawer>
     <RoomDrawer v-if="drawer === 'image-mode'" title="图片识别方式" subtitle="用于接下来发送的图片" :tone="tone" @close="drawer = null"><RemoteSelect v-model="imageMode" label="图片识别方式" :options="imageModeOptions" /></RoomDrawer>
     <RemoteConnections v-if="drawer === 'connections'" :prepare-switch="prepareModeSwitch" @close="drawer = null" />
     <RemoteThreadSettings v-if="drawer === 'thread-settings' && selection" :key="selection.threadId" :thread-id="selection.threadId" :agent-id="selection.agentId" @close="drawer = null" @updated="refreshConversation" @pending="showManagementPending" />
@@ -113,6 +113,7 @@
 import { computed, ref, reactive, watch, nextTick, onMounted, onBeforeUnmount } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import RemoteFeedback from '../components/remote/RemoteFeedback.vue'
+import AppBackgroundLayer from '../components/companion/AppBackgroundLayer.vue'
 import { open as openExternal } from '@tauri-apps/plugin-shell'
 import RoomIcon from '../components/remote/RemoteIcon.vue'
 import RoomDrawer from '../components/companion/RoomDrawer.vue'
@@ -179,7 +180,6 @@ const error = ref(''), storageError = ref(''), uploading = ref(false), stopping 
 const queuePanel = ref(null), chatStage = ref(null), copiedMessage = ref(null)
 const transcript = ref(null), composer = ref(null), fileInput = ref(null), atEnd = ref(true), historyWindow = ref(false)
 const appearance = reactive(defaultCharacterAppearance())
-const { display, theme, ready: themeReady, saving: themeSaving, error: themeError, restore: restoreTheme, save: persistTheme } = useRemoteTheme(appearance)
 const cg = computed(() => characterCg(agent.value, appearance))
 const changingInteraction = ref(false), taskTitle = ref(''), taskInstruction = ref(''), dispatching = ref(false)
 const dispatchRequestId = ref(null), dispatchUnknown = ref(false)
@@ -208,6 +208,7 @@ const agent = computed(() => {
   const detail = remoteViews.get(JSON.stringify({ kind: 'agent', id }))?.data
   return { id, name: id, ...detail, ...remoteState.agents.find(item => item.id === id) }
 })
+const { display, theme, background, ready: themeReady, saving: themeSaving, error: themeError, restore: restoreTheme, save: persistTheme } = useRemoteTheme(appearance, computed(() => agent.value?.id))
 const tone = computed(() => theme.value.mode === 'dark' ? 'nana' : 'pero')
 const interactionMode = computed(() => selection.value ? remoteViews.get(JSON.stringify({ kind: 'thread', id: selection.value.threadId }))?.data?.thread?.interactionMode || 'chat' : 'chat')
 const characterQuery = computed(() => agent.value ? { kind: 'agent_state', id: agent.value.id, threadId: selection.value?.agentId === agent.value.id ? selection.value.threadId : null } : null)

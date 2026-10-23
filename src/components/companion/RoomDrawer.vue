@@ -1,7 +1,7 @@
 <template>
   <Teleport to="body">
     <Transition name="room-drawer" appear @after-leave="$emit('close')">
-      <div v-if="visible" class="room-drawer-overlay companion-surface" data-ui="soft" :class="[`room-drawer-overlay--${variant}`, { 'remote-themed': remoteTheme, 'standalone-design': !remoteTheme && localTheme }]" :data-tone="tone" :data-remote-theme="remoteTheme?.mode" :data-decoration="remoteTheme?.decoration" :data-bubble="remoteTheme?.bubble" :data-reduce-motion="remoteTheme ? remoteTheme.reduceMotion : localTheme?.reduceMotion" :style="[viewportStyle, remoteTheme ? remoteTheme.style : localTheme?.style]" @click.self="requestClose">
+      <div v-if="visible" class="room-drawer-overlay companion-surface" data-ui="soft" :class="[`room-drawer-overlay--${variant}`, { 'remote-themed': remoteTheme, 'standalone-design': !remoteTheme && localTheme }]" :data-tone="tone" :data-background="background?.active ? 'active' : undefined" :data-remote-theme="remoteTheme?.mode" :data-decoration="remoteTheme?.decoration" :data-bubble="remoteTheme?.bubble" :data-reduce-motion="remoteTheme ? remoteTheme.reduceMotion : localTheme?.reduceMotion" :style="[viewportStyle, remoteTheme ? remoteTheme.style : localTheme?.style]" @click.self="requestClose">
         <section ref="panel" class="room-drawer-panel" role="dialog" aria-modal="true" :aria-label="title" tabindex="-1" @keydown="handleKeydown">
           <RoomAccent v-if="!remoteTheme && localTheme" class="drawer-accent" kind="orbit" />
           <header class="room-drawer-header">
@@ -22,6 +22,7 @@
 import { ref, inject, onMounted, onBeforeUnmount, nextTick } from 'vue'
 import { REMOTE_THEME } from '../../services/remoteTheme'
 import { LOCAL_APPEARANCE } from '../../stores/appearance'
+import { APP_BACKGROUND } from '../../services/appBackground'
 import RoomIcon from './RoomIcon.vue'
 import RoomAccent from './RoomAccent.vue'
 import CompanionEmblem from './CompanionEmblem.vue'
@@ -35,6 +36,7 @@ const visible = ref(true)
 const { viewportStyle } = useRoomViewport()
 const remoteTheme = inject(REMOTE_THEME, null)
 const localTheme = inject(LOCAL_APPEARANCE, null)
+const background = inject(APP_BACKGROUND, null)
 let previousFocus = null, unregisterFeedback = null
 function requestClose() { if (!props.busy && props.beforeClose?.() !== false) visible.value = false }
 function handleKeydown(event) {

@@ -1,5 +1,6 @@
 <template>
-  <div class="app companion-surface" data-ui="soft" :class="{ 'standalone-design': isStandalone }" :data-tone="tone" :data-reduce-motion="isStandalone && !displayPreferences.motion" :style="isStandalone ? localStyle : undefined">
+  <div class="app companion-surface" data-ui="soft" :class="{ 'standalone-design': isStandalone }" :data-background="isStandalone && localBackground.active ? 'active' : undefined" :data-tone="tone" :data-reduce-motion="isStandalone && !displayPreferences.motion" :style="isStandalone ? localStyle : undefined">
+    <AppBackgroundLayer v-if="isStandalone && route.path !== '/'" :background="localBackground" />
     <div v-if="contentReady" class="app-mode-content" :inert="transitionVisible ? true : undefined" :aria-hidden="transitionVisible ? true : undefined">
       <router-view v-if="isStandalone" v-slot="{ Component }"><Transition name="app-route" mode="out-in"><component :is="Component" :key="route.path" /></Transition></router-view>
       <RemoteWorkspace v-else-if="isRemote" :key="`${modeState.snapshot.installationId}:${modeState.snapshot.activationEpoch}:${modeState.snapshot.activeTarget.profileId}`" />
@@ -20,6 +21,8 @@ import RemoteWorkspace from './pages/RemoteWorkspace.vue'
 import ModeTransition from './components/ModeTransition.vue'
 import FeedbackBubbles from './components/FeedbackBubbles.vue'
 import { clearFeedback } from './services/appFeedback'
+import { APP_BACKGROUND, useAppBackground } from './services/appBackground'
+import AppBackgroundLayer from './components/companion/AppBackgroundLayer.vue'
 import './styles/companion.css'
 import './styles/controls.css'
 import './styles/standalone.css'
@@ -34,7 +37,9 @@ const contentReady = computed(() => isRemote.value || isStandalone.value && !mod
 const transitionLoading = computed(() => modeState.loading || modeState.restoring || !!modeState.snapshot && ['activating', 'quiescing'].includes(modeState.snapshot.phase) || isRemote.value && (remoteState.initializing || remoteState.restoringView))
 const transitionNeeded = computed(() => !contentReady.value || modeState.loading || modeState.restoring)
 const { visible: transitionVisible, waiting: transitionWaiting } = useModeTransition(transitionNeeded, transitionLoading)
-const localStyle = computed(() => appearanceStyle(activeAgentId.value))
+const localBackground = useAppBackground(activeAgentId, computed(() => 'light'), 'standalone')
+provide(APP_BACKGROUND, localBackground)
+const localStyle = computed(() => ({ ...appearanceStyle(activeAgentId.value), ...localBackground.style }))
 provide(LOCAL_APPEARANCE, computed(() => isStandalone.value ? { style: localStyle.value, reduceMotion: !displayPreferences.value.motion } : null))
 watch(tone, value => { document.documentElement.dataset.tone = value }, { immediate: true })
 watch(() => [route.fullPath, modeState.snapshot?.activationEpoch, modeState.snapshot?.phase], clearFeedback, { flush: 'sync' })

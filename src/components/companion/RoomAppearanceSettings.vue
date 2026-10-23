@@ -7,24 +7,29 @@
         <button v-for="item in renderers" :key="item.id" type="button" :aria-pressed="draft.displayMode === item.id" @click="draft.displayMode = item.id"><RoomIcon :name="item.icon" /><strong>{{ item.name }}</strong><small>{{ item.note }}</small><RoomIcon v-if="draft.displayMode === item.id" class="appearance-check" name="check" /></button>
       </div>
       <div class="appearance-label"><span>点缀配色</span><ChoicePicker v-model="draft.palette" label="点缀配色" :options="paletteOptions" :disabled="appearanceBusy || loading" /></div>
-      <label class="appearance-label">玻璃底色 <output>{{ draft.glass }}%</output><input v-model.number="draft.glass" type="range" min="60" max="94" :style="{ '--range-progress': `${(draft.glass - 60) / 34 * 100}%` }" /></label>
       <label class="appearance-label">静态立绘大小 <output>{{ draft.figureSize }}%</output><input v-model.number="draft.figureSize" type="range" min="44" max="64" :style="{ '--range-progress': `${(draft.figureSize - 44) / 20 * 100}%` }" /></label>
       <label class="appearance-motion"><span><strong>轻量交互动效</strong><small>系统减少动态效果时优先遵循系统设置</small></span><RoomSwitch v-model="draft.motion" label="轻量交互动效" /></label>
       <p class="appearance-note">默认房间按设备本地时间选择白天、晨昏或夜晚背景，在切回房间或应用时更新。其他自定义角色默认使用 Pero 的房间。角色管理中可上传固定背景、静态立绘或 CG。Pio 为通用 Live2D 模型，服装选择仅对 Live2D 生效。</p>
       <button type="submit" class="room-primary-button" :disabled="!dirty && !appearanceError">{{ appearanceBusy ? '正在保存…' : '保存显示设置' }}</button>
     </fieldset>
+    <BackgroundEditor :agent="activeAgent" :room-image="roomImage" />
   </form>
 </template>
 <script setup>
-import { computed, onMounted, reactive, ref, watch } from 'vue'
+import { computed, onMounted, reactive, ref, watch, inject } from 'vue'
 import { appMessage as ElMessage } from '../../services/appFeedback'
 import FeedbackMessage from '../FeedbackMessage.vue'
 import RoomIcon from './RoomIcon.vue'
 import ChoicePicker from './ChoicePicker.vue'
 import RoomSwitch from './RoomSwitch.vue'
+import BackgroundEditor from './BackgroundEditor.vue'
+import { activeAgent } from '../../stores/agents'
+import { APP_BACKGROUND } from '../../services/appBackground'
 import { appearance, appearanceBusy, appearanceError, appearancePalettes, displayPreferences, loadAppearance, saveAppearance } from '../../stores/appearance'
 const draft = reactive({ ...displayPreferences.value })
 const loading = ref(!appearance.value)
+const background = inject(APP_BACKGROUND, null)
+const roomImage = computed(() => background?.roomReady.defaultSource || activeAgent.value?.room_background || (activeAgent.value?.id === 'nana' ? '/companion/moonlit-room.png' : '/companion/sunlit-room.png'))
 const paletteOptions = [{ value: 'auto', label: '跟随角色' }, ...Object.entries(appearancePalettes).map(([value, palette]) => ({ value, label: palette.label }))]
 const renderers = [{ id: 'illustration', icon: 'image', name: '静态立绘', note: '角色专属立绘或 CG' }, { id: 'live2d', icon: 'model', name: 'Live2D', note: '通用 Pio · 支持换装' }]
 const dirty = computed(() => Object.keys(draft).some(key => draft[key] !== displayPreferences.value[key]))

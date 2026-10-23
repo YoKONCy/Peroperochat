@@ -7,6 +7,7 @@ mod db;
 mod local;
 mod mode;
 mod remote;
+mod appearance_background;
 
 #[tauri::command]
 async fn save_api_key(app: AppHandle, key: String, mode_token:crate::mode::Token) -> Result<(), local::types::ChatError> {
@@ -118,6 +119,9 @@ pub fn run() {
     .plugin(remote::background::init())
     .plugin(remote::files::init())
     .invoke_handler(tauri::generate_handler![
+        appearance_background::appearance_background_read,
+        appearance_background::appearance_background_image,
+        appearance_background::appearance_background_save,
         mode::mode_snapshot,
         mode::mode_switch,
         remote::profiles::remote_profiles,

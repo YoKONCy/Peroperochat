@@ -3,6 +3,7 @@
     <nav class="phase-tabs"><button :class="{ selected: panel === 'appearance' }" :aria-pressed="panel === 'appearance'" @click="panel = 'appearance'"><RemoteIcon name="palette" />{{ t('本机外观') }}</button><button :class="{ selected: panel === 'language' }" :aria-pressed="panel === 'language'" @click="panel = 'language'"><RemoteIcon name="language" />{{ t('界面语言') }}</button></nav>
     <RemoteLanguageSetting v-if="panel === 'language'" />
     <div v-show="panel === 'appearance'">
+    <BackgroundEditor :agent="agent" :palette="display.palette" />
     <RemoteFeedback :message="error" /><RemoteFeedback :message="saveError" :action-label="t('重试')" @action="$emit('save')" />
     <fieldset :disabled="!ready || saving || importing"><legend>{{ t('界面主题') }}</legend><div class="remote-theme-options"><button v-for="item in themes" :key="item.id" :class="{ selected: display.theme === item.id }" @click="change('theme', item.id)"><RemoteIcon :name="item.icon" /><span>{{ t(item.name) }}</span></button></div></fieldset>
     <fieldset :disabled="!ready || saving || importing"><legend>{{ t('配色包') }}<button class="room-text-button" @click="change('palette', 'standard')">{{ t('使用标准配色') }}</button></legend><div class="remote-palette-grid"><button v-for="palette in remotePalettes" :key="palette.id" :aria-pressed="display.palette === palette.id" :class="{ selected: display.palette === palette.id }" @click="change('palette', palette.id)"><span class="remote-palette-sample"><i :style="{ background: palette.light[1], color: palette.light[0] }" /><i :style="{ background: palette.dark[1], color: palette.dark[0] }" /></span><strong>{{ t(palette.name) }}</strong></button></div></fieldset>
@@ -17,6 +18,7 @@
 </template>
 <script setup>
 import RemoteFeedback from './RemoteFeedback.vue'
+import BackgroundEditor from '../companion/BackgroundEditor.vue'
 import RoomSwitch from '../companion/RoomSwitch.vue'
 import { computed, ref, onBeforeUnmount, watch } from 'vue'
 import RemoteLanguageSetting from './RemoteLanguageSetting.vue'
