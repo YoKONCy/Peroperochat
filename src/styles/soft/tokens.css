@@ -6,6 +6,8 @@
   --ui-muted: var(--ui-neutral-muted, var(--room-muted));
   --ui-paper: var(--ui-neutral-paper, var(--room-surface));
   --ui-page: var(--ui-neutral-page, var(--room-page));
+  --ui-inset: var(--ui-neutral-inset, var(--ui-paper));
+  --ui-raised: var(--ui-neutral-raised, var(--ui-paper));
   --ui-soft: color-mix(in srgb, var(--ui-accent) 13%, var(--ui-paper));
   --ui-warm: var(--ui-rose-soft);
   --ui-thought: var(--ui-violet-soft);
@@ -14,6 +16,11 @@
   --ui-card-face: color-mix(in srgb, var(--ui-accent) 2%, var(--ui-paper));
   --ui-field: color-mix(in srgb, var(--ui-accent) 5%, var(--ui-paper));
   --ui-shelf: var(--ui-neutral-shelf);
+  --ui-depth: 4px;
+  --ui-depth-control: 3px;
+  --ui-depth-small: 2px;
+  --ui-press-travel: 4px;
+  --ui-shadow-ink: var(--ui-ink);
   --ui-emphasis: color-mix(in srgb, var(--ui-accent) 76%, var(--ui-ink));
   --ui-edge: color-mix(in srgb, var(--ui-paper) 86%, transparent);
   --ui-glass: color-mix(in srgb, var(--ui-paper) 94%, transparent);
@@ -25,8 +32,8 @@
   --ui-label: max(12px, calc(var(--ui-text) - 1px));
   --ui-caption: max(11px, calc(var(--ui-text) - 3px));
   --ui-heading: calc(var(--ui-text) + 5px);
-  --ui-shadow: 0 4px 0 var(--ui-shelf), 0 8px 18px color-mix(in srgb, var(--ui-ink) 7%, transparent), inset 0 1px 0 var(--ui-edge);
-  --ui-floating-shadow: 0 4px 0 var(--ui-shelf), 0 9px 25px color-mix(in srgb, var(--ui-ink) 13%, transparent);
+  --ui-shadow: 0 var(--ui-depth) 0 var(--ui-shelf), 0 8px 18px color-mix(in srgb, var(--ui-shadow-ink) 7%, transparent), inset 0 1px 0 var(--ui-edge);
+  --ui-floating-shadow: 0 var(--ui-depth) 0 var(--ui-shelf), 0 9px 25px color-mix(in srgb, var(--ui-shadow-ink) 13%, transparent);
   --ui-press-shadow: 0 4px 0 color-mix(in srgb, var(--ui-accent) 66%, var(--ui-ink)), inset 0 1px 0 color-mix(in srgb, white 40%, transparent);
   --ui-focus: 0 0 0 3px color-mix(in srgb, var(--ui-accent) 15%, transparent);
   --ui-radius: 18px;
@@ -103,12 +110,33 @@
 .remote-themed.remote-themed[data-ui='soft'][data-remote-theme='dark'] {
   --surface: var(--ui-neutral-paper);
   --ink: var(--ui-neutral-ink);
-  --ui-on-accent: var(--tint);
+  --ui-on-accent: var(--ui-neutral-on-accent);
+  --ui-soft: color-mix(in srgb, var(--ui-accent) 13%, var(--ui-paper));
+  --ui-contour: color-mix(in srgb, var(--ui-accent) 18%, var(--ui-paper));
+  --ui-card-face: var(--ui-paper);
+  --ui-field: var(--ui-inset);
+  --ui-edge: rgb(255 255 255 / 5%);
+  --ui-glass: color-mix(in srgb, var(--ui-raised) 88%, transparent);
+  --ui-depth: 0px;
+  --ui-depth-control: 0px;
+  --ui-depth-small: 0px;
+  --ui-press-travel: 1px;
+  --ui-shadow-ink: #03050b;
+  --ui-shadow: 0 7px 20px rgb(3 5 11 / 21%), inset 0 1px 0 rgb(255 255 255 / 3%);
+  --ui-floating-shadow: 0 12px 32px rgb(3 5 11 / 38%), inset 0 1px 0 rgb(255 255 255 / 5%);
   --ui-action: var(--accent);
   --ui-action-top: color-mix(in srgb, var(--accent) 94%, white);
   --ui-line: var(--ui-neutral-line);
   --ui-shelf: var(--ui-neutral-shelf);
-  --ui-press-shadow: 0 4px 0 color-mix(in srgb, var(--accent) 43%, var(--tint)), inset 0 1px 0 color-mix(in srgb, white 23%, transparent);
+  --ui-press-shadow: 0 3px 8px rgb(3 5 11 / 24%), inset 0 1px 0 rgb(255 255 255 / 12%);
+  --chat-shadow: rgb(3 5 11 / 24%);
+  --edge-light: var(--ui-edge);
+  --bevel: var(--ui-contour);
+  --el-bg-color-overlay: var(--ui-raised);
+  --el-fill-color: var(--ui-inset);
+  --el-fill-color-blank: var(--ui-inset);
+  --el-text-color-disabled: var(--ui-muted);
+  --el-disabled-bg-color: var(--ui-inset);
   color-scheme: dark;
 }
 .standalone-design[data-ui='soft'], .standalone-design[data-ui='soft'] .companion-surface {

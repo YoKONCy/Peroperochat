@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="dark">
+  <title>PeroperoChat · 夜色软糖 / 暗色优化设计稿</title>
+  <link rel="stylesheet" href="design.css">
+  <script src="../anime-ui-directions/icons.js" defer></script>
+  <script src="design.js" defer></script>
+</head>
+<body>
+  <header class="studio"><a class="studio-brand" href="../chromatic-ui/index.html"><span data-icon="bow"></span><span>PeroperoChat<small>视觉探索 · 暗色优化</small></span></a><button id="motion" class="studio-button" aria-pressed="false"><span data-icon="moon"></span>减少动态</button></header>
+  <main>
+    <section class="intro"><div><span class="eyebrow">SOFT AFTER DARK / 05</span><h1>夜色软糖<span>把柔软，留在夜里。</span></h1><p>有颜色的夜色 · 有呼吸的留白 · 轻轻浮起的玻璃</p></div><div class="palette-panel"><span class="palette-caption">八种夜色，同一份陪伴</span><div id="palettes" class="palettes" aria-label="配色包"></div><span id="palette-name" class="palette-name"></span></div></section>
+    <nav id="filters" class="filters" aria-label="设计页面"></nav>
+    <section class="screens" id="screens" aria-label="六页交互设计稿"></section>
+    <section class="spec-section"><div class="spec-heading"><span class="eyebrow">NIGHT MATERIALS</span><h2>颜色有轻重，夜晚有层次。</h2><p>页面安静，内容清楚。可爱来自圆润的轮廓、细小的装饰与有节制的色彩。</p></div><div class="spec-grid"><article><span class="spec-no">01</span><h3>四层夜色</h3><div class="material-samples"><i class="sample-page">页面</i><i class="sample-inset">内嵌</i><i class="sample-panel">卡片</i><i class="sample-raised">浮层</i></div><p>底色跟随配色包；浮层更亮、背景更安静，用明度承接视线。</p></article><article><span class="spec-no">02</span><h3>小面积的糖果色</h3><div class="semantic-samples"><span class="tone rose">角色</span><span class="tone mint">进展</span><span class="tone violet">记忆</span><span class="tone amber">确认</span></div><p>低饱和的暗色承托功能辅色；重点按钮使用实色与深色文字。</p></article><article><span class="spec-no">03</span><h3>轻玻璃，轻动效</h3><div class="material-demo"><span class="glass-demo"><span data-icon="bow"></span>晚安，也可以慢慢来。</span><i></i></div><p>细亮边与柔黑阴影勾出厚度；取消灰白光晕和沉重黑色底边。</p></article></div></section>
+    <footer class="studio-footer">HTML / CSS / SVG 交互设计稿 · 内容与数据均为示意 · 本轮未修改应用代码<br>可试：切换配色、筛选页面、展开思考、发送消息、选择强度、调参和预览文件。</footer>
+  </main>
+  <dialog id="sheet" aria-labelledby="sheet-title"><div class="sheet-grip"></div><header><h2 id="sheet-title"></h2><button data-close class="icon-button" aria-label="关闭"><span data-icon="close"></span></button></header><div id="sheet-body"></div></dialog>
+  <div id="toast" class="toast" role="status" aria-live="polite"><span data-icon="check"></span><span></span></div>
+</body>
+</html>

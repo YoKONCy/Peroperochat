@@ -1,0 +1,239 @@
+/* 夜色软糖：暗色按页面、内嵌、卡片和浮层分层；所有内容色仍来自配色包。 */
+.remote-themed.remote-themed[data-ui='soft'][data-remote-theme='dark'] {
+  --success: var(--ui-mint);
+  --danger: var(--ui-rose);
+}
+.remote-themed[data-ui='soft'][data-remote-theme='dark'] .phase2 {
+  --phase-green: var(--ui-mint);
+  --phase-gold: var(--ui-amber);
+}
+
+/* 弹层只压暗背景，不用浅色文字混出白雾；提示层本身始终透明。 */
+.remote-themed[data-ui='soft'][data-remote-theme='dark'].room-drawer-overlay {
+  background: rgb(6 9 17 / 64%);
+}
+.remote-themed[data-ui='soft'][data-remote-theme='dark'] .room-drawer-panel {
+  background: var(--ui-raised);
+  box-shadow: var(--ui-floating-shadow);
+  border-color: color-mix(in srgb, var(--ui-ink) 10%, transparent);
+}
+.remote-themed[data-ui='soft'][data-remote-theme='dark'] .room-drawer-header {
+  border-bottom-color: var(--ui-line);
+}
+.remote-themed[data-ui='soft'][data-remote-theme='dark'] .room-drawer-header > .room-icon-button {
+  background: color-mix(in srgb, var(--ui-ink) 5%, transparent);
+  color: var(--ui-muted);
+  box-shadow: none;
+}
+.remote-themed[data-ui='soft'][data-remote-theme='dark'] .room-drawer-panel::before {
+  height: 3px;
+  background: var(--ui-accent);
+  opacity: .55;
+}
+.remote-themed[data-ui='soft'][data-remote-theme='dark'] :is(.el-message-box, .el-popper.is-light, .el-dropdown-menu) {
+  background: var(--ui-raised);
+  border-color: var(--ui-line);
+  box-shadow: var(--ui-floating-shadow);
+}
+.remote-themed[data-ui='soft'][data-remote-theme='dark'] .little-feedback {
+  --bubble-paper: var(--ui-raised);
+  border-color: color-mix(in srgb, var(--bubble-accent) 30%, var(--bubble-paper));
+  box-shadow: var(--ui-floating-shadow);
+}
+.remote-themed[data-ui='soft'][data-remote-theme='dark'] .little-feedback[data-tone='warning'] { --bubble-accent: var(--ui-amber); }
+.remote-themed[data-ui='soft'][data-remote-theme='dark'] .el-message-box .el-button--danger {
+  color: var(--ui-on-accent);
+  box-shadow: var(--ui-press-shadow);
+}
+
+/* 表单嵌入卡片，弹出的选项落在更亮一层；主操作与轻入口保持区别。 */
+.remote-themed[data-ui='soft'][data-remote-theme='dark'] :is(.remote-select, .choice-picker) {
+  background: var(--ui-inset);
+  border-color: var(--ui-line);
+}
+.remote-themed[data-ui='soft'][data-remote-theme='dark'] :is(.remote-select-chip, .reasoning-picker.is-compact) {
+  background: transparent;
+  box-shadow: none;
+}
+.remote-themed[data-ui='soft'][data-remote-theme='dark'] :is(.remote-select-options, .choice-options) > button {
+  background: var(--ui-paper);
+  border-color: transparent;
+}
+.remote-themed[data-ui='soft'][data-remote-theme='dark'] :is(.remote-select-options, .choice-options) > button.selected {
+  background: var(--ui-soft);
+  border-color: var(--ui-contour);
+  box-shadow: inset 2px 0 0 var(--ui-accent);
+}
+.remote-themed[data-ui='soft'][data-remote-theme='dark'] :where(.room-icon-button),
+.remote-themed[data-ui='soft'][data-remote-theme='dark'] .phase-hub-heading > .room-icon-button {
+  background: var(--ui-raised);
+  box-shadow: inset 0 1px 0 var(--ui-edge);
+}
+.remote-themed[data-ui='soft'][data-remote-theme='dark'] :is(.remote-search, .phase-search, .chromatic-library-search) { background: var(--ui-inset); }
+.remote-themed[data-ui='soft'][data-remote-theme='dark'] :is(input, textarea)::placeholder { color: var(--ui-muted); opacity: .8; }
+.remote-themed[data-ui='soft'][data-remote-theme='dark'] :is(.remote-segments, .phase-tabs, .remote-subnav, .remote-library-tabs, .file-workbench-tabs, .file-section-tabs, .model-editor-tabs) {
+  background: var(--ui-inset);
+  border-color: color-mix(in srgb, var(--ui-ink) 4%, transparent);
+  box-shadow: none;
+}
+.remote-themed[data-ui='soft'][data-remote-theme='dark'] :is(.remote-segments, .phase-tabs, .remote-subnav, .remote-library-tabs, .file-workbench-tabs, .file-section-tabs, .model-editor-tabs) button.selected {
+  background: var(--ui-raised);
+  color: var(--ui-accent);
+  border-color: color-mix(in srgb, var(--ui-ink) 5%, transparent);
+  box-shadow: 0 2px 5px rgb(3 5 11 / 13%), inset 0 1px 0 var(--ui-edge);
+}
+.remote-themed[data-ui='soft'][data-remote-theme='dark'] .phase-conversation-hub .phase-tabs button:nth-child(2).selected {
+  background: var(--ui-rose-soft);
+  color: var(--ui-rose);
+}
+.remote-themed[data-ui='soft'][data-remote-theme='dark'] :is(.conversation-actions, .remote-action-menu) > button {
+  background: var(--ui-paper);
+  box-shadow: none;
+  border: 1px solid var(--ui-line);
+}
+
+/* 页面与导航更安静，把视线留给头像、内容和当前选择。 */
+.remote-themed[data-ui='soft'][data-remote-theme='dark'] .remote-header {
+  background: var(--ui-page);
+  box-shadow: none;
+}
+.remote-themed[data-ui='soft'][data-remote-theme='dark'] .remote-navigation {
+  background: color-mix(in srgb, var(--ui-paper) 78%, var(--ui-page));
+  box-shadow: 0 -6px 23px rgb(3 5 11 / 8%);
+}
+.remote-themed[data-ui='soft'][data-remote-theme='dark'] .remote-navigation button.selected > span {
+  border-color: transparent;
+  background: var(--ui-soft);
+  color: var(--ui-accent);
+  box-shadow: inset 0 1px 0 var(--ui-edge);
+  transform: none;
+}
+.remote-themed[data-ui='soft'][data-remote-theme='dark'] .remote-navigation button.selected > span > svg { transform: none; }
+.remote-themed[data-ui='soft'][data-remote-theme='dark'] :is(.phase-card, .remote-record, .remote-manager-card, .remote-manager-record, .conversation-thread-row, .conversation-thread-row.is-current, .file-browser-row) {
+  box-shadow: var(--ui-shadow);
+  border-color: var(--ui-line);
+}
+.remote-themed[data-ui='soft'][data-remote-theme='dark'] .conversation-thread-row.is-featured {
+  background: linear-gradient(125deg, var(--ui-soft), var(--ui-paper) 70%);
+  border-color: var(--ui-contour);
+}
+.remote-themed[data-ui='soft'][data-remote-theme='dark'] .conversation-thread-row.is-featured::before { width: 3px; opacity: .7; }
+.remote-themed[data-ui='soft'][data-remote-theme='dark'] .conversation-thread-more { background: transparent; box-shadow: none; }
+.remote-themed[data-ui='soft'][data-remote-theme='dark'] .phase-agent-picker > button > .character-avatar { border-color: var(--ui-raised); }
+
+/* 聊天正文、思考和工具轨迹分别用气泡、云签和细线，不铺满彩色底板。 */
+.remote-themed[data-ui='soft'][data-remote-theme='dark'] .chat-room-header {
+  background: linear-gradient(180deg, color-mix(in srgb, var(--ui-paper) 45%, var(--ui-page)), var(--ui-page));
+  border-bottom: 1px solid var(--ui-line);
+  border-radius: 0 0 20px 20px;
+  box-shadow: none;
+}
+.remote-themed[data-ui='soft'][data-remote-theme='dark'] .remote-transcript { background: var(--ui-page); }
+.remote-themed[data-ui='soft'][data-remote-theme='dark'] .chat-header-more { background: var(--ui-paper) !important; color: var(--ui-muted) !important; }
+.remote-themed[data-ui='soft'][data-remote-theme='dark'] .chat-date-divider > span { background: transparent; }
+.remote-themed[data-ui='soft'][data-remote-theme='dark'] .chat-turn:not(.is-user) > .remote-surface > .remote-rich-text {
+  background: var(--ui-paper);
+  border-color: var(--ui-line);
+  border-radius: 6px 21px 21px 21px;
+  box-shadow: 0 3px 12px rgb(3 5 11 / 8%);
+}
+.remote-themed[data-ui='soft'][data-remote-theme='dark'] .chat-turn:not(.is-user) > .remote-surface > .remote-rich-text::after { display: none; }
+.remote-themed[data-ui='soft'][data-remote-theme='dark'][data-bubble='ribbon'] .chat-turn:not(.is-user) > .remote-surface > .remote-rich-text { border-left-color: var(--ui-secondary); }
+.remote-themed[data-ui='soft'][data-remote-theme='dark'] .chat-turn.is-user > .remote-surface {
+  background: var(--ui-soft);
+  border-color: var(--ui-contour);
+  box-shadow: inset 0 1px 0 var(--ui-edge);
+}
+.remote-themed[data-ui='soft'][data-remote-theme='dark'] :is(.remote-reasoning, .expression-reasoning[data-effort]) {
+  background: linear-gradient(110deg, var(--effort-soft, var(--ui-thought)), color-mix(in srgb, var(--ui-paper) 40%, var(--ui-page)));
+  border-color: color-mix(in srgb, var(--effort-color, var(--ui-violet)) 20%, transparent);
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 2%);
+}
+.remote-themed[data-ui='soft'][data-remote-theme='dark'] .remote-reasoning > summary > strong { color: var(--ui-muted); }
+.remote-themed[data-ui='soft'][data-remote-theme='dark'] .remote-reasoning::before { display: none; }
+.remote-themed[data-ui='soft'][data-remote-theme='dark'] .soft-thought-symbol {
+  background: transparent;
+  color: var(--ui-violet);
+  box-shadow: none;
+}
+.remote-themed[data-ui='soft'][data-remote-theme='dark'] .remote-tool-trace > summary {
+  background: transparent;
+  border-right: 0;
+}
+.remote-themed[data-ui='soft'][data-remote-theme='dark'] .remote-tool-glyph {
+  border-color: color-mix(in srgb, var(--trace-accent) 29%, var(--ui-paper));
+  background: color-mix(in srgb, var(--trace-accent) 12%, var(--ui-paper));
+  box-shadow: 0 0 0 3px var(--ui-page);
+}
+.remote-themed[data-ui='soft'][data-remote-theme='dark'] .chat-trace-run::before { border-width: 1px; border-style: solid; }
+.remote-themed[data-ui='soft'][data-remote-theme='dark'] .remote-tool-trace:is([data-state='calling'], [data-state='assembling'], [data-state='failed']) > summary {
+  background: linear-gradient(90deg, transparent 44px, color-mix(in srgb, var(--trace-accent) 5%, transparent) 44px);
+}
+.remote-themed[data-ui='soft'][data-remote-theme='dark'] .remote-tool-trace[data-state='failed'] > summary { background: linear-gradient(90deg, transparent 44px, color-mix(in srgb, var(--danger) 7%, transparent) 44px); }
+.remote-themed[data-ui='soft'][data-remote-theme='dark'] .remote-tool-child > summary { background: transparent; }
+.remote-themed[data-ui='soft'][data-remote-theme='dark'] .remote-tool-child .remote-tool-glyph { box-shadow: none; }
+.remote-themed[data-ui='soft'][data-remote-theme='dark'] .remote-nit-children { background: var(--ui-inset); }
+.remote-themed[data-ui='soft'][data-remote-theme='dark'] .chat-composer {
+  background: linear-gradient(130deg, var(--ui-glass), color-mix(in srgb, var(--ui-paper) 91%, transparent));
+  border-color: color-mix(in srgb, var(--ui-ink) 7%, transparent);
+  box-shadow: var(--ui-floating-shadow);
+}
+.remote-themed[data-ui='soft'][data-remote-theme='dark'] .chat-composer:focus-within { border-color: var(--ui-contour); }
+.remote-themed[data-ui='soft'][data-remote-theme='dark'] .chat-composer::before { height: 2px; top: -1px; opacity: .65; transform: none; }
+.remote-themed[data-ui='soft'][data-remote-theme='dark'] .chat-queue-chip { background: var(--ui-amber-soft); color: var(--ui-amber); border-color: var(--ui-amber-edge); box-shadow: none; }
+.remote-themed[data-ui='soft'][data-remote-theme='dark'] .remote-jump-latest { background: var(--ui-raised); }
+
+/* 管理、任务与资料靠用途色分区，卡片内的图标保持小而轻。 */
+.remote-themed[data-ui='soft'][data-remote-theme='dark'] .phase-quick-grid > button,
+.remote-themed[data-ui='soft'][data-remote-theme='dark'] .phase-quick-grid > button:nth-child(even) {
+  background: linear-gradient(130deg, var(--ui-tone-soft), var(--ui-paper));
+  border-color: var(--ui-tone-edge);
+  box-shadow: var(--ui-shadow);
+}
+.remote-themed[data-ui='soft'][data-remote-theme='dark'] .phase-quick-grid > button .phase-tile-icon {
+  background: color-mix(in srgb, var(--ui-tone) 8%, var(--ui-paper));
+  box-shadow: inset 0 1px 0 var(--ui-edge);
+}
+.remote-themed[data-ui='soft'][data-remote-theme='dark'] :is(.chromatic-management-hero, .phase-room-overview, .phase-room-heading, .chromatic-task-overview) { box-shadow: var(--ui-shadow); }
+.remote-themed[data-ui='soft'][data-remote-theme='dark'] .chromatic-management-hero > .character-avatar { border-color: var(--ui-raised); transform: rotate(-4deg); }
+.remote-themed[data-ui='soft'][data-remote-theme='dark'] .chromatic-task-card[data-ui-tone='amber'] { border-top: 2px solid var(--ui-amber); }
+.remote-themed[data-ui='soft'][data-remote-theme='dark'] :is(.remote-approval-card, .remote-input-card) {
+  background: linear-gradient(120deg, var(--ui-amber-soft), var(--ui-paper));
+  border-color: var(--ui-amber-edge);
+  border-top: 2px solid var(--ui-amber);
+}
+.remote-themed[data-ui='soft'][data-remote-theme='dark'] .remote-approval-card .remote-eyebrow { color: var(--ui-amber); }
+.remote-themed[data-ui='soft'][data-remote-theme='dark'] .chromatic-library-categories > button { background: linear-gradient(135deg, var(--ui-tone-soft), var(--ui-paper)); }
+.remote-themed[data-ui='soft'][data-remote-theme='dark'] .file-folder-tile { box-shadow: inset 0 1px 0 var(--ui-edge); }
+.remote-themed[data-ui='soft'][data-remote-theme='dark'] .remote-file-miniature { background: var(--ui-inset); }
+.remote-themed[data-ui='soft'][data-remote-theme='dark'] .file-button.primary { color: var(--ui-on-accent); background: var(--ui-action); box-shadow: var(--ui-press-shadow); }
+.remote-themed[data-ui='soft'][data-remote-theme='dark'] .file-pdf-controls { background: var(--ui-glass); box-shadow: var(--ui-floating-shadow); }
+
+/* 模型配置的身份卡、内嵌数值与能力开关共用四层材质。 */
+.remote-themed[data-ui='soft'][data-remote-theme='dark'] .model-editor-hero::before { opacity: .06; }
+.remote-themed[data-ui='soft'][data-remote-theme='dark'] .model-editor-hero::after { opacity: .14; }
+.remote-themed[data-ui='soft'][data-remote-theme='dark'] .model-editor-brand { border-radius: 16px 16px 8px 16px; background: color-mix(in srgb, var(--ui-blue) 6%, var(--ui-paper)); box-shadow: var(--ui-shadow); }
+.remote-themed[data-ui='soft'][data-remote-theme='dark'] .model-number { box-shadow: inset 0 1px 0 var(--ui-edge); }
+.remote-themed[data-ui='soft'][data-remote-theme='dark'] .model-number:focus-within { border-color: var(--ui-accent); box-shadow: var(--ui-focus); }
+.remote-themed[data-ui='soft'][data-remote-theme='dark'] .model-number-value > input { font-weight: 650; }
+.remote-themed[data-ui='soft'][data-remote-theme='dark'] .model-number.is-custom { border-color: var(--ui-tone-edge); }
+.remote-themed[data-ui='soft'][data-remote-theme='dark'] .model-reasoning-section { box-shadow: none; }
+.remote-themed[data-ui='soft'][data-remote-theme='dark'] .model-reasoning-section .reasoning-picker { background: var(--ui-inset); box-shadow: none; }
+.remote-themed[data-ui='soft'][data-remote-theme='dark'] .reasoning-options > button { background: var(--ui-paper); border-color: transparent; }
+.remote-themed[data-ui='soft'][data-remote-theme='dark'] .reasoning-options > button.selected { background: var(--effort-soft); border-color: var(--effort-edge); }
+.remote-themed[data-ui='soft'][data-remote-theme='dark'] .model-capability.enabled { box-shadow: inset 0 1px 0 var(--ui-edge); }
+
+/* 富文本强调结构，保留图片、视频及文档自身的颜色。 */
+.remote-themed[data-ui='soft'][data-remote-theme='dark'] .markdown-body h3 { text-decoration-color: var(--ui-contour); text-decoration-thickness: 2px; }
+.remote-themed[data-ui='soft'][data-remote-theme='dark'] .markdown-body blockquote { background: var(--ui-rose-soft); border-color: var(--ui-line); border-left: 2px solid var(--ui-rose); color: var(--ui-muted); box-shadow: none; }
+.remote-themed[data-ui='soft'][data-remote-theme='dark'] .markdown-body :not(pre) > code { background: var(--ui-inset); color: var(--ui-blue); }
+.remote-themed[data-ui='soft'][data-remote-theme='dark'] :is(.remote-rich-panel > header, .remote-rich-table th) { background: var(--ui-inset); }
+.remote-themed[data-ui='soft'][data-remote-theme='dark'] .remote-rich-table tbody tr { --table-row: var(--ui-paper); }
+.remote-themed[data-ui='soft'][data-remote-theme='dark'] .remote-rich-table tbody tr:nth-child(even) { --table-row: var(--ui-inset); }
+.remote-themed[data-ui='soft'][data-remote-theme='dark'] .remote-rich-table tr > :first-child { box-shadow: 5px 0 9px -9px var(--ui-shadow-ink); }
+.remote-themed[data-ui='soft'][data-remote-theme='dark'] .message-aside { color: color-mix(in srgb, var(--ui-violet) 80%, var(--ui-ink)); }
+
+@media (hover: hover) {
+  .remote-themed[data-ui='soft'][data-remote-theme='dark'] :is(.remote-select-options, .choice-options, .reasoning-options) > button:hover:not(:disabled) { background: var(--ui-soft); }
+  .remote-themed[data-ui='soft'][data-remote-theme='dark'] .phase-quick-grid > button:hover:not(:disabled) { border-color: color-mix(in srgb, var(--ui-tone) 42%, var(--ui-paper)); }
+}

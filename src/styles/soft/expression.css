@@ -38,7 +38,7 @@
 :is(.companion-surface, .remote-themed)[data-ui='soft'] .reasoning-picker { gap: 10px; background: var(--effort-soft); border-color: var(--effort-edge); color: var(--effort-color); border-radius: 14px 14px 14px 6px; }
 :is(.companion-surface, .remote-themed)[data-ui='soft'] .reasoning-picker > .reasoning-icon { width: 25px; height: 25px; color: var(--effort-color); }
 :is(.companion-surface, .remote-themed)[data-ui='soft'] .reasoning-picker > span { min-width: 0; flex: 1; text-align: left; }
-:is(.companion-surface, .remote-themed)[data-ui='soft'] .reasoning-picker.is-compact { width: auto; max-width: 100%; min-width: 0; min-height: 29px; gap: 5px; padding: 4px 6px; border: 0; border-radius: 9px; font-size: var(--ui-caption); white-space: nowrap; box-shadow: none; }
+:is(.companion-surface, .remote-themed)[data-ui='soft'] .reasoning-picker.is-compact { width: auto; max-width: 100%; min-width: 0; min-height: 38px; gap: 5px; padding: 4px 0; border: 0; border-radius: 6px; background: transparent; font-size: var(--ui-caption); white-space: nowrap; box-shadow: none; }
 .reasoning-picker.is-compact > span { overflow: hidden; text-overflow: ellipsis; }
 :is(.companion-surface, .remote-themed)[data-ui='soft'] .reasoning-picker.is-compact > .reasoning-icon { width: 17px; height: 17px; }
 :is(.companion-surface, .remote-themed)[data-ui='soft'] .reasoning-picker.is-compact > svg:last-child { width: 10px; height: 10px; color: inherit; }

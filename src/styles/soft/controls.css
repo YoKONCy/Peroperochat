@@ -20,7 +20,7 @@
   border-radius: 13px;
   background: linear-gradient(145deg, var(--ui-paper), var(--ui-soft));
   color: var(--ui-ink);
-  box-shadow: 0 3px 0 var(--ui-shelf), inset 0 1px 0 var(--ui-edge);
+  box-shadow: 0 var(--ui-depth-control) 0 var(--ui-shelf), inset 0 1px 0 var(--ui-edge);
   font-size: var(--ui-label);
   font-weight: 550;
 }
@@ -33,7 +33,7 @@
   border: 1px solid var(--ui-line);
   background: var(--ui-field);
   color: var(--ui-accent);
-  box-shadow: 0 2px 0 var(--ui-shelf), inset 0 1px 0 var(--ui-edge);
+  box-shadow: 0 var(--ui-depth-small) 0 var(--ui-shelf), inset 0 1px 0 var(--ui-edge);
 }
 :is(.companion-surface, .remote-themed)[data-ui='soft'] .room-text-button { min-height: 40px; border-radius: 10px; font-size: var(--ui-label); }
 :is(.companion-surface, .remote-themed)[data-ui='soft'] :is(.remote-field, .settings-field) { gap: 8px; font-size: var(--ui-label); font-weight: 550; }
@@ -59,7 +59,7 @@
   border-color: var(--ui-line);
   background: linear-gradient(145deg, var(--ui-paper), var(--ui-field));
   color: var(--ui-ink);
-  box-shadow: 0 3px 0 var(--ui-shelf), inset 0 1px 0 var(--ui-edge);
+  box-shadow: 0 var(--ui-depth-control) 0 var(--ui-shelf), inset 0 1px 0 var(--ui-edge);
   font-size: var(--ui-text);
 }
 :is(.companion-surface, .remote-themed)[data-ui='soft'] :is(.remote-select, .choice-picker)[aria-expanded='true'] { border-color: var(--ui-accent); box-shadow: var(--ui-focus); }
@@ -79,7 +79,7 @@
   background: var(--ui-soft);
   border-color: var(--ui-contour);
   color: var(--ui-accent);
-  box-shadow: inset 3px 0 0 var(--ui-accent), 0 3px 0 var(--ui-shelf);
+  box-shadow: inset 3px 0 0 var(--ui-accent), 0 var(--ui-depth-control) 0 var(--ui-shelf);
 }
 :is(.companion-surface, .remote-themed)[data-ui='soft'] :is(.remote-segments, .phase-tabs, .remote-subnav, .settings-navigation nav, .remote-library-tabs) {
   gap: 5px;
@@ -102,11 +102,11 @@
   color: var(--ui-accent);
   border-color: var(--ui-contour);
   font-weight: 650;
-  box-shadow: 0 3px 0 var(--ui-shelf), inset 0 1px 0 var(--ui-edge);
+  box-shadow: 0 var(--ui-depth-control) 0 var(--ui-shelf), inset 0 1px 0 var(--ui-edge);
 }
 :is(.companion-surface, .remote-themed)[data-ui='soft'] :is(.remote-segments, .phase-tabs) button.selected::after { display: none; }
 :is(.companion-surface, .remote-themed)[data-ui='soft'] .room-switch-track { width: 36px; height: 23px; border-radius: 12px 12px 12px 7px; background: color-mix(in srgb, var(--ui-accent) 19%, var(--ui-paper)); border-color: var(--ui-line); padding: 3px; }
-:is(.companion-surface, .remote-themed)[data-ui='soft'] .room-switch-track::after { width: 15px; height: 15px; box-shadow: 0 1px 3px color-mix(in srgb, var(--ui-ink) 16%, transparent); }
+:is(.companion-surface, .remote-themed)[data-ui='soft'] .room-switch-track::after { width: 15px; height: 15px; box-shadow: 0 1px 3px color-mix(in srgb, var(--ui-shadow-ink) 16%, transparent); }
 :is(.companion-surface, .remote-themed)[data-ui='soft'] .room-switch > input:checked + .room-switch-track::after { transform: translateX(13px); }
 :is(.companion-surface, .remote-themed)[data-ui='soft'] .room-switch > input:active + .room-switch-track::after { width: 18px; }
 :is(.companion-surface, .remote-themed)[data-ui='soft'] .room-switch > input:checked:active + .room-switch-track::after { transform: translateX(10px); }
@@ -133,7 +133,7 @@
   border-bottom: 0;
   border-radius: 27px 27px 0 0;
   background: var(--ui-paper);
-  box-shadow: 0 -8px 32px color-mix(in srgb, var(--ui-ink) 12%, transparent), inset 0 1px 0 var(--ui-edge);
+  box-shadow: 0 -8px 32px color-mix(in srgb, var(--ui-shadow-ink) 12%, transparent), inset 0 1px 0 var(--ui-edge);
   overflow: hidden;
 }
 :is(.companion-surface, .remote-themed)[data-ui='soft'] .room-drawer-panel::before { content: ''; width: 29px; height: 5px; position: absolute; left: 23px; top: 0; border-radius: 0 0 4px 4px; background: var(--ui-secondary); transform: rotate(-4deg); }
@@ -144,7 +144,7 @@
 :is(.companion-surface, .remote-themed)[data-ui='soft'] .room-drawer-header > .room-icon-button { width: 40px; height: 40px; border: 1px solid var(--ui-line); border-radius: 50%; background: var(--ui-soft); color: var(--ui-accent); }
 :is(.companion-surface, .remote-themed)[data-ui='soft'] .room-drawer-content { scrollbar-width: thin; scrollbar-color: var(--ui-line) transparent; }
 :is(.companion-surface, .remote-themed)[data-ui='soft'] .room-drawer-footer { background: var(--ui-glass); border-top: 1px solid var(--ui-line); padding: 13px 18px 16px; }
-:is(.companion-surface, .remote-themed)[data-ui='soft'] :is(.conversation-actions, .remote-action-menu) > button { min-height: 52px; border-radius: 15px; background: var(--ui-paper); box-shadow: 0 2px 0 color-mix(in srgb, var(--ui-accent) 7%, transparent); }
+:is(.companion-surface, .remote-themed)[data-ui='soft'] :is(.conversation-actions, .remote-action-menu) > button { min-height: 52px; border-radius: 15px; background: var(--ui-paper); box-shadow: 0 var(--ui-depth-small) 0 color-mix(in srgb, var(--ui-accent) 7%, transparent); }
 :is(.companion-surface, .remote-themed)[data-ui='soft'] .remote-inline-confirm { padding: 15px; border-radius: 16px; background: var(--ui-warm); border-color: var(--ui-line); }
 :is(.companion-surface, .remote-themed)[data-ui='soft'] .el-button { border-radius: 12px; min-height: 42px; }
 :is(.companion-surface, .remote-themed)[data-ui='soft'] :is(.el-input__wrapper, .el-select__wrapper, .el-textarea__inner) { border-radius: 12px; background: var(--ui-paper); }
@@ -155,7 +155,7 @@
 :is(.companion-surface, .remote-themed)[data-ui='soft'] .el-message-box__btns { gap: 9px; }
 :is(.companion-surface, .remote-themed)[data-ui='soft'] .el-message-box .el-button { min-height: 43px; border-radius: 13px; }
 :is(.companion-surface, .remote-themed)[data-ui='soft'] .el-message-box .el-button--primary { color: var(--ui-on-accent); background: var(--ui-action); box-shadow: var(--ui-press-shadow); border-color: var(--ui-accent); }
-:is(.companion-surface, .remote-themed)[data-ui='soft'] .el-message-box .el-button--danger { color: white; background: var(--room-danger); border-color: var(--room-danger); box-shadow: 0 3px 0 color-mix(in srgb, var(--room-danger) 80%, var(--ui-ink)); }
+:is(.companion-surface, .remote-themed)[data-ui='soft'] .el-message-box .el-button--danger { color: white; background: var(--room-danger); border-color: var(--room-danger); box-shadow: 0 var(--ui-depth-control) 0 color-mix(in srgb, var(--room-danger) 80%, var(--ui-ink)); }
 :is(.companion-surface, .remote-themed)[data-ui='soft'] :is(.el-popper, .el-dropdown-menu) { border-radius: 13px; }
 :is(.companion-surface, .remote-themed)[data-ui='soft'] .el-popper.is-light { border-color: var(--ui-line); background: var(--ui-paper); box-shadow: var(--ui-floating-shadow); color: var(--ui-ink); }
 :is(.companion-surface, .remote-themed)[data-ui='soft'] :is(.remote-manager-actions, .remote-task-controls, .remote-actions, .remote-pagination) > button:not(.room-primary-button) { min-height: 40px; border: 1px solid var(--ui-line); border-radius: 12px; background: var(--ui-paper); padding: 8px 11px; font-size: var(--ui-label); }

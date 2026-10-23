@@ -5,14 +5,14 @@ import { uiPaletteVariables } from '../utils/uiPalette'
 
 export const REMOTE_THEME = Symbol('remote-theme')
 export const remotePalettes = [
-  { id: 'sky', name: '晴空蓝', light: ['#467fc5', '#eff8ff', '#96c7e8'], dark: ['#8bbcf0', '#171f2d', '#b9d8ed'] },
-  { id: 'night', name: '月夜紫', light: ['#8966b7', '#f7f2ff', '#cb9dbb'], dark: ['#c2a7ef', '#1d1b2b', '#d79bb8'] },
-  { id: 'sakura', name: '樱花粉', light: ['#bb5c84', '#fff3f7', '#e6b4ca'], dark: ['#eea8c7', '#281d29', '#c98ba8'] },
-  { id: 'mint', name: '薄荷青', light: ['#307e74', '#effaf6', '#8dcabb'], dark: ['#8dd9c4', '#192824', '#b5cec5'] },
-  { id: 'amber', name: '琥珀金', light: ['#9c7127', '#fff9eb', '#dfba75'], dark: ['#e5c17a', '#28231c', '#d0a86a'] },
-  { id: 'crimson', name: '绯红', light: ['#b74a5e', '#fff2f4', '#d78b9b'], dark: ['#f19aab', '#2a1b24', '#d18399'] },
-  { id: 'silver', name: '银雾', light: ['#5c738e', '#f0f5fa', '#b0c2d3'], dark: ['#b4c9df', '#1d232d', '#a7b6cc'] },
-  { id: 'peach', name: '桃橙', light: ['#b46643', '#fff5ee', '#e9b29d'], dark: ['#f1b396', '#2b211f', '#dc9c8e'] },
+  { id: 'sky', name: '晴空蓝', light: ['#467fc5', '#eff8ff', '#96c7e8'], dark: ['#9fc9f0', '#162133', '#b9d8ed'] },
+  { id: 'night', name: '月夜紫', light: ['#8966b7', '#f7f2ff', '#cb9dbb'], dark: ['#c7b3f0', '#211a30', '#d79bb8'] },
+  { id: 'sakura', name: '樱花粉', light: ['#bb5c84', '#fff3f7', '#e6b4ca'], dark: ['#eeafcc', '#2a1d29', '#c98ba8'] },
+  { id: 'mint', name: '薄荷青', light: ['#307e74', '#effaf6', '#8dcabb'], dark: ['#98d9c4', '#172923', '#b5cec5'] },
+  { id: 'amber', name: '琥珀金', light: ['#9c7127', '#fff9eb', '#dfba75'], dark: ['#e6c58b', '#2b251a', '#d0a86a'] },
+  { id: 'crimson', name: '绯红', light: ['#b74a5e', '#fff2f4', '#d78b9b'], dark: ['#f0a2b3', '#2d1c26', '#d18399'] },
+  { id: 'silver', name: '银雾', light: ['#5c738e', '#f0f5fa', '#b0c2d3'], dark: ['#b9cddd', '#1e252e', '#a7b6cc'] },
+  { id: 'peach', name: '桃橙', light: ['#b46643', '#fff5ee', '#e9b29d'], dark: ['#f1ba9d', '#2c221e', '#dc9c8e'] },
 ]
 export const defaultCharacterAppearance = () => ({ expanded: false, model: null, palette: 'sky', cg: null, style: null })
 export function builtinCg(agent) { return ['pero', 'nana'].includes(agent?.id) ? `/remote/${agent.id}-cg.png` : '' }
@@ -30,8 +30,11 @@ export function useRemoteTheme(character) {
     const [accent, tint, secondary] = palette[mode.value]
     const style = selectedStyle.value
     const color = style?.[mode.value === 'dark' ? 'darkAccent' : 'lightAccent'] || accent
+    const surfaceTint = mode.value === 'dark' && style?.darkAccent ? undefined : tint
+    const paletteVariables = uiPaletteVariables(color, mode.value, surfaceTint)
+    const backgroundTint = surfaceTint || paletteVariables['--ui-neutral-inset']
     return { mode: mode.value, reduceMotion: display.reduceMotion, bubble: style?.bubble || 'standard', decoration: style?.decoration === 'standard' || !style?.decoration ? mode.value === 'dark' ? 'constellation' : 'ribbon' : style.decoration,
-      style: { ...uiPaletteVariables(color, mode.value), '--remote-font-size': (display.fontSize || 14) + 'px', '--remote-chat-size': ((display.fontSize || 14) + 1) + 'px', '--accent': color, '--tint': tint, '--accent-secondary': style?.secondary || secondary, '--remote-accent': color, '--remote-tint': tint, '--room-accent': color } }
+      style: { ...paletteVariables, '--remote-font-size': (display.fontSize || 14) + 'px', '--remote-chat-size': ((display.fontSize || 14) + 1) + 'px', '--accent': color, '--tint': backgroundTint, '--accent-secondary': style?.secondary || secondary, '--remote-accent': color, '--remote-tint': backgroundTint, '--room-accent': color } }
   })
   provide(REMOTE_THEME, theme)
   function systemChanged(event) { systemDark.value = event.matches }
