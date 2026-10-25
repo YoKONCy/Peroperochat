@@ -50,6 +50,8 @@ fn validate_archive_edit(input:&Request)->ChatResult<()> {
 fn endpoint(input:&Request)->ChatResult<(Route,bool)> {
     validate_archive_edit(input)?;
     validate_answer_preferences(input)?;
+    if input.operation=="tasks.create" {super::operations::validate_task_dispatch(input.body.as_ref().ok_or_else(super::inactive)?)?;}
+    if input.operation=="tasks.control" {validate_task_control(input.body.as_ref().ok_or_else(super::inactive)?)?;}
     let id=match &input.id {Some(id)=>segment(id)?,None=>String::new()};
     // 路径与方法只能从此目录产生，不接受任意 URL、HTTP 方法或子应用入口。
     let (method,path,keys,write):(&str,String,&[&str],bool)=match input.operation.as_str() {
@@ -225,9 +227,11 @@ fn endpoint(input:&Request)->ChatResult<(Route,bool)> {
         "voice.status"=>("GET","/voice/status".into(),&[],false),
         "logs.list"=>("GET","/chat/threads".into(),&["agentId","channel","purpose","page","pageSize"],false),
         "logs.get"=>("GET",format!("/chat/threads/{id}"),&["page","pageSize"],false),
-        "tasks.list"=>("GET","/background-tasks".into(),&["category","agentId","status","keyword","from","to","page","pageSize"],false),
+        "tasks.list"=>("GET","/background-tasks".into(),&["category","view","parentTaskId","agentId","status","keyword","from","to","page","pageSize"],false),
         "tasks.get"=>("GET",format!("/background-tasks/{id}"),&[],false),
         "tasks.create"=>("POST","/background-tasks".into(),&[],true),
+        "tasks.control"=>("POST","/background-tasks/control".into(),&[],true),
+        "tasks.deliveries"=>("GET",format!("/background-tasks/{id}/deliveries"),&[],false),
         "tasks.pause"|"tasks.resume"|"tasks.retry"|"tasks.cancel"|"tasks.resume-interrupted"|"tasks.read"=>("POST",format!("/background-tasks/{id}/{}",input.operation.split('.').next_back().unwrap()),&[],true),
         "tasks.delete"=>("DELETE",format!("/background-tasks/{id}"),&[],true),
         "tasks.read_all"=>("POST","/background-tasks/mark-all-read".into(),&[],true),
@@ -275,6 +279,21 @@ fn endpoint(input:&Request)->ChatResult<(Route,bool)> {
     }
     let body=if matches!(method,"POST"|"PUT"|"PATCH") {Some(input.body.clone().filter(|value|!value.is_null()).unwrap_or_else(||json!({})))} else {input.body.clone()};
     Ok((Route {method:reqwest::Method::from_bytes(method.as_bytes()).unwrap(),path,params,body},write))
+}
+fn validate_task_control(value:&Value)->ChatResult<()> {
+    let invalid=||ChatError::new("INVALID_INPUT","任务操作无效，请刷新任务后重试");
+    let body=value.as_object().ok_or_else(invalid)?;
+    let text=|key:&str,max:usize,required:bool|match body.get(key) {None=>!required,Some(Value::String(value))=>value.encode_utf16().count()<=max && (!required || !value.trim().is_empty()) && !value.contains('\0'),_=>false};
+    if body.keys().any(|key|!["agentId","action","taskId","expectedRevision","instruction","successCriteria","deadline","recovery","confirmUncertain","maxSegments","maxLlmCalls","maxToolCalls","deliveryId","deliveryDecision"].contains(&key.as_str()))
+        || !text("agentId",64,true) || !text("taskId",160,true) || !text("instruction",4000,body.get("action").is_some_and(|value|value=="update")) || !text("successCriteria",2000,false)
+        || !body.get("expectedRevision").and_then(Value::as_u64).is_some_and(|n|n>0 && n<=9_007_199_254_740_991)
+        || !body.get("action").and_then(Value::as_str).is_some_and(|s|["update","pause","resume","cancel","resolve_delivery"].contains(&s))
+        || body.get("confirmUncertain").is_some_and(|value|!value.is_boolean())
+        || body.get("recovery").is_some_and(|value|!value.as_str().is_some_and(|s|["read_only","confirm"].contains(&s)))
+        || body.get("deadline").is_some_and(|value|!value.as_str().is_some_and(|s|chrono::DateTime::parse_from_rfc3339(s).is_ok())) {return Err(invalid());}
+    for (key,max) in [("maxSegments",1000),("maxLlmCalls",10000),("maxToolCalls",50000)] {if body.get(key).is_some_and(|value|!value.as_u64().is_some_and(|n|n>0 && n<=max)) {return Err(invalid());}}
+    if body.get("action").is_some_and(|value|value=="resolve_delivery") && (!text("deliveryId",250,true) || !body.get("deliveryDecision").and_then(Value::as_str).is_some_and(|s|["sent","retry"].contains(&s))) {return Err(invalid());}
+    Ok(())
 }
 fn validate_answer_preferences(input:&Request)->ChatResult<()> {
     if input.operation!="configs.save_batch" {return Ok(());}
@@ -401,6 +420,22 @@ pub async fn remote_voice_tts(app:AppHandle,token:Token,input:super::tts::Input,
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn task_controls_require_current_revision_and_preserve_recovery_and_delivery_decisions() {
+        let body=json!({"agentId":"pero","taskId":"task-a","action":"resume","expectedRevision":9,"confirmUncertain":true});
+        let (route,write)=endpoint(&input("tasks.control",None,Some(body.clone()))).unwrap();
+        assert!(write);assert_eq!(route.method,reqwest::Method::POST);assert_eq!(route.path,"/background-tasks/control");assert_eq!(route.body,Some(body.clone()));
+        for (key,value) in [("expectedRevision",json!(0)),("expectedRevision",json!(9007199254740992u64)),("agentId",json!("")),("taskId",json!("")),("confirmUncertain",json!("true")),("action",json!("resume-interrupted")),("maxToolCalls",json!(50001)),("deadline",json!(null)),("unexpected",json!(true))] {
+            let mut invalid=body.clone();invalid[key]=value;assert!(endpoint(&input("tasks.control",None,Some(invalid))).is_err());
+        }
+        let mut invalid=body.clone();invalid.as_object_mut().unwrap().remove("expectedRevision");assert!(endpoint(&input("tasks.control",None,Some(invalid))).is_err());
+        let update=json!({"agentId":"pero","taskId":"task-a","action":"update","expectedRevision":9,"instruction":"新要求","successCriteria":"","recovery":"read_only","maxSegments":48,"maxLlmCalls":192,"maxToolCalls":768});
+        assert_eq!(endpoint(&input("tasks.control",None,Some(update.clone()))).unwrap().0.body,Some(update));
+        let mut delivery=body;delivery["action"]=json!("resolve_delivery");assert!(endpoint(&input("tasks.control",None,Some(delivery.clone()))).is_err());
+        delivery["deliveryId"]=json!("delivery-a");delivery["deliveryDecision"]=json!("retry");assert!(endpoint(&input("tasks.control",None,Some(delivery.clone()))).is_ok());
+        delivery["deliveryDecision"]=json!("sent");assert!(endpoint(&input("tasks.control",None,Some(delivery))).is_ok());
+        let (route,write)=endpoint(&input("tasks.deliveries",Some("task-a"),None)).unwrap();assert!(!write);assert_eq!(route.path,"/background-tasks/task-a/deliveries");
+    }
     fn input(operation:&str,id:Option<&str>,body:Option<Value>)->Request {
         Request {operation:operation.into(),id:id.map(str::to_owned),params:Map::new(),body}
     }
@@ -430,6 +465,20 @@ mod tests {
         let context=audit_context(&first,&endpoint(&first).unwrap().0);
         assert!(!context.to_string().contains("测试密钥"));assert!(context.get("body").is_none());
         assert_ne!(context["sha256"],audit_context(&second,&endpoint(&second).unwrap().0)["sha256"]);
+    }
+    #[test]
+    fn prefill_modes_round_trip_without_rewriting_text_or_other_preferences() {
+        let content="  <reply>\n（先想一想）\n";
+        for mode in ["once","continuous"] {
+            for enabled in [false,true] {
+                let value=json!({"enabled":enabled,"content":content,"mode":mode}).to_string();
+                let body=json!({"items":[{"key":"system.assistantPrefill","value":value}]});
+                let (route,write)=endpoint(&input("configs.save_batch",None,Some(body.clone()))).unwrap();
+                assert!(write);assert_eq!(route.method,reqwest::Method::PUT);assert_eq!(route.path,"/configs/batch");assert_eq!(route.body,Some(body));
+                let saved:Value=serde_json::from_str(route.body.as_ref().unwrap()["items"][0]["value"].as_str().unwrap()).unwrap();
+                assert_eq!(saved["enabled"],enabled);assert_eq!(saved["mode"],mode);assert_eq!(saved["content"],content);
+            }
+        }
     }
     #[test]
     fn answer_preferences_use_server_config_keys_and_preserve_prefill_exactly() {

@@ -30,6 +30,7 @@ import RemoteAvatar from './RemoteAvatar.vue'
 import RemoteFileCover from './RemoteFileCover.vue'
 import { readRemote, remoteViews, remoteState } from '../../stores/remote'
 import { currentToken, assertToken } from '../../stores/mode'
+import { activeTaskStatuses, newestTasks } from '../../utils/taskCenter'
 import { remoteItems, remoteStatus } from '../../utils/remoteMarkdown'
 const props = defineProps({ agent: Object, state: Object, profile: Object, selection: Object, image: String, showCg: Boolean, decoration: { type: String, default: 'ribbon' }, inboxCount: Number })
 defineEmits(['art', 'connections', 'appearance', 'resume', 'threads', 'tasks', 'library', 'inbox', 'detail'])
@@ -38,11 +39,11 @@ let disposed = false, version = 0
 const online = computed(() => remoteState.connection === 'online')
 const connectionText = computed(() => remoteState.initializing ? '正在连接' : ({ online: '已连接', auth_required: '需要重新授权', incompatible: '需要检查连接', reconnecting: '正在重连', connecting: '正在连接' }[remoteState.connection] || '暂时离线'))
 const cg = computed(() => imageFailed.value ? '' : props.image)
-const tasks = computed(() => remoteItems(remoteViews.get(JSON.stringify(queries.value[0]))?.data).filter(task => !['completed', 'failed', 'cancelled'].includes(task.status)).slice(0, 3))
-const files = computed(() => { const data = remoteViews.get(JSON.stringify(queries.value[1]))?.data; return remoteItems(data?.nodes || data).filter(file => file.type !== 'directory').slice(0, 3) })
+const tasks = computed(() => newestTasks(queries.value.filter(query => query.kind === 'tasks').flatMap(query => remoteItems(remoteViews.get(JSON.stringify(query))?.data))).filter(task => task.category === 'agent_task' && activeTaskStatuses.includes(task.status)).slice(0, 3))
+const files = computed(() => { const query = queries.value.find(query => query.kind === 'workspace_tree'), data = query && remoteViews.get(JSON.stringify(query))?.data; return remoteItems(data?.nodes || data).filter(file => file.type !== 'directory').slice(0, 3) })
 async function reload() {
   const request = ++version; loading.value = true; error.value = ''
-  const next = [{ kind: 'tasks', agentId: props.agent?.id || null, status: 'running', page: 1, pageSize: 3 }]
+  const next = activeTaskStatuses.map(status => ({ kind: 'tasks', category: 'agent_task', agentId: props.agent?.id || null, status, page: 1, pageSize: 3 }))
   if (props.selection) next.push({ kind: 'workspace_tree', agentId: props.selection.agentId, threadId: props.selection.threadId, path: '.' })
   queries.value = next
   try { const results = await Promise.allSettled(next.map(query => readRemote(query))); assertToken(token, 'remote'); if (!disposed && request === version) error.value = results.filter(result => result.status === 'rejected').map(result => result.reason.message).join('；') }

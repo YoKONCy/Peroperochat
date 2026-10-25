@@ -25,6 +25,7 @@ const groups = computed(() => [
   { id: 'more', title: '更多日常配置', icon: 'route', items: [
     { id: 'assignments', label: '模型分工', description: '默认模型、角色覆盖与视觉', icon: 'route' },
     { id: 'prompts', label: '提示词', description: '编辑、整理与发布', icon: 'document' },
+    { id: 'prefill', label: t('预填充模式', [], 'answer-preferences'), description: t('回答开头与填充方式', [], 'answer-preferences'), icon: 'edit', keywords: t('单次填充与持续填充', [], 'answer-preferences') },
     { id: 'voice', label: '语音', description: '识别与朗读', icon: 'audio' },
     { id: 'user', label: '个人资料', description: t('资料、语言与回答偏好', [], 'answer-preferences'), icon: 'profile', keywords: t('健全模式与回答预填充', [], 'answer-preferences') },
   ] },

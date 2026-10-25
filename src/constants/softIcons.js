@@ -1,5 +1,9 @@
 // 柔软可爱风的内置图标；仅接受这里的受信任矢量，不执行角色包中的代码。
 const paths = {
+  'tool-lock': '<rect class="icon-wash" x="4" y="10" width="16" height="12" rx="4"/><rect x="4" y="10" width="16" height="12" rx="4"/><path d="M8 10V7a4 4 0 0 1 8 0v3m-4 5v3"/>',
+  'tool-off': '<circle class="icon-wash" cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="9"/><path d="m6 6 12 12"/>',
+  archive: '<rect class="icon-wash" x="3" y="4" width="18" height="5" rx="2"/><path d="M5 9v11h14V9"/><rect x="3" y="4" width="18" height="5" rx="2"/><path d="M10 13h4m-4 4h4"/>',
+  restore: '<path class="icon-wash" d="M5 11h14v10H5Z"/><path d="M5 11v10h14V11M12 15V3m-4 4 4-4 4 4M8 17h8"/>',
   bow: '<path class="icon-wash" d="M10 9C7 7 4 5 2 6v11c2 1 6-1 8-3h4c2 2 6 4 8 3V6c-2-1-5 1-8 3Zm0 5-3 7 5-2 5 2-3-7Z"/><path d="M10 9C7 7 4 5 2 6v11c2 1 6-1 8-3m4-5c3-2 6-4 8-3v11c-2 1-6-1-8-3m-4 1-3 6 5-2 5 2-3-6"/><rect x="10" y="8" width="4" height="7" rx="1.4"/><path class="icon-detail" d="m4 9 4 2m-4 3 4-2m12-3-4 2m4 3-4-2"/>',
   back: '<path d="m14 5-7 7 7 7M7 12h13"/>',
   more: '<circle cx="5" cy="12" r="1.4" fill="currentColor" stroke="none"/><circle cx="12" cy="12" r="1.4" fill="currentColor" stroke="none"/><circle cx="19" cy="12" r="1.4" fill="currentColor" stroke="none"/>',

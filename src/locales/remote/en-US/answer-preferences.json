@@ -41,5 +41,8 @@
   "请检查预填充设置，正文最多 8000 个字符": "Check prefill settings. Text must be 8,000 characters or fewer.",
   "重新读取回答偏好？": "Reload reply preferences?",
   "重新读取会替换这次尚未保存的修改。": "Reloading will replace your unsaved changes.",
-  "放弃并重新读取": "Discard and reload"
+  "放弃并重新读取": "Discard and reload",
+  "预填充模式": "Assistant prefill",
+  "回答开头与填充方式": "Reply opening and prefill behavior",
+  "单次填充与持续填充": "First generation and every generation"
 }

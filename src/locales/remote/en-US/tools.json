@@ -1,0 +1,18 @@
+{
+  "查找工具": "Find tools",
+  "共 {0} 个工具": "{0} tools",
+  "系统 · 启用 · 停用": "System · Enabled · Disabled",
+  "系统工具": "System tools",
+  "已启用": "Enabled",
+  "已停用": "Disabled",
+  "模式禁用": "Blocked by mode",
+  "手动禁用": "Manually disabled",
+  "当前模式不可用": "Unavailable in this mode",
+  "当前模式不可用，也已手动停用": "Unavailable in this mode; also manually disabled",
+  "系统管理，不可手动关闭": "Managed by the system; cannot be turned off",
+  "没有匹配的工具": "No matching tools",
+  "工具选择尚未保存": "Tool selection not saved",
+  "已读取当前设置": "Current settings loaded",
+  "保存工具选择": "Save tool selection",
+  "工具设置已保存": "Tool settings saved"
+}

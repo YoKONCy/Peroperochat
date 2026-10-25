@@ -1,0 +1,37 @@
+.thread-tool-summary { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 7px; margin: 14px 0 20px; color: var(--ui-muted); font-size: var(--ui-caption); }
+.thread-tool-summary > span { font-size: 10px; letter-spacing: .04em; }
+.thread-tool-section { --tool-section-tone: var(--ui-muted); margin-block: 20px; min-width: 0; }
+.thread-tool-section[data-section='system'] { --tool-section-tone: var(--ui-violet); }
+.thread-tool-section[data-section='enabled'] { --tool-section-tone: var(--ui-mint); }
+.thread-tool-section > h3 { display: flex; align-items: center; gap: 8px; margin: 0 0 12px; color: var(--tool-section-tone); font-size: var(--ui-label); font-weight: 650; }
+.thread-tool-section > h3 > svg { width: 18px; height: 18px; }
+.thread-tool-section > h3 > small { display: grid; place-items: center; min-width: 23px; height: 21px; padding-inline: 5px; border: 1px solid var(--ui-line); border-radius: 7px; font-size: 11px; font-variant-numeric: tabular-nums; }
+.thread-tool-section > h3::after { content: ''; height: 1px; background: var(--ui-line); flex: 1; margin-left: 3px; }
+.thread-tool-family { margin-block: 12px; min-width: 0; }
+.thread-tool-family-heading { display: flex; align-items: center; gap: 6px; padding: 3px 5px 9px; color: var(--ui-muted); }
+.thread-tool-family-heading > svg { width: 14px; height: 14px; flex: none; color: var(--tool-section-tone); }
+.thread-tool-family-heading > code { font-size: 10px; overflow-wrap: anywhere; }
+.thread-tool-family-heading > small { margin-left: auto; flex: none; font-size: 10px; }
+.thread-tool-rows { display: grid; gap: 6px; min-width: 0; }
+.thread-tool-row { --tool-tone: var(--ui-mint); --tool-wash: var(--ui-mint-soft); --tool-edge: var(--ui-mint-edge); display: grid; grid-template-columns: 29px minmax(0, 1fr) 44px; align-items: start; gap: 10px; min-width: 0; padding: 13px 9px 13px 12px; border: 1px solid var(--tool-edge); border-left: 3px solid var(--tool-tone); border-radius: 14px 14px 14px 6px; background: var(--ui-paper); color: var(--ui-ink); box-shadow: 0 2px 0 var(--ui-shelf); }
+.thread-tool-row:is([data-state='system'], [data-state='system-blocked']) { --tool-tone: var(--ui-violet); --tool-wash: var(--ui-violet-soft); --tool-edge: var(--ui-violet-edge); background: linear-gradient(115deg, var(--tool-wash), var(--ui-paper) 65%); }
+.thread-tool-row[data-state='mode-disabled'] { --tool-tone: var(--ui-amber); --tool-wash: var(--ui-amber-soft); --tool-edge: var(--ui-amber-edge); border-style: dashed; border-left-style: solid; background: linear-gradient(125deg, var(--tool-wash), var(--ui-inset) 75%); box-shadow: none; }
+.thread-tool-row[data-state='manual-disabled'] { --tool-tone: var(--ui-muted); --tool-wash: var(--ui-field); --tool-edge: var(--ui-line); background: var(--ui-inset); box-shadow: none; }
+.thread-tool-symbol { display: grid; place-items: center; width: 29px; height: 32px; margin-top: 1px; border: 1px solid var(--tool-edge); border-radius: 10px 10px 10px 4px; background: var(--tool-wash); color: var(--tool-tone); }
+.thread-tool-symbol > svg { width: 18px; height: 18px; }
+.thread-tool-copy { min-width: 0; }
+.thread-tool-copy > header { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 9px; }
+.thread-tool-copy strong { color: var(--ui-ink); font-size: var(--ui-label); font-weight: 600; line-height: 1.65; overflow-wrap: anywhere; }
+.thread-tool-badge { display: inline-flex; align-items: center; gap: 3px; flex: none; padding: 2px 5px; border: 1px solid var(--tool-edge); border-radius: 6px; background: var(--tool-wash); color: var(--tool-tone); font-size: 10px; line-height: 1.5; }
+.thread-tool-badge > svg { width: 11px; height: 11px; }
+.thread-tool-copy > code { display: block; margin-top: 4px; color: var(--ui-muted); font-size: 10px; line-height: 1.6; overflow-wrap: anywhere; }
+.thread-tool-copy > p { margin: 7px 0 0; color: var(--ui-muted); font-size: var(--ui-caption); line-height: 1.75; overflow-wrap: anywhere; }
+.thread-tool-row[data-state='manual-disabled'] .thread-tool-copy > code { text-decoration: line-through; text-decoration-color: var(--ui-line); }
+.thread-tool-restriction { display: flex; align-items: baseline; gap: 4px; margin-top: 7px; color: var(--ui-amber); font-size: 10px; line-height: 1.7; }
+.thread-tool-restriction > svg { width: 11px; height: 11px; align-self: center; flex: none; }
+.thread-tool-fixed { display: grid; place-items: center; min-height: 44px; width: 44px; color: var(--tool-tone); }
+.thread-tool-fixed > svg { width: 20px; height: 20px; }
+.thread-tool-row[data-state='system-blocked'] .thread-tool-fixed { color: var(--ui-amber); }
+.thread-tool-save { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; justify-content: space-between; }
+.thread-tool-save > span { color: var(--ui-muted); font-size: var(--ui-caption); }
+@media (max-width: 359px) { .thread-tool-row { gap: 7px; grid-template-columns: 25px minmax(0, 1fr) 38px; padding-left: 9px; padding-right: 5px; } .thread-tool-symbol { width: 25px; height: 29px; } .thread-tool-fixed { width: 38px; } }

@@ -6,9 +6,10 @@ import { remoteFeedbackMessage } from '../../services/remoteFeedback.js'
 import { quietlyRefreshRemoteUserAvatar } from '../../services/remoteUserAvatar'
 import { invalidateAllRemoteAvatars } from '../../services/remoteMedia'
 import { observeRemoteResult } from '../../services/remoteObservation.js'
+import { taskResultQuery, opensTaskResult } from '../../utils/taskCenter.js'
 
 // 独立模式 Store 不参与远程数据投影；服务端是消息、任务与角色状态的权威。
-export const remoteState = shallowReactive({ connection: 'offline', sessionId: null, agents: [], activeAgentId: null, error: null, pendingError: null, notificationError: null, ready: false, initializing: false, restoringView: false, hasReadableData: false })
+export const remoteState = shallowReactive({ connection: 'offline', sessionId: null, agents: [], activeAgentId: null, pendingTaskResult: null, error: null, pendingError: null, notificationError: null, ready: false, initializing: false, restoringView: false, hasReadableData: false })
 export const remoteViews = reactive(new Map())
 export const remoteExecutions = reactive(new Map())
 export const remotePendingRequests = reactive(new Map())
@@ -160,6 +161,7 @@ export function clearRemoteState() {
   remoteState.sessionId = null
   remoteState.agents = []
   remoteState.activeAgentId = null
+  remoteState.pendingTaskResult = null
   remoteState.error = null
   remoteState.pendingError = null
   remoteState.ready = false
@@ -335,6 +337,13 @@ async function listenOnce() {
       // Gateway 只触发读模型失效；不把通知回放当作新消息或自行计算业务状态。
       for (const view of remoteViews.values()) view.stale = true
       scheduleRefresh()
+      const taskQuery = taskResultQuery(event.data?.payload, event.data?.replayed === true)
+      if (taskQuery) {
+        const requestGeneration = generation
+        readRemote(taskQuery, { allowCached: false }).then(task => {
+          if (requestGeneration === generation && opensTaskResult(task)) remoteState.pendingTaskResult = task
+        }).catch(() => { /* 暂时读取失败仍可从任务历史和持久通知查看，不重放完成动作。 */ })
+      }
       if (event.kind === 'snapshot_required' || event.data?.payload?.action === 'durable_notification') scheduleNotifications()
       return
     }

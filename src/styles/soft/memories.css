@@ -1,0 +1,20 @@
+/* 编辑和管理共用纵向内容区；弹层只在外壳铺底色，底部操作始终可见。 */
+.remote-memory-reader { width: 100%; min-width: 0; }
+.memory-browse-tabs { display: flex; gap: 7px; margin: 14px 0 18px; padding: 4px; border: 1px solid var(--ui-line); border-radius: 16px; background: var(--ui-field); }
+.memory-browse-tabs > button { display: flex; flex: 1; justify-content: center; align-items: center; gap: 7px; min-width: 0; min-height: 42px; padding: 9px; border: 1px solid transparent; border-radius: 12px; background: transparent; color: var(--ui-muted); font: inherit; font-size: var(--ui-label); }
+.memory-browse-tabs > button.selected { color: var(--ui-violet); background: var(--ui-violet-soft); border-color: var(--ui-violet-edge); font-weight: 600; }
+.memory-browse-tabs > button > svg { width: 18px; height: 18px; flex: none; }
+.memory-entry-actions { display: grid; gap: 12px; width: 100%; min-width: 0; margin: 8px 0 18px; }
+.memory-status-label { display: inline-flex; align-items: center; gap: 5px; justify-self: start; color: var(--ui-mint); font-size: 11px; }
+.memory-status-label[data-archived='true'] { color: var(--ui-violet); }
+.memory-status-label > svg { width: 15px; height: 15px; }
+.memory-entry-buttons { display: flex; flex-wrap: wrap; gap: 9px; }
+.memory-entry-buttons > .remote-purpose-action { flex: 1 1 auto; min-width: 0; justify-content: center; padding: 9px 12px; }
+.memory-operation-confirm { display: grid; justify-items: start; gap: 14px; min-width: 0; padding: 2px 0 10px; --memory-action-color: var(--ui-violet); --memory-action-soft: var(--ui-violet-soft); }
+.memory-operation-confirm[data-danger='true'] { --memory-action-color: var(--ui-rose); --memory-action-soft: var(--ui-rose-soft); }
+.memory-confirm-symbol { display: grid; place-items: center; width: 44px; height: 44px; border-radius: 15px 15px 15px 7px; background: var(--memory-action-soft); color: var(--memory-action-color); }
+.memory-confirm-symbol > svg { width: 25px; height: 25px; }
+.memory-operation-confirm > p { margin: 0; font-size: var(--ui-text); line-height: 1.8; color: var(--ui-ink); }
+.memory-operation-confirm > blockquote { margin: 0; width: 100%; min-width: 0; padding: 12px 14px; border-left: 2px solid var(--memory-action-color); border-radius: 5px 12px 12px 5px; background: var(--memory-action-soft); color: var(--ui-muted); font-size: var(--ui-label); line-height: 1.8; overflow-wrap: anywhere; max-height: 8em; overflow-y: auto; }
+.memory-confirm-footer { display: flex; justify-content: flex-end; flex-wrap: wrap; gap: 9px; }
+.memory-browse-tabs > button:focus-visible { outline: 2px solid var(--ui-violet); outline-offset: -2px; }

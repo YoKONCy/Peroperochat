@@ -4,7 +4,7 @@ const colors = {
   dark: { ink: '#e9ebf1', muted: '#a8afbd', shelf: '#03050b', rose: '#e9a5be', mint: '#8ed0b7', violet: '#bfa8ea', amber: '#e3bf83', blue: '#96bfe7' },
 }
 const washes = { rose: '#fbe3eb', mint: '#e0f3eb', violet: '#eee5fc', amber: '#fff0d7', blue: '#e2effa' }
-const sections = { api: 'blue', model: 'blue', models: 'blue', providers: 'blue', agents: 'rose', role: 'rose', proactive: 'amber', appearance: 'violet', assignments: 'blue', prompts: 'violet', voice: 'rose', user: 'rose', usage: 'mint', runtime: 'mint', memory: 'violet', data: 'amber' }
+const sections = { api: 'blue', model: 'blue', models: 'blue', providers: 'blue', agents: 'rose', role: 'rose', proactive: 'amber', appearance: 'violet', assignments: 'blue', prompts: 'violet', prefill: 'violet', voice: 'rose', user: 'rose', usage: 'mint', runtime: 'mint', memory: 'violet', data: 'amber' }
 export function uiSectionTone(id) { return sections[id] || 'blue' }
 function mix(first, second, ratio) {
   if (![first, second].every(value => /^#[a-f\d]{6}$/i.test(value || ''))) {

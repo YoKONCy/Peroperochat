@@ -9,6 +9,7 @@
       <form class="remote-search chromatic-library-search" @submit.prevent="search"><RoomIcon name="search" /><input v-model="searchText" :placeholder="t(source === 'files' ? '在文件夹里找找…' : '搜索当前连接中的资料')" :aria-label="t('搜索资料')" maxlength="200" /><button type="submit">{{ t('搜索') }}</button></form>
       <nav class="chromatic-library-categories" :aria-label="t('资料分类')"><button v-for="item in sources" :key="item.id" :data-ui-tone="item.tone" :aria-pressed="source === item.id" :class="{ selected: source === item.id }" @click="source = item.id"><RoomIcon :name="item.icon" /><strong>{{ t(item.label) }}</strong><small>{{ t(item.description) }}</small></button></nav>
       <RemoteFilePath v-if="source === 'files'" :path="path" :disabled="loading" @navigate="navigateFiles" />
+      <nav v-if="source === 'memories'" class="memory-browse-tabs" :aria-label="t('记忆分类', [], 'memory-actions')"><button v-for="item in memoryTabs" :key="item.status" type="button" :class="{ selected: memoryStatus === item.status }" :aria-pressed="memoryStatus === item.status" @click="memoryStatus = item.status"><RoomIcon :name="item.icon" />{{ t(item.label, [], 'memory-actions') }}</button></nav>
     </template>
     <template v-if="kind === 'inbox'"><RemoteFeedback v-if="active" :message="remoteState.notificationError" /><article v-for="notice in notices" :id="`remote-notice-${JSON.stringify([notice.principalId, notice.notificationId])}`" :key="`${notice.principalId}:${notice.notificationId}:${notice.revision}`" class="remote-input-card"><span class="remote-eyebrow">{{ notice.replayed ? '较早的提醒' : '新的提醒' }}</span><h3>{{ notice.title || 'infOS 通知' }}</h3><p class="remote-notice-body">{{ notice.body }}</p><button class="room-text-button" :disabled="acknowledging || remoteState.connection !== 'online'" @click="acknowledge(notice)">标为已读</button></article></template>
     <RemoteFeedback v-if="active" :message="error" />
@@ -16,16 +17,17 @@
     <p v-if="kind === 'library' && source === 'files' && loading && rows.length" class="file-opening-note" role="status">正在读取文件…</p>
     <p v-if="(loading || syncing) && !rows.length" class="room-empty">正在载入…</p>
     <p v-else-if="error && !rows.length && (kind !== 'inbox' || !notices.length)" class="remote-empty"><RoomIcon name="refresh" /><strong>暂时没能载入</strong><span>稍后点右上角刷新，再试一次。</span></p>
+    <p v-else-if="!rows.length && kind === 'library' && source === 'memories'" class="remote-empty"><RoomIcon :name="memoryStatus === 'archived' ? 'archive' : 'memory'" /><strong>{{ t(memoryStatus === 'archived' ? '还没有归档的记忆' : '这里还没有记忆', [], 'memory-actions') }}</strong><span>{{ t(memoryStatus === 'archived' ? '归档的记忆会放在这里，需要时可以恢复。' : '记下的事情会出现在这里。', [], 'memory-actions') }}</span></p>
     <p v-else-if="!rows.length && (kind !== 'inbox' || !notices.length)" class="remote-empty"><RoomIcon :name="kind === 'inbox' ? 'check' : 'document'" /><strong>{{ kind === 'inbox' ? '暂时没有需要处理的事项' : '这里还没有内容' }}</strong><span>{{ kind === 'tasks' ? '角色执行的任务会出现在这里。' : kind === 'library' ? '可以换个关键词，或查看其他分类。' : '新的审批和问题会在这里汇合。' }}</span></p>
     <template v-if="featuredFile"><h3 class="chromatic-section-label">{{ t('文件预览') }}</h3><RemoteResourceCard v-if="active" :key="`${agentId}:${threadId}:${featuredFile.path}`" :value="{ source: `workspace:${encodeURIComponent(featuredFile.path)}`, name: featuredFile.name }" :context="{ agentId, threadId }" @open="$emit('resource', $event)" /></template>
-    <div class="remote-record-list"><button v-for="row in displayRows" :key="`${row.category}:${row.id || row.requestId || row.path}`" class="remote-record" :class="{ 'chromatic-task-card': kind === 'tasks' }" :data-ui-tone="rowTone(row)" @click="open(row)"><RemoteFileCover v-if="row.category === 'files' && row.type !== 'directory'" :name="row.name" /><span v-else class="remote-record-symbol"><RoomIcon :name="row.category === 'pending' ? 'help' : row.category === 'approval' ? 'shield' : row.type === 'directory' ? 'folder' : kind === 'tasks' ? row.status === 'completed' ? 'check' : 'tasks' : source === 'memories' ? 'memory' : 'document'" /></span><span class="chromatic-record-copy"><small v-if="kind !== 'tasks'">{{ t(category(row)) }}</small><strong>{{ row.title || row.question || row.name || row.summary || row.event?.summary || t('查看详情') }}</strong><em v-if="recordSummary(row)">{{ recordSummary(row) }}</em><small v-if="row.status" class="chromatic-record-state">{{ t(remoteStatus(row.status)) }}</small></span><RoomIcon name="arrow" /></button></div>
+    <div class="remote-record-list"><button v-for="row in displayRows" :key="`${row.category}:${row.id || row.requestId || row.path}`" class="remote-record" :class="{ 'chromatic-task-card': kind === 'tasks' }" :data-ui-tone="rowTone(row)" @click="open(row)"><RemoteFileCover v-if="row.category === 'files' && row.type !== 'directory'" :name="row.name" /><span v-else class="remote-record-symbol"><RoomIcon :name="row.category === 'pending' ? 'help' : row.category === 'approval' ? 'shield' : row.type === 'directory' ? 'folder' : kind === 'tasks' ? row.status === 'completed' ? 'check' : 'tasks' : source === 'memories' ? 'memory' : 'document'" /></span><span class="chromatic-record-copy"><small v-if="kind !== 'tasks'">{{ t(category(row)) }}</small><strong>{{ row.title || row.question || row.name || row.summary || row.event?.summary || (row.category === 'memories' ? row.narrative?.slice(0, 88) : '') || t('查看详情') }}</strong><em v-if="recordSummary(row)">{{ recordSummary(row) }}</em><small v-if="row.status" class="chromatic-record-state">{{ t(remoteStatus(row.status)) }}</small></span><RoomIcon name="arrow" /></button></div>
     <div v-if="kind !== 'inbox' && (kind === 'tasks' || source !== 'files') && (page > 1 || hasMore)" class="remote-pagination"><button :disabled="loading || page <= 1" @click="page--">{{ t('上一页') }}</button><span>{{ t('第 {0} 页', [page]) }}</span><button :disabled="loading || !hasMore" @click="page++">{{ t('下一页') }}</button></div>
   </section>
 </template>
 <script setup>
 import RemoteFeedback from './RemoteFeedback.vue'
 import { managementOperationLabel } from '../../services/remoteManagement'
-import { computed, ref, watch, onBeforeUnmount } from 'vue'
+import { computed, ref, watch, onMounted, onBeforeUnmount } from 'vue'
 import RoomIcon from './RemoteIcon.vue'
 import RemoteFilePath from './RemoteFilePath.vue'
 import '../../styles/remote-files.css'
@@ -33,13 +35,15 @@ import { t } from '../../i18n/remote'
 import RemoteFileCover from './RemoteFileCover.vue'
 import RemoteResourceCard from './RemoteResourceCard.vue'
 import { readRemote, remoteViews, remotePendingRequests, refreshRemotePendingRequests, remoteNotifications, remoteState, refreshRemoteNotifications, acknowledgeRemoteNotification } from '../../stores/remote'
-import { currentToken, assertToken } from '../../stores/mode'
+import { currentToken, assertToken, sameToken } from '../../stores/mode'
 import { remoteItems, remoteStatus } from '../../utils/remoteMarkdown'
 const props = defineProps({ kind: String, agentId: String, threadId: String, active: { type: Boolean, default: true } })
 const emit = defineEmits(['detail', 'thread', 'pending', 'create-task', 'resource', 'manage'])
 const token = currentToken()
 const page = ref(1), source = ref('files'), path = ref('.'), searchText = ref(''), keyword = ref(''), loading = ref(false), error = ref(''), queries = ref([]), taskStatus = ref(null)
 const acknowledging = ref(false)
+const memoryStatus = ref('active')
+const memoryTabs = [{ status: 'active', label: '当前记忆', icon: 'memory' }, { status: 'archived', label: '已归档', icon: 'archive' }]
 const notices = computed(() => [...remoteNotifications.values()])
 const sources = [{ id: 'files', label: '文件', icon: 'folder', tone: 'blue', description: '随时打开' }, { id: 'memories', label: '记忆', icon: 'memory', tone: 'violet', description: '一起积累' }, { id: 'documents', label: '文档', icon: 'document', tone: 'amber', description: '随时翻一翻' }]
 const managementEntry = computed(() => ({ files: { section: 'workbench', label: '文件管理', icon: 'folder' }, memories: { section: 'memories', label: '记忆管理', icon: 'memory' }, documents: { section: 'documents', label: '文档管理', icon: 'edit' } })[source.value])
@@ -75,7 +79,7 @@ async function reload() {
     const next = props.kind === 'tasks' ? [{ kind: 'tasks', agentId: props.agentId || null, status: taskStatus.value, page: page.value, pageSize: 30 }]
       : props.kind === 'inbox' ? [{ kind: 'approvals' }, { kind: 'questions' }]
         : source.value === 'files' ? props.threadId && props.agentId ? [{ kind: 'workspace_tree', agentId: props.agentId, threadId: props.threadId, path: path.value }] : []
-          : source.value === 'memories' ? props.agentId ? [{ kind: 'memories', agentId: props.agentId, query: keyword.value, page: page.value, pageSize: 30 }] : []
+          : source.value === 'memories' ? props.agentId ? [{ kind: 'memories', agentId: props.agentId, query: keyword.value, page: page.value, pageSize: 30, ...(memoryStatus.value === 'archived' ? { status: 'archived' } : {}) }] : []
             : [{ kind: 'documents', query: keyword.value, page: page.value, pageSize: 30 }]
     queries.value = next
     const inboxResults = props.kind === 'inbox' ? await Promise.allSettled([refreshRemotePendingRequests(), refreshRemoteNotifications()]) : []
@@ -123,6 +127,12 @@ watch(() => props.active, value => { if (value) reload(); else { version++; load
 watch([page, path], reload)
 watch(source, () => { page.value = 1; path.value = '.'; searchText.value = ''; keyword.value = ''; reload() })
 watch(taskStatus, () => { if (page.value !== 1) page.value = 1; else reload() })
+watch(memoryStatus, () => { queries.value = []; if (page.value !== 1) page.value = 1; else reload() })
 watch(() => remoteState.connection, (state, previous) => { if (state === 'online' && previous !== 'online') reload() })
-onBeforeUnmount(() => { disposed = true; version++ })
+function memoryChanged(event) {
+  if (!sameToken(event.detail?.token, token) || props.kind !== 'library' || source.value !== 'memories') return
+  reload()
+}
+onMounted(() => window.addEventListener('ppc:memories-changed', memoryChanged))
+onBeforeUnmount(() => { disposed = true; version++; window.removeEventListener('ppc:memories-changed', memoryChanged) })
 </script>

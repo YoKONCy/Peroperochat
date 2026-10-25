@@ -12,4 +12,7 @@
 @import './tts.css';
 @import './prompts.css';
 @import './answer-preferences.css';
+@import './memories.css';
+@import './tasks.css';
+@import './tools.css';
 @import './motion.css';

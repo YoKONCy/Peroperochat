@@ -1,5 +1,5 @@
 <template>
-  <RoomDrawer :title="tr('回答偏好')" :subtitle="tr('与当前 infOS 的其他客户端同步')" :busy="saving" :before-close="beforeClose" @close="$emit('close')">
+  <RoomDrawer :title="tr(prefillOnly ? '预填充模式' : '回答偏好')" :subtitle="tr('与当前 infOS 的其他客户端同步')" :busy="saving" :before-close="beforeClose" @close="$emit('close')">
     <RemoteFeedback :message="tr(error)" /><RemoteFeedback :message="tr(notice)" tone="success" />
     <RemoteAction v-if="unresolved" icon="alert" tone="danger" @click="$emit('pending')">{{ tr('核对保存结果') }}</RemoteAction>
     <div class="answer-preferences">
@@ -7,11 +7,11 @@
       <p v-if="!settings && busy" class="room-empty" role="status">{{ tr('正在读取设置…') }}</p>
       <RemoteAction v-if="!settings && !busy" icon="refresh" :disabled="!online" @click="run(load)">{{ tr('重新读取') }}</RemoteAction>
       <template v-if="settings">
-        <section class="answer-preference-card answer-wholesome">
+        <section v-if="!prefillOnly" class="answer-preference-card answer-wholesome">
           <header><span class="answer-setting-icon"><RemoteIcon name="shield" /></span><div><h3>{{ tr('健全模式') }}</h3><p>{{ tr('启用后会引导模型，避免生成限制级内容。') }}</p></div><RoomSwitch v-model="settings.wholesome" :disabled="locked" :label="tr('健全模式')" /></header>
         </section>
         <section class="answer-preference-card answer-prefill">
-          <header><span class="answer-setting-icon"><RemoteIcon name="edit" /></span><div><h3>{{ tr('回答预填充') }}</h3><p>{{ tr('给回答写个开头，让模型接着生成。') }}</p></div><RoomSwitch v-model="settings.prefill.enabled" :disabled="locked" :label="tr('回答预填充')" /></header>
+          <header><span class="answer-setting-icon"><RemoteIcon name="edit" /></span><div><h3>{{ tr('预填充模式') }}</h3><p>{{ tr('给回答写个开头，让模型接着生成。') }}</p></div><RoomSwitch v-model="settings.prefill.enabled" :disabled="locked" :label="tr('预填充模式')" /></header>
           <div class="answer-prefill-content">
             <nav class="answer-prefill-modes" :aria-label="tr('填充方式')"><button v-for="mode in modes" :key="mode.id" type="button" :class="{ selected: settings.prefill.mode === mode.id }" :aria-pressed="settings.prefill.mode === mode.id" :disabled="locked" @click="settings.prefill.mode = mode.id"><RemoteIcon :name="mode.icon" /><span>{{ tr(mode.label) }}</span><RemoteIcon v-if="settings.prefill.mode === mode.id" name="check" /></button></nav>
             <p class="answer-mode-description">{{ tr(settings.prefill.mode === 'continuous' ? '每轮生成都填充，包括使用工具后的继续回答。' : '每次回复只在首次生成时填充。') }}</p>
@@ -37,6 +37,7 @@ import { useRemoteManagement } from '../../composables/useRemoteManagement'
 import { remoteState } from '../../stores/remote'
 import { t } from '../../i18n/remote'
 import { ANSWER_PREFERENCE_KEYS, MAX_ASSISTANT_PREFILL_LENGTH, WHOLESOME_MODE_KEY, parseAnswerPreferences, changedAnswerPreferences } from '../../utils/answerPreferences'
+defineProps({ prefillOnly: Boolean })
 const emit = defineEmits(['close', 'saved', 'pending'])
 const tr = (text, parameters = []) => t(text, parameters, 'answer-preferences')
 const { token, read, write, run, guard, busy, error, unresolved } = useRemoteManagement()

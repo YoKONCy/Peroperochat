@@ -21,7 +21,9 @@ pub enum Query {
     ActiveExecutions,
     Approvals,
     Questions,
-    Tasks {#[serde(rename="agentId")] agent_id:Option<String>,status:Option<String>,page:u32,#[serde(rename="pageSize")] page_size:u32},
+    Tasks {#[serde(rename="agentId")] agent_id:Option<String>,status:Option<String>,page:u32,#[serde(rename="pageSize")] page_size:u32,#[serde(default,skip_serializing_if="Option::is_none")] category:Option<String>,#[serde(default,skip_serializing_if="Option::is_none")] view:Option<String>,#[serde(default,skip_serializing_if="Option::is_none")] keyword:Option<String>,#[serde(default,rename="parentTaskId",skip_serializing_if="Option::is_none")] parent_task_id:Option<String>,#[serde(default,skip_serializing_if="Option::is_none")] from:Option<String>,#[serde(default,skip_serializing_if="Option::is_none")] to:Option<String>},
+    TaskCounts,
+    TaskDeliveries {id:String},
     Task {id:String},
     TaskProjection {id:String},
     Plan {#[serde(rename="threadId")] thread_id:String},
@@ -29,7 +31,7 @@ pub enum Query {
     Rooms,
     Room {id:String,limit:u32},
     RoomMembers {id:String},
-    Memories {#[serde(rename="agentId")] agent_id:String,query:String,page:u32,#[serde(rename="pageSize")] page_size:u32},
+    Memories {#[serde(rename="agentId")] agent_id:String,query:String,page:u32,#[serde(rename="pageSize")] page_size:u32,#[serde(default,skip_serializing_if="Option::is_none")] status:Option<String>},
     MemorySource {id:String},
     Documents {query:String,page:u32,#[serde(rename="pageSize")] page_size:u32},
     Document {id:String},
@@ -96,8 +98,14 @@ impl Query {
             Self::QueueLive {id}=>route(format!("/chat/queue/{}/live",segment(id)?)),
             Self::ActiveExecutions=>route("/chat/tasks".into()),
             Self::Approvals=>route("/approvals".into()),Self::Questions=>route("/agent-inputs".into()),
-            Self::Tasks {agent_id,status,page:n,page_size}=> {let mut r=route("/background-tasks".into());page(&mut r,*n,*page_size)?;
-                if let Some(id)=agent_id {param(&mut r,"agentId",id)?;}if let Some(status)=status {param(&mut r,"status",status)?;}r},
+            Self::Tasks {agent_id,status,page:n,page_size,category,view,keyword,parent_task_id,from,to}=> {let mut r=route("/background-tasks".into());page(&mut r,*n,*page_size)?;
+                if let Some(id)=agent_id {param(&mut r,"agentId",id)?;}
+                if let Some(status)=status {if !["queued","running","paused","waiting_input","waiting","blocked","completed","failed","cancelled"].contains(&status.as_str()) {return Err(invalid());}param(&mut r,"status",status)?;}
+                if let Some(category)=category {if !["agent_task","resident"].contains(&category.as_str()) {return Err(invalid());}param(&mut r,"category",category)?;}
+                if let Some(view)=view {if view!="history" {return Err(invalid());}param(&mut r,"view",view)?;}
+                for (key,value) in [("keyword",keyword),("parentTaskId",parent_task_id),("from",from),("to",to)] {if let Some(value)=value {param(&mut r,key,value)?;}}r},
+            Self::TaskCounts=>route("/background-tasks/active-count".into()),
+            Self::TaskDeliveries {id}=>route(format!("/background-tasks/{}/deliveries",segment(id)?)),
             Self::Task {id}=>route(format!("/background-tasks/{}",segment(id)?)),
             Self::TaskProjection {id}=>route(format!("/background-tasks/{}/projection",segment(id)?)),
             Self::Plan {thread_id}=>route(format!("/task-plans/{}",segment(thread_id)?)),
@@ -106,7 +114,7 @@ impl Query {
             Self::Room {id,limit}=> {if !(1..=100).contains(limit) {return Err(ChatError::new("INVALID_INPUT","房间历史范围无效"));}
                 let mut r=route(format!("/stronghold/rooms/{}/projection",segment(id)?));param(&mut r,"limit",&limit.to_string())?;r},
             Self::RoomMembers {id}=>route(format!("/stronghold/rooms/{}/members",segment(id)?)),
-            Self::Memories {agent_id,query,page:n,page_size}=> {let mut r=route("/memories".into());param(&mut r,"agentId",agent_id)?;param(&mut r,"query",query)?;page(&mut r,*n,*page_size)?;r},
+            Self::Memories {agent_id,query,page:n,page_size,status}=> {let mut r=route("/memories".into());param(&mut r,"agentId",agent_id)?;param(&mut r,"query",query)?;if let Some(status)=status {if !["active","archived"].contains(&status.as_str()) {return Err(invalid());}param(&mut r,"statuses",status)?;}page(&mut r,*n,*page_size)?;r},
             Self::MemorySource {id}=>route(format!("/memories/{}/source",segment(id)?)),
             Self::Documents {query,page:n,page_size}=> {let mut r=route("/knowledge/documents".into());param(&mut r,"query",query)?;page(&mut r,*n,*page_size)?;r},
             Self::Document {id}=>route(format!("/knowledge/documents/{}",segment(id)?)),
@@ -136,7 +144,7 @@ pub enum Action {
     RewindPreview {id:String,#[serde(rename="messageId")] message_id:Option<u64>,#[serde(rename="wholeThread")] whole_thread:bool},
     Rewind {id:String,#[serde(rename="messageId")] message_id:Option<u64>,#[serde(rename="wholeThread")] whole_thread:bool,#[serde(default,rename="preserveInputAttachments")] preserve_input_attachments:bool},
     TaskControl {id:String,action:String},
-    DispatchTask {#[serde(rename="agentId")] agent_id:String,instruction:String,title:Option<String>,#[serde(rename="targetThreadId")] target_thread_id:Option<String>},
+    DispatchTask {#[serde(rename="agentId")] agent_id:String,instruction:String,title:Option<String>,#[serde(rename="targetThreadId")] target_thread_id:Option<String>,priority:Option<u8>,#[serde(rename="completionAction")] completion_action:Option<String>,#[serde(rename="successCriteria")] success_criteria:Option<String>,recovery:Option<String>,deadline:Option<String>},
     RoomMessage {id:String,content:String,mentions:Vec<String>},
 }
 #[derive(Debug,Clone,Serialize,Deserialize)]
@@ -177,10 +185,12 @@ impl Action {
                 ("POST",format!("/chat/threads/{}/{name}",segment(id)?),body)
             },
             Self::TaskControl {id,action}=> {if !["pause","resume","resume-interrupted","retry","cancel","read"].contains(&action.as_str()) {return Err(invalid());}("POST",format!("/background-tasks/{}/{}",segment(id)?,action),json!({}))},
-            Self::DispatchTask {agent_id,instruction,title,target_thread_id}=> {
-                if instruction.trim().is_empty() || instruction.len()>16000 {return Err(invalid());}
+            Self::DispatchTask {agent_id,instruction,title,target_thread_id,priority,completion_action,success_criteria,recovery,deadline}=> {
                 let mut body=json!({"agentId":agent_id,"instruction":instruction});
                 if let Some(title)=title {body["title"]=json!(title);}if let Some(id)=target_thread_id {body["targetThreadId"]=json!(id);}
+                for (key,value) in [("completionAction",completion_action),("successCriteria",success_criteria),("recovery",recovery),("deadline",deadline)] {if let Some(value)=value {body[key]=json!(value);}}
+                if let Some(priority)=priority {body["priority"]=json!(priority);}
+                validate_task_dispatch(&body)?;
                 ("POST","/background-tasks".into(),body)
             },
             Self::RoomMessage {id,content,mentions}=> {if content.trim().is_empty() || mentions.len()>32 {return Err(invalid());}
@@ -190,11 +200,50 @@ impl Action {
         Ok(Route {method:method.parse().unwrap(),path,params:Vec::new(),body:Some(body)})
     }
 }
+pub(super) fn validate_task_dispatch(body:&Value)->ChatResult<()> {
+    let Some(body)=body.as_object() else {return Err(invalid());};
+    let text=|key:&str,max:usize,required:bool|match body.get(key) {None=>!required,Some(Value::String(value))=>value.encode_utf16().count()<=max && (!required || !value.trim().is_empty()) && !value.contains('\0'),_=>false};
+    if body.keys().any(|key|!["agentId","instruction","title","targetThreadId","priority","completionAction","successCriteria","recovery","deadline"].contains(&key.as_str()))
+        || !text("agentId",64,true) || !text("instruction",4000,true) || !text("title",64,false) || !text("targetThreadId",160,body.contains_key("targetThreadId")) || !text("successCriteria",2000,false)
+        || body.get("priority").is_some_and(|value|!value.as_u64().is_some_and(|n|(1..=10).contains(&n)))
+        || body.get("completionAction").is_some_and(|value|!value.as_str().is_some_and(|s|["notify","open_result","send_to_chat"].contains(&s)))
+        || body.get("recovery").is_some_and(|value|!value.as_str().is_some_and(|s|["read_only","confirm"].contains(&s)))
+        || body.get("deadline").is_some_and(|value|!value.as_str().is_some_and(|s|chrono::DateTime::parse_from_rfc3339(s).is_ok()))
+        || body.get("completionAction").is_some_and(|value|value=="send_to_chat") && !body.get("targetThreadId").and_then(Value::as_str).is_some_and(|id|!id.trim().is_empty()) {return Err(invalid());}
+    Ok(())
+}
 fn invalid()->ChatError {ChatError::new("INVALID_INPUT","远程操作参数无效或超出范围")}
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn task_queries_keep_server_history_filters_parent_scope_and_legacy_cache_keys() {
+        let legacy=json!({"kind":"tasks","agentId":null,"status":null,"page":1,"pageSize":30});
+        let query:Query=serde_json::from_value(legacy.clone()).unwrap();
+        assert_eq!(serde_json::to_value(query).unwrap(),legacy);
+        let query:Query=serde_json::from_value(json!({"kind":"tasks","agentId":"pero","status":"failed","page":2,"pageSize":30,"category":"agent_task","view":"history","parentTaskId":"parent-a","keyword":"散步","from":"2026-10-01","to":"2026-10-25"})).unwrap();
+        let route=query.route().unwrap();assert_eq!(route.path,"/background-tasks");
+        for (key,value) in [("category","agent_task"),("view","history"),("parentTaskId","parent-a"),("status","failed"),("keyword","散步"),("page","2"),("from","2026-10-01"),("to","2026-10-25")] {assert!(route.params.contains(&(key.into(),value.into())));}
+        for (key,value) in [("status","interrupted"),("category","system"),("view","active")] {
+            let mut invalid=legacy.clone();invalid[key]=json!(value);
+            assert!(serde_json::from_value::<Query>(invalid).unwrap().route().is_err());
+        }
+        assert_eq!(Query::TaskCounts.route().unwrap().path,"/background-tasks/active-count");
+        assert_eq!(Query::TaskDeliveries {id:"a/b".into()}.route().unwrap().path,"/background-tasks/a%2Fb/deliveries");
+    }
+    #[test]
+    fn task_dispatch_keeps_delivery_recovery_and_utf16_server_limits() {
+        let body=json!({"agentId":"pero","instruction":"整理路线","title":"周末","priority":7,"targetThreadId":"thread-a","completionAction":"send_to_chat","successCriteria":"提供路线文件","recovery":"confirm","deadline":"2026-10-26T18:00:00+08:00"});
+        let mut action=body.clone();action["kind"]=json!("dispatch_task");
+        let route=serde_json::from_value::<Action>(action).unwrap().route().unwrap();
+        assert_eq!(route.path,"/background-tasks");assert_eq!(route.method,reqwest::Method::POST);assert_eq!(route.body,Some(body.clone()));
+        for (key,value) in [("priority",json!(0)),("priority",json!(11)),("instruction",json!("字".repeat(4001))),("title",json!("\u{1F600}".repeat(33))),("successCriteria",json!("字".repeat(2001))),("targetThreadId",json!("")),("completionAction",json!("unknown")),("recovery",json!(true)),("deadline",json!("not-a-date")),("unexpected",json!(true))] {
+            let mut invalid=body.clone();invalid[key]=value;assert!(validate_task_dispatch(&invalid).is_err());
+        }
+        let mut invalid=body.clone();invalid.as_object_mut().unwrap().remove("targetThreadId");assert!(validate_task_dispatch(&invalid).is_err());
+        let mut boundary=body;boundary["instruction"]=json!("\u{1F600}".repeat(2000));boundary["title"]=json!("字".repeat(64));assert!(validate_task_dispatch(&boundary).is_ok());
+    }
     #[tokio::test]
     async fn oversized_history_retries_smaller_pages_without_losing_cursor() {
         let query=Query::Conversation {id:"thread-a".into(),before_cursor:Some("123".into()),page_size:24};
@@ -230,6 +279,22 @@ mod tests {
         assert_eq!(rewind.body.unwrap()["preserveInputAttachments"],true);
         assert!(Action::EditMessage {thread_id:"t".into(),id:"1".into(),content:"新正文".into(),expected_revision:None}.route().is_err());
         assert!(Action::EditMessage {thread_id:"t".into(),id:"1".into(),content:" ".into(),expected_revision:Some(1)}.route().is_err());
+    }
+    #[test]
+    fn memory_archive_filters_are_bounded_and_keep_legacy_cache_keys() {
+        let legacy=json!({"kind":"memories","agentId":"nana","query":"旅行","page":1,"pageSize":30});
+        let query:Query=serde_json::from_value(legacy.clone()).unwrap();
+        assert_eq!(serde_json::to_value(&query).unwrap(),legacy);
+        assert!(!query.route().unwrap().params.iter().any(|(key,_)|key=="statuses"));
+        for status in ["active","archived"] {
+            let query:Query=serde_json::from_value(json!({"kind":"memories","agentId":"nana","query":"旅行","page":2,"pageSize":30,"status":status})).unwrap();
+            let route=query.route().unwrap();
+            assert_eq!(route.path,"/memories");
+            assert!(route.params.contains(&("statuses".into(),status.into())));
+            assert!(route.params.contains(&("agentId".into(),"nana".into())));
+        }
+        let invalid:Query=serde_json::from_value(json!({"kind":"memories","agentId":"nana","query":"","page":1,"pageSize":30,"status":"deleted"})).unwrap();
+        assert!(invalid.route().is_err());
     }
     #[test]
     fn state_and_queue_routes_preserve_thread_identity_and_revisions() {

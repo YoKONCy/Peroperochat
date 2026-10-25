@@ -18,9 +18,9 @@
       <RemoteAction icon="close" :disabled="!content" @click="$emit('clear'); commands = false">清空输入</RemoteAction>
       <RemoteAction icon="folder" @click="$emit('workbench'); commands = false">引用工作区</RemoteAction>
       <RemoteAction icon="image" @click="$emit('image-mode'); commands = false">{{ imageLabel || '图片识别方式' }}</RemoteAction>
-      <RemoteAction icon="shield" :disabled="blocked" @click="commands = false; answerPreferencesOpen = true">{{ tr('回答偏好') }}</RemoteAction>
+      <RemoteAction icon="edit" :disabled="blocked" @click="commands = false; answerPreferencesOpen = true">{{ tr('预填充模式') }}</RemoteAction>
     </div></RoomDrawer>
-    <RemoteAnswerPreferences v-if="answerPreferencesOpen" ref="answerPreferences" @close="answerPreferencesOpen = false" @pending="$emit('pending')" />
+    <RemoteAnswerPreferences v-if="answerPreferencesOpen" ref="answerPreferences" prefill-only @close="answerPreferencesOpen = false" @pending="$emit('pending')" />
     <RoomDrawer v-if="budgetOpen" title="上下文用量" @close="budgetOpen = false"><section class="chat-context-details">
       <template v-if="budget"><strong>{{ compact(budget.usedTokens) }}<small v-if="budget.maxInputTokens > 0"> / {{ compact(budget.maxInputTokens) }} Token</small></strong><progress v-if="budget.maxInputTokens > 0" :value="budget.usedTokens || 0" :max="budget.maxInputTokens" aria-label="预计上下文占用" /><p>{{ budget.maxInputTokens > 0 ? '预计用量，实际使用可能略有变化。' : '当前模型尚未设置上下文大小。' }}</p></template>
       <template v-else><p>{{ running ? '角色正在回复，完成后会更新用量。' : blocked ? '连接恢复后可以查看用量。' : '暂时没有可用的估算。' }}</p><RemoteAction icon="refresh" :disabled="blocked || running" @click="loadBudget">重新估算</RemoteAction></template>
