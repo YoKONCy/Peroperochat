@@ -106,7 +106,7 @@ Object.assign(fieldLabels, { gender: '性别', identity: '身份', appearance: '
 Object.assign(fieldLabels, { targetThreadId: '目标会话标识', priority: '优先级', autoExecuteTools: '自动执行工具', configured: '已配置', hasApiKey: '已设置密钥', ready: '就绪', supported: '支持', phase: '阶段', nextRunAt: '下次运行', dailyRuns: '今日执行次数', lastOutcome: '最近结果', lastError: '最近错误', pairIds: '对话轮次标识', targetMessageId: '回退消息标识', rolledBackCount: '回退文件数', deletedMessageIds: '已删除消息', lastSync: '上次同步', saved: '已保存', cancelled: '已取消', totalBytes: '字节数', totalLines: '总行数', encoding: '编码', eol: '换行格式' })
 export function managementOperationLabel(operation) {
   if (!operation) return ''
-  const special = { avatar: '上传角色头像', knowledge: '上传知识文档', asr: '语音识别', 'voice.tts': '文字朗读' }
+  const special = { avatar: '上传角色头像', owner_avatar: '更新用户头像', 'owner_avatar.reset': '恢复默认头像', knowledge: '上传知识文档', asr: '语音识别', tts_reference: '上传参考音频', 'voice.save_tts_config': '保存声音配置', 'voice.tts': '文字朗读' }
   if (special[operation]) return special[operation]
   for (const section of managementSections) {
     const action = [section.create, ...(section.actions || []), ...(section.top || [])].find(item => item?.op === operation)

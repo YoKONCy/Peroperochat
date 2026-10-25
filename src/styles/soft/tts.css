@@ -1,0 +1,28 @@
+.remote-tts-settings { min-width: 0; }
+.tts-workspace-heading { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin: 9px 0 17px; }
+.tts-workspace-heading > span { display: flex; align-items: center; gap: 10px; }
+.tts-workspace-heading svg { width: 32px; height: 32px; color: var(--ui-rose); padding: 5px; border-radius: 11px 11px 11px 4px; background: var(--ui-rose-soft); border: 1px solid var(--ui-rose-edge); transform: rotate(-4deg); }
+.tts-preset-picker { display: flex; gap: 10px; align-items: center; margin-bottom: 18px; }
+.tts-preset-picker > .remote-select { flex: 1; min-width: 0; }
+.tts-preset-picker > button:last-child { flex: none; }
+.tts-preset-card > header { display: flex; align-items: center; justify-content: space-between; gap: 9px; margin-bottom: 15px; }
+.tts-preset-card > header > button { display: inline-flex; align-items: center; gap: 5px; font-size: var(--ui-caption); }
+.tts-preset-card > header svg { width: 15px; height: 15px; }
+.tts-select-label, .tts-json-label { display: grid; gap: 9px; margin: 14px 0 20px; font-size: var(--ui-label); color: var(--ui-ink); }
+.tts-json-label textarea { width: 100%; min-width: 0; font: 12px/1.7 ui-monospace, monospace; background: var(--ui-inset); border: 1px solid var(--ui-line); border-radius: 13px; color: var(--ui-ink); padding: 12px; resize: vertical; }
+.tts-agent-binding { display: flex; gap: 12px; margin-top: 19px; align-items: center; }
+.tts-agent-binding > .character-avatar { width: 39px; height: 39px; flex: none; border-radius: 13px; border: 1px solid var(--ui-line); }
+.tts-agent-binding > div { flex: 1; min-width: 0; }
+.tts-agent-binding strong { display: block; margin-bottom: 8px; font-size: var(--ui-label); }
+.tts-preview-card > textarea { width: 100%; border: 1px solid var(--ui-line); border-radius: 15px; background: var(--ui-inset); color: var(--ui-ink); font: inherit; line-height: 1.8; padding: 12px; resize: vertical; }
+.remote-tts-settings button > svg { width: 17px; height: 17px; flex: none; }
+.remote-speech-button { display: inline-flex; justify-content: center; align-items: center; gap: 7px; padding: 8px; border: 0; border-radius: 10px; background: transparent; color: var(--ui-accent); font: inherit; }
+.remote-speech-button.is-playing { color: var(--ui-mint); }
+.remote-themed[data-ui='soft'] .chat-reply-actions .remote-speech-button.is-playing { color: var(--ui-mint); }
+.remote-speech-button > i { display: flex; align-items: center; gap: 2px; height: 15px; }
+.remote-speech-button > i > b { display: block; width: 2px; height: 6px; border-radius: 2px; background: currentColor; animation: tts-wave 800ms ease-in-out infinite alternate; }
+.remote-speech-button > i > b:nth-child(2) { animation-delay: -250ms; }
+.remote-speech-button > i > b:nth-child(3) { animation-delay: -500ms; }
+@keyframes tts-wave { to { height: 13px; } }
+@media (prefers-reduced-motion: reduce) { .remote-speech-button > i > b { animation: none; } }
+[data-reduce-motion='true'] .remote-speech-button > i > b { animation: none; }

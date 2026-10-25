@@ -1,0 +1,14 @@
+{
+  "用户头像": "Your avatar", "和当前 infOS 的其他客户端同步。": "Synced with other clients connected to this infOS.", "头像图片暂时无法显示": "Couldn't display the avatar image.",
+  "当前 infOS 暂不支持用户头像，请更新后再试。": "Update infOS to use custom avatars.",
+  "更换头像": "Change avatar", "恢复默认头像": "Reset avatar", "刷新": "Refresh",
+  "正在读取图片…": "Loading image…", "调整用户头像": "Crop your avatar",
+  "拖动图片调整位置，也可以使用方向键。": "Drag to reposition, or use the arrow keys.",
+  "缩放": "Zoom", "居中": "Center", "取消": "Cancel", "正在保存…": "Saving…", "保存头像": "Save avatar",
+  "恢复默认头像？": "Reset your avatar?", "头像已更新": "Avatar updated", "已恢复默认头像": "Avatar reset",
+  "图片无法读取，请重新选择": "Couldn't read the image. Please choose another.", "操作失败，请重试": "Couldn't complete this action. Please try again.",
+  "请选择 PNG、JPEG 或 WebP 图片": "Choose a PNG, JPEG or WebP image.", "请选择不超过 15MB 的图片": "Choose an image up to 15MB.",
+  "图片尺寸过大，请选择较小图片": "This image is too large. Please choose a smaller one.", "裁切失败，请重试": "Couldn't crop the image. Please try again.",
+  "请重新裁切头像后再保存": "Please crop the avatar again before saving.", "暂时无法读取用户头像": "Couldn't load your avatar.",
+  "请选择裁切后的 PNG 头像": "Please choose a cropped PNG avatar.", "你": "You"
+}

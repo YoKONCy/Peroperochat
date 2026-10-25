@@ -45,6 +45,11 @@
 .reasoning-options { display: grid; gap: 7px; }
 :is(.companion-surface, .remote-themed)[data-ui='soft'] .reasoning-options > button { display: flex; align-items: center; gap: 12px; min-height: 59px; padding: 10px 12px; text-align: left; border: 1px solid transparent; border-radius: 16px 16px 16px 7px; background: transparent; color: var(--ui-ink); }
 :is(.companion-surface, .remote-themed)[data-ui='soft'] .reasoning-options > button.selected { border-color: var(--effort-edge); background: var(--effort-soft); }
+:is(.companion-surface, .remote-themed)[data-ui='soft'] .reasoning-options > button:focus-visible { outline: 2px solid var(--effort-color); outline-offset: -2px; }
+:is(.companion-surface, .remote-themed)[data-ui='soft'] .reasoning-options > button:not(:disabled):active { background: var(--effort-soft); }
+@media (hover: hover) {
+  :is(.companion-surface, .remote-themed)[data-ui='soft'] .reasoning-options > button:hover:not(:disabled) { background: var(--effort-soft); }
+}
 :is(.companion-surface, .remote-themed)[data-ui='soft'] .reasoning-options > button > .reasoning-icon { box-sizing: content-box; width: 28px; height: 28px; padding: 6px; background: var(--effort-soft); border-radius: 12px; color: var(--effort-color); }
 .reasoning-options > button > span { flex: 1; min-width: 0; }
 .reasoning-options strong { display: block; font-size: 14px; font-weight: 600; }

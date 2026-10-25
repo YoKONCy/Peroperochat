@@ -37,11 +37,11 @@ async fn upload_inner(app:AppHandle,token:Token,request_id:String,thread_id:Stri
 #[derive(Clone,Deserialize,Serialize)]
 #[serde(tag="kind",rename_all="snake_case",deny_unknown_fields)]
 pub enum Resource {
-    Attachment {id:String},AgentAvatar {id:String},
+    Attachment {id:String},AgentAvatar {id:String},OwnerAvatar {#[serde(default)] version:Option<String>},
     Workspace {#[serde(rename="agentId")] agent_id:String,#[serde(rename="threadId")] thread_id:String,path:String,version:String},
     Reference {#[serde(rename="agentId")] agent_id:String,#[serde(rename="threadId")] thread_id:String,#[serde(default,rename="taskId")] task_id:Option<String>,source:String},
 }
-#[derive(Deserialize)]
+#[derive(Deserialize,Serialize)]
 #[serde(rename_all="camelCase",deny_unknown_fields)]
 pub struct Range {pub start:u64,pub end:u64}
 fn verify_range(range:&Range,header:Option<&str>,length:usize)->ChatResult<()> {
@@ -75,6 +75,10 @@ impl Resource {
         Ok(match self {
             Self::Attachment {id}=>(format!("/attachments/{}/content",operations::segment(id)?),vec![]),
             Self::AgentAvatar {id}=>(format!("/agents/{}/avatar",operations::segment(id)?),vec![]),
+            Self::OwnerAvatar {version}=> {
+                if version.as_ref().is_some_and(|value|uuid::Uuid::parse_str(value).is_err()) {return Err(ChatError::new("INVALID_FILE","用户头像版本无效"));}
+                ("/system/user-avatar/content".into(),vec![])
+            },
             Self::Workspace {agent_id,thread_id,path,version}=> {
                 operations::segment(agent_id)?;operations::segment(thread_id)?;
                 if path.is_empty() || path.len()>2048 || version.is_empty() || version.len()>256 {return Err(ChatError::new("INVALID_FILE","工作区资源必须指定路径与版本"));}
@@ -93,16 +97,39 @@ impl Resource {
     }
 }
 
-// 引用解析由 infOS 校验会话与路径权限，移动端不把服务器文件路径当成本机路径。
+async fn cached_metadata<F>(app:&AppHandle,token:&Token,key:&str,cached_only:Option<bool>,resource:Option<&Value>,fetch:F)->ChatResult<Value>
+where F:std::future::Future<Output=ChatResult<Value>> {
+    super::validate_token(app,token)?;
+    if cached_only==Some(true) {
+        let data=cache::load(app,token,key)?.ok_or_else(||ChatError::new("REMOTE_NOT_CACHED","这份文件还没有保存在本机，联网后打开一次吧"))?;
+        return Ok(json!({"modeToken":token,"cached":true,"data":data}));
+    }
+    let mode=app.state::<Coordinator>();let mut changes=mode.subscribe();let ticket=cache::begin_read(app,token,key)?;
+    let result=tokio::select! {biased;_ =changes.changed()=>return Err(super::inactive()),result=fetch=>result,};
+    match result {
+        Ok(data)=> {
+            if !cache::save(app,token,key,ticket,&data)? {return Err(ChatError::new("REMOTE_STALE_READ","正在同步最新内容"));}
+            Ok(json!({"modeToken":token,"cached":false,"data":data}))
+        },
+        Err(error)=> {
+            super::validate_token(app,token)?;
+            if cache::offline_error(&error) {if let Ok(Some(data))=cache::load(app,token,key) {return Ok(json!({"modeToken":token,"cached":true,"data":data}));}}
+            if matches!(error.code.as_str(),"REMOTE_NOT_FOUND"|"REMOTE_FORBIDDEN") {
+                if let Some(resource)=resource {let _=cache::forget_resource(app,token,resource,key,ticket);}
+                else {let _=cache::forget_query(app,token,key,ticket,None);}
+            }
+            Err(error)
+        },
+    }
+}
+// 引用解析由 infOS 校验会话与路径权限；离线只复用同一连接中已确认的解析结果。
 #[tauri::command]
-pub async fn remote_resolve_resource(app:AppHandle,token:Token,agent_id:String,thread_id:String,task_id:Option<String>,source:String)->ChatResult<Value> {
+pub async fn remote_resolve_resource(app:AppHandle,token:Token,agent_id:String,thread_id:String,task_id:Option<String>,source:String,cached_only:Option<bool>)->ChatResult<Value> {
     operations::segment(&agent_id)?;operations::segment(&thread_id)?;
     if source.is_empty() || source.len()>2048 || source.chars().any(char::is_control) {return Err(ChatError::new("INVALID_FILE","文件引用无效或过长"));}
     if let Some(id)=&task_id {operations::segment(id)?;}
-    let mode=app.state::<Coordinator>();let mut changes=mode.subscribe();
-    let data=tokio::select! {biased;
-        _=changes.changed()=>return Err(super::inactive()),
-        result=async {
+    let key=format!("resource-resolve:{}",json!({"agentId":agent_id,"threadId":thread_id,"taskId":task_id,"source":source}));
+    cached_metadata(&app,&token,&key,cached_only,None,async {
             let session=super::session(&app,&token).await?;
             let mut input=json!({"agentId":agent_id,"threadId":thread_id,"source":source});
             if let Some(id)=task_id {input["taskId"]=json!(id);}
@@ -112,9 +139,7 @@ pub async fn remote_resolve_resource(app:AppHandle,token:Token,agent_id:String,t
                 .send().await.map_err(|_|transport::network())?;
             let response=super::checked_response(&session,response).await?;
             transport::envelope(&transport::body(response).await?)
-        }=>result?,
-    };
-    super::validate_token(&app,&token)?;Ok(json!({"modeToken":token,"data":data}))
+    }).await
 }
 
 // HTML 文件使用 infOS 已有的短期预览票据，支持同一工作区内的相对资源，不向页面暴露设备凭据。
@@ -152,12 +177,11 @@ pub async fn remote_html_preview(app:AppHandle,token:Token,resource:Resource)->C
     super::validate_token(&app,&token)?;Ok(json!({"modeToken":token,"data":{"url":url}}))
 }
 #[tauri::command]
-pub async fn remote_resource_info(app:AppHandle,token:Token,resource:Resource)->ChatResult<Value> {
+pub async fn remote_resource_info(app:AppHandle,token:Token,resource:Resource,cached_only:Option<bool>)->ChatResult<Value> {
     let (path,mut params)=resource.route()?;params.push(("download".into(),"1".into()));
-    let mode=app.state::<Coordinator>();let mut changes=mode.subscribe();
-    let data=tokio::select! {biased;
-        _=changes.changed()=>return Err(super::inactive()),
-        result=async {
+    let descriptor=serde_json::to_value(&resource).map_err(|_|super::inactive())?;
+    let key=format!("resource-info:{descriptor}");
+    cached_metadata(&app,&token,&key,cached_only,Some(&descriptor),async {
             let session=super::session(&app,&token).await?;
             let mut url=reqwest::Url::parse(&format!("{}/api{path}",session.profile.endpoint)).map_err(|_|transport::network())?;
             url.query_pairs_mut().extend_pairs(params);
@@ -169,15 +193,23 @@ pub async fn remote_resource_info(app:AppHandle,token:Token,resource:Resource)->
             let mime=response.headers().get("content-type").and_then(|v|v.to_str().ok()).unwrap_or("application/octet-stream");
             let name=content_name(response.headers().get("content-disposition").and_then(|v|v.to_str().ok()));
             Ok::<_,ChatError>(json!({"name":name,"size":size,"mimeType":mime,"ranges":response.headers().get("accept-ranges").is_some_and(|v|v=="bytes")}))
-        }=>result?,
-    };
-    super::validate_token(&app,&token)?;Ok(json!({"modeToken":token,"data":data}))
+    }).await
 }
 #[tauri::command]
-pub async fn remote_resource(app:AppHandle,token:Token,resource:Resource,range:Option<Range>)->ChatResult<Value> {
+pub async fn remote_resource(app:AppHandle,token:Token,resource:Resource,range:Option<Range>,cached_only:Option<bool>)->ChatResult<Value> {
     let (path,params)=resource.route()?;
     if range.as_ref().is_some_and(|r|r.end<r.start || r.end-r.start>=transport::MAX_BODY as u64) {return Err(ChatError::new("INVALID_FILE","资源分段范围无效或过大"));}
+    super::validate_token(&app,&token)?;
+    let descriptor=serde_json::to_value(&resource).map_err(|_|super::inactive())?;
+    let key=json!({"resource":descriptor,"range":range}).to_string();
+    // 可变工作区引用的分块不能混用不同时间的文件；只有完整文件或固定版本资源才保留离线副本。
+    let cacheable=range.is_none() || matches!(resource,Resource::Attachment {..}|Resource::Workspace {..});
+    let response=|blob:cache::Blob,cached:bool|json!({"modeToken":token,"cached":cached,"mimeType":blob.mime,"contentRange":blob.content_range,"bytes":blob.bytes});
+    if cached_only==Some(true) {
+        return if cacheable {cache::load_blob(&app,&token,&key)?} else {None}.map(|blob|response(blob,true)).ok_or_else(||ChatError::new("REMOTE_NOT_CACHED","这份资源还没有保存在本机，联网后打开一次吧"));
+    }
     let mode=app.state::<Coordinator>();let mut changes=mode.subscribe();
+    let ticket=cache::begin_read(&app,&token,&format!("blob:{key}"))?;
     let result=tokio::select! {biased;
         _=changes.changed()=>return Err(super::inactive()),
         result=async {
@@ -193,10 +225,21 @@ pub async fn remote_resource(app:AppHandle,token:Token,resource:Resource,range:O
             let content_range=response.headers().get("content-range").and_then(|v|v.to_str().ok()).map(str::to_owned);
             let bytes=transport::body(response).await?;
             if let Some(range)=range.as_ref() {verify_range(range,content_range.as_deref(),bytes.len())?;}
-            Ok::<_,ChatError>(json!({"modeToken":token,"mimeType":mime,"contentRange":content_range,"bytes":bytes}))
-        }=>result?,
+            Ok::<_,ChatError>(cache::Blob {mime,content_range,bytes})
+        }=>result,
     };
-    super::validate_token(&app,&token)?;Ok(result)
+    super::validate_token(&app,&token)?;
+    match result {
+        Ok(blob)=> {
+            if cacheable && !cache::save_blob(&app,&token,&key,ticket,&blob)? {return Err(ChatError::new("REMOTE_STALE_READ","正在同步最新内容"));}
+            Ok(response(blob,false))
+        },
+        Err(error)=> {
+            if cacheable && cache::offline_error(&error) {if let Ok(Some(blob))=cache::load_blob(&app,&token,&key) {return Ok(response(blob,true));}}
+            if matches!(error.code.as_str(),"REMOTE_NOT_FOUND"|"REMOTE_FORBIDDEN") {let _=cache::forget_resource(&app,&token,&descriptor,&format!("blob:{key}"),ticket);}
+            Err(error)
+        },
+    }
 }
 
 #[cfg(test)]
@@ -216,6 +259,14 @@ mod tests {
         assert!(serde_json::from_value::<Resource>(json!({"kind":"attachment","id":"a","url":"https://example.com"})).is_err());
         let file=Resource::Workspace {agent_id:"agent".into(),thread_id:"thread".into(),path:"报告.pdf".into(),version:"".into()};
         assert!(file.route().is_err());
+        let avatar:Resource=serde_json::from_value(json!({"kind":"owner_avatar"})).unwrap();
+        assert_eq!(avatar.route().unwrap(),("/system/user-avatar/content".into(),vec![]));
+        assert!(serde_json::from_value::<Resource>(json!({"kind":"owner_avatar","url":"https://example.invalid"})).is_err());
+        assert!(serde_json::from_value::<Resource>(json!({"kind":"owner_avatar","id":"another-user"})).is_err());
+        let updated:Resource=serde_json::from_value(json!({"kind":"owner_avatar","version":uuid::Uuid::new_v4().to_string()})).unwrap();
+        assert_eq!(updated.route().unwrap().0,"/system/user-avatar/content");
+        assert_ne!(serde_json::to_value(&updated).unwrap(),serde_json::to_value(&avatar).unwrap());
+        let invalid:Resource=serde_json::from_value(json!({"kind":"owner_avatar","version":"过期"})).unwrap();assert!(invalid.route().is_err());
     }
     #[test]
     fn preserves_utf8_attachment_names_and_literal_plus() {

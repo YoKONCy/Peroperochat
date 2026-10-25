@@ -6,6 +6,7 @@ mod transport;
 mod cache;
 mod operations;
 pub mod management;
+pub mod tts;
 pub mod files;
 pub mod downloads;
 pub mod conversation;
@@ -157,7 +158,16 @@ pub async fn remote_query(app:AppHandle,token:Token,query:operations::Query,#[al
     let ticket=cache::begin_read(&app,&token,&key)?;
     let mut data=tokio::select! {biased;
         _=changes.changed()=>return Err(inactive()),
-        result=async {let session=session(&app,&token).await?;operations::fetch_query(&query,|route,limit|perform_limited(&session,route,limit)).await}=>result?,
+        result=async {let session=session(&app,&token).await?;operations::fetch_query(&query,|route,limit|perform_limited(&session,route,limit)).await}=>match result {
+            Ok(data)=>data,
+            Err(error)=> {
+                if matches!(error.code.as_str(),"REMOTE_NOT_FOUND"|"REMOTE_FORBIDDEN") {
+                    let thread=if error.code=="REMOTE_NOT_FOUND" {if let operations::Query::Thread {id}=&query {Some(id.as_str())} else {None}} else {None};
+                    let _=cache::forget_query(&app,&token,&key,ticket,thread);
+                }
+                return Err(error);
+            },
+        },
     };
     if matches!(query,operations::Query::Agent {..}) {
         data=json!({"id":data["id"],"name":data["name"],"description":data["description"],"publicProfile":data["publicProfile"],"ownerAppellation":data["ownerAppellation"]});

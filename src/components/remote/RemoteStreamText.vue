@@ -10,7 +10,7 @@ function flush() {
   frame = null
   if (!root.value) return
   const source = props.source
-  const nextPlain = /[`$<\[\\]/.test(source)
+  const nextPlain = /[`$<[\\]/.test(source)
   if (!source.startsWith(received) || nextPlain !== plain) { root.value.replaceChildren(); stream = { node: null, depth: 0, start: 0 }; received = '' }
   plain = nextPlain
   // 直接追加文本节点，稳定区域的选区与 DOM 不随增量替换。

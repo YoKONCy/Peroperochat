@@ -3,9 +3,9 @@
     <RemoteFeedback :message="error" /><RemoteFeedback :message="notice" tone="success" />
     <button v-if="unresolved" class="room-text-button" @click="$emit('pending')">操作结果待核对，前往通知</button>
     <div v-if="message && view === 'menu'" class="remote-action-menu">
-      <button @click="copy"><RemoteIcon name="copy" /><span>复制正文<small>复制这条消息的文字</small></span></button>
-      <button :disabled="busy || blocked" @click="view = 'edit'"><RemoteIcon name="edit" /><span>编辑消息<small>仅保存，或保存后重新生成</small></span></button>
-      <button :disabled="busy || blocked || unresolved" @click="preview"><RemoteIcon name="refresh" /><span>回滚到此处<small>撤回本轮及后续对话，预览相关文件变更</small></span></button>
+      <button type="button" data-ui-tone="blue" @click="copy"><RemoteIcon name="copy" /><span><strong>复制正文</strong><small>复制这条消息的文字</small></span></button>
+      <button type="button" data-ui-tone="violet" :disabled="busy || blocked" @click="view = 'edit'"><RemoteIcon name="edit" /><span><strong>编辑消息</strong><small>仅保存，或保存后重新生成</small></span><RemoteIcon name="next" /></button>
+      <button type="button" data-ui-tone="amber" :disabled="busy || blocked || unresolved" @click="preview"><RemoteIcon name="refresh" /><span><strong>回滚到此处</strong><small>撤回本轮及后续对话，预览相关文件变更</small></span><RemoteIcon name="next" /></button>
     </div>
     <form v-if="view === 'edit'" @submit.prevent="saveOnly">
       <label class="remote-field">消息正文<textarea v-model="content" rows="8" maxlength="131072" required :disabled="busy" /></label>

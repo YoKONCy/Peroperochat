@@ -7,6 +7,7 @@ use crate::local::types::*;
 #[serde(tag="kind",rename_all="snake_case",deny_unknown_fields)]
 pub enum Query {
     Agents,
+    OwnerAvatar,
     Tools,
     Agent {id:String},
     AgentState {id:String,#[serde(default,rename="threadId")] thread_id:Option<String>},
@@ -78,6 +79,7 @@ impl Query {
     pub fn route(&self)->ChatResult<Route> {
         let mut r=match self {
             Self::Agents=>route("/agents".into()),
+            Self::OwnerAvatar=>route("/system/user-avatar".into()),
             Self::Tools=> {let mut r=route("/agents/tools".into());param(&mut r,"includeAdvanced","true")?;r},
             Self::Agent {id}=>route(format!("/agents/{}",segment(id)?)),
             Self::AgentState {id,thread_id}=> {let mut r=route(format!("/agents/{}/pet-state",segment(id)?));if let Some(thread)=thread_id {segment(thread)?;param(&mut r,"threadId",thread)?;}r},

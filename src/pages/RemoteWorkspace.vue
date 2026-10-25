@@ -36,12 +36,13 @@
             <div v-if="row.timestamp && (!index || dayKey(row.timestamp) !== dayKey(rows[index - 1].timestamp))" class="chat-date-divider"><span>{{ dayLabel(row.timestamp) }}</span></div>
             <article class="chat-turn" :class="{ 'is-user': row.role === 'user', 'is-panel': !row.surface.messageId && row.surface.state !== 'open' }" :data-anchor="row.surface.surfaceId" :data-cursor="row.cursor || ''">
               <div v-if="row.role !== 'user'" class="chat-speaker"><RemoteAvatar :id="row.surface.principalId || agent?.id" :label="agent?.name" /><span>{{ agent?.name || '角色' }}</span><RoomIcon v-if="theme.decoration !== 'none'" name="bow" /><time v-if="row.timestamp">{{ messageTime(row.timestamp) }}</time><button v-if="row.message && row.surface.state !== 'open'" type="button" aria-label="消息操作" :disabled="!online || busy" @click="messageAction = row.message; drawer = 'message'"><RoomIcon name="more" /></button></div>
-              <RemoteSurface :surface="row.surface" :disabled="!online" @resource="openResource" @updated="refreshConversation" @resize="contentResized" />
-              <footer v-if="row.role === 'user'" class="chat-user-meta"><span>你</span><time v-if="row.timestamp">{{ messageTime(row.timestamp) }}</time><button v-if="row.message" type="button" aria-label="编辑或回滚这条消息" :disabled="!online || busy" @click="messageAction = row.message; drawer = 'message'"><RoomIcon name="more" /></button></footer>
-              <footer v-else-if="row.message && row.surface.state !== 'open'" class="chat-reply-actions"><button type="button" :aria-label="copiedMessage === row.surface.surfaceId ? '已复制' : '复制回复'" @click="copyReply(row)"><RoomIcon :name="copiedMessage === row.surface.surfaceId ? 'check' : 'copy'" /></button></footer>
+              <RemoteSurface :surface="row.surface" :started-at="waitingStart" :disabled="!online" @resource="openResource" @updated="refreshConversation" @resize="contentResized" />
+              <footer v-if="row.role === 'user'" class="chat-user-meta"><RemoteUserAvatar v-if="row.owner" class="chat-owner-avatar" /><span>{{ row.owner ? t('你') : row.message?.senderName || row.message?.name || t('用户') }}</span><time v-if="row.timestamp">{{ messageTime(row.timestamp) }}</time><button v-if="row.message" type="button" aria-label="编辑或回滚这条消息" :disabled="!online || busy" @click="messageAction = row.message; drawer = 'message'"><RoomIcon name="more" /></button></footer>
+              <footer v-else-if="row.message && row.surface.state !== 'open'" class="chat-reply-actions"><RemoteSpeechButton v-if="row.message.spokenReply?.trim()" :id="`reply:${row.surface.surfaceId}`" :text="row.message.spokenReply" :agent-id="row.surface.principalId || agent?.id" :disabled="!online" @pending="showManagementPending" /><button type="button" :aria-label="copiedMessage === row.surface.surfaceId ? '已复制' : '复制回复'" @click="copyReply(row)"><RoomIcon :name="copiedMessage === row.surface.surfaceId ? 'check' : 'copy'" /></button></footer>
             </article>
           </template>
 
+          <div v-if="busy && !rows.some(row => row.surface.state === 'open' && row.surface.nodes.some(node => node.kind === 'status' || node.kind === 'markdown' && node.props.source))" class="remote-execution-status" role="status"><span class="remote-status-dot" /><span>{{ t('正在等待回复…', [], 'execution') }}</span><ElapsedTime :started-at="waitingStart" :prefix="t('已等待', [], 'execution')" /></div>
           <div v-if="pendingForThread.length" class="remote-pending-summary"><RoomIcon name="help" /><span>有 {{ pendingForThread.length }} 项发送结果待核对</span><button @click="pending = pendingForThread[0]; drawer = 'pending'">查看</button></div>
         </template>
       </div>
@@ -118,6 +119,11 @@ import { open as openExternal } from '@tauri-apps/plugin-shell'
 import RoomIcon from '../components/remote/RemoteIcon.vue'
 import RoomDrawer from '../components/companion/RoomDrawer.vue'
 import RemoteAvatar from '../components/remote/RemoteAvatar.vue'
+import RemoteUserAvatar from '../components/remote/RemoteUserAvatar.vue'
+import RemoteSpeechButton from '../components/remote/RemoteSpeechButton.vue'
+import { stopRemoteSpeech } from '../services/remoteSpeech'
+import { isLocalOwnerMessage } from '../utils/userAvatarCrop'
+import { quietlyRefreshRemoteUserAvatar } from '../services/remoteUserAvatar'
 import RemoteCharacter from '../components/remote/RemoteCharacter.vue'
 import RemoteConnections from '../components/remote/RemoteConnections.vue'
 import RemoteCollection from '../components/remote/RemoteCollection.vue'
@@ -138,13 +144,14 @@ import RemoteMessageActions from '../components/remote/RemoteMessageActions.vue'
 import RemoteComposerTools from '../components/remote/RemoteComposerTools.vue'
 import RemoteVoiceInput from '../components/remote/RemoteVoiceInput.vue'
 import RemoteSelect from '../components/remote/RemoteSelect.vue'
+import ElapsedTime from '../components/companion/ElapsedTime.vue'
 import { useRemoteTheme, defaultCharacterAppearance, characterCg } from '../services/remoteTheme'
 import { useRoomViewport } from '../composables/useRoomViewport'
 import { currentToken, assertToken } from '../stores/mode'
 import { remoteClient, remoteConnections } from '../services/remote'
 import { readPresentation, writePresentation } from '../services/remotePresentation'
 import { uploadRemoteFile } from '../services/remoteMedia'
-import { remoteState, remoteViews, remoteExecutions, remotePendingRequests, remoteNotifications, remoteUnavailableThreads, focusRemoteThread, retryRemoteThreadReads, retireRemoteThread, readRemote, sendRemoteChat, performRemote, initializeRemote, reconnectRemote, resumeRemote, reconcileRemotePendingRequests, reviewRemoteRequest, refreshRemoteNotifications, refreshRemotePendingRequests } from '../stores/remote'
+import { remoteState, remoteViews, remoteExecutions, remotePendingRequests, remoteNotifications, remoteUnavailableThreads, focusRemoteThread, suspendRemote, retryRemoteThreadReads, retireRemoteThread, readRemote, sendRemoteChat, performRemote, initializeRemote, reconnectRemote, resumeRemote, reconcileRemotePendingRequests, reviewRemoteRequest, refreshRemoteNotifications, refreshRemotePendingRequests } from '../stores/remote'
 import { remoteItems } from '../utils/remoteMarkdown'
 import { managementOperationLabel } from '../services/remoteManagement'
 import '../styles/remote.css'
@@ -202,6 +209,8 @@ let stageObserver = null, copyTimer = null, retiringSelection = null, recoveryWr
 const recoveredDrafts = ref([]), recoveryPreview = ref(null), recoveryBusy = ref(false), recoveryNotice = ref(''), recoveryError = ref(''), retirementError = ref(null)
 const observedFrames = new Set()
 const online = computed(() => remoteState.connection === 'online')
+watch(() => [tab.value, selection.value?.threadId], () => stopRemoteSpeech())
+watch(online, connected => { if (connected) quietlyRefreshRemoteUserAvatar(); else stopRemoteSpeech() }, { immediate: true })
 const agent = computed(() => {
   const id = selection.value?.agentId || pickerAgent.value || remoteState.activeAgentId
   if (!id) return null
@@ -213,13 +222,18 @@ const tone = computed(() => theme.value.mode === 'dark' ? 'nana' : 'pero')
 const interactionMode = computed(() => selection.value ? remoteViews.get(JSON.stringify({ kind: 'thread', id: selection.value.threadId }))?.data?.thread?.interactionMode || 'chat' : 'chat')
 const characterQuery = computed(() => agent.value ? { kind: 'agent_state', id: agent.value.id, threadId: selection.value?.agentId === agent.value.id ? selection.value.threadId : null } : null)
 const characterState = computed(() => characterQuery.value ? remoteViews.get(JSON.stringify(characterQuery.value))?.data : null)
-const snapshots = computed(() => pages.value.map(page => ({ ...page, data: remoteViews.get(JSON.stringify(page.query))?.data || page.snapshot })).filter(page => page.data))
+const snapshots = computed(() => remoteUnavailableThreads.has(selection.value?.threadId) ? [] : pages.value.map(page => { const view = remoteViews.get(JSON.stringify(page.query)); return { ...page, data: view ? view.data : page.snapshot } }).filter(page => page.data))
 const oldestSnapshot = computed(() => snapshots.value[0]?.data)
 const isCached = computed(() => pages.value.some(page => { const view = remoteViews.get(JSON.stringify(page.query)); return view?.cached || !view && page.snapshot }))
 const conversationReady = computed(() => snapshots.value.length > 0)
 const conversationSyncing = computed(() => pages.value.some(page => { const view = remoteViews.get(JSON.stringify(page.query)); return view?.loading || view?.syncing }))
 const serverExecution = computed(() => remoteItems(remoteViews.get(JSON.stringify({ kind: 'active_executions' }))?.data).find(item => item.threadId === selection.value?.threadId && ['running', 'paused'].includes(item.state)))
-const busy = computed(() => !!selection.value && (!!serverExecution.value || sending.value?.threadId === selection.value.threadId || [...remoteExecutions.values()].some(item => item.threadId === selection.value.threadId && item.state === 'observing')))
+const queueSnapshot = computed(() => remoteViews.get(JSON.stringify({ kind: 'queue', id: selection.value?.threadId }))?.data)
+const waitingStart = computed(() => queueSnapshot.value?.items?.find(item => item.state === 'running')?.createdAt
+  ?? (sending.value?.threadId === selection.value?.threadId ? sending.value?.startedAt : null)
+  ?? serverExecution.value?.startedAt
+  ?? [...remoteExecutions.values()].find(item => item.threadId === selection.value?.threadId && item.state === 'observing' && item.startedAt)?.startedAt)
+const busy = computed(() => !!selection.value && (!!serverExecution.value || queueSnapshot.value?.active || queueSnapshot.value?.items?.some(item => item.state === 'running') || sending.value?.threadId === selection.value.threadId || [...remoteExecutions.values()].some(item => item.threadId === selection.value.threadId && item.state === 'observing')))
 const canSend = computed(() => online.value && verified.value && !remoteUnavailableThreads.has(selection.value?.threadId) && agent.value?.isEnabled !== false && !controlsBusy.value && !sending.value && !changingInteraction.value && !uploading.value && !loading.value && !!draft.value.trim())
 const visibleAgents = computed(() => { const keyword = agentSearch.value.trim().toLowerCase(); return remoteState.agents.filter(item => !keyword || `${item.name} ${item.id}`.toLowerCase().includes(keyword)).slice(0, 24) })
 const threads = computed(() => remoteItems(threadQuery.value && remoteViews.get(JSON.stringify(threadQuery.value))?.data))
@@ -243,7 +257,11 @@ const rows = computed(() => {
       else if (execution.needsRefresh && surface.messageId && !descriptors.has(surface.surfaceId)) descriptors.set(surface.surfaceId, surface)
     }
   }
-  const output = [...descriptors.values()].map(surface => ({ surface, message: messages.get(surface.messageId), role: messages.get(surface.messageId)?.role || 'assistant', timestamp: messages.get(surface.messageId)?.timestamp, cursor: cursors.get(surface.surfaceId) || null }))
+  const channel = remoteViews.get(JSON.stringify({ kind: 'thread', id: selection.value?.threadId }))?.data?.thread?.channel
+  const output = [...descriptors.values()].map(surface => {
+    const message = messages.get(surface.messageId)
+    return { surface, message, role: message?.role || 'assistant', owner: isLocalOwnerMessage({ ...message, channel }), timestamp: message?.timestamp, cursor: cursors.get(surface.surfaceId) || null }
+  })
   return [...output.filter(row => row.surface.messageId || row.surface.state === 'open'), ...output.filter(row => !row.surface.messageId && row.surface.state !== 'open')]
 })
 function guard(request = version) { assertToken(token, 'remote'); if (disposed || request !== version) throw new Error('会话已切换') }
@@ -327,7 +345,7 @@ async function persistCurrent() {
 }
 function setTaskHub(value) { taskHub.value = value }
 function taskPending(value) { if (value) { pending.value = value; drawer.value = 'pending' } else showManagementPending() }
-async function preparePageLeave() { await detailPanel.value?.prepareLeave?.(); queuePanel.value?.prepareLeave?.(); await manager.value?.prepareLeave?.(); if (tab.value === 'conversations') await conversationHub.value?.prepareLeave?.(); if (tab.value === 'tasks') await taskHub.value?.prepareLeave?.() }
+async function preparePageLeave() { await composerTools.value?.prepareLeave?.(); await detailPanel.value?.prepareLeave?.(); queuePanel.value?.prepareLeave?.(); await manager.value?.prepareLeave?.(); if (tab.value === 'conversations') await conversationHub.value?.prepareLeave?.(); if (tab.value === 'tasks') await taskHub.value?.prepareLeave?.() }
 async function prepareModeSwitch() {
   await preparePageLeave()
   if (uploading.value || dispatching.value || mutating.value || changingInteraction.value) throw new Error('当前操作尚未完成，请稍后再切换运行模式')
@@ -360,7 +378,7 @@ async function restoreScroll(saved = reading) {
 }
 async function loadDraftRecoveries() {
   try { const values = await readPresentation({ kind: 'draft_recoveries' }, token); guard(); recoveredDrafts.value = values || []; recoveryError.value = '' }
-  catch (failure) { if (!disposed) { try { assertToken(token, 'remote'); recoveryError.value = t('暂时没能读取保留的草稿。') } catch { /* 旧连接不影响当前界面。 */ } } }
+  catch { if (!disposed) { try { assertToken(token, 'remote'); recoveryError.value = t('暂时没能读取保留的草稿。') } catch { /* 旧连接不影响当前界面。 */ } } }
 }
 function updateDraftRecoveries(update) {
   const operation = recoveryWrites.catch(() => {}).then(async () => {
@@ -453,8 +471,17 @@ async function selectConversation(item) {
       await writePresentation({ kind: 'home' }, selection.value, token); guard(request)
       const currentQuery = query(reading.atEnd ? null : reading.cursor)
       pages.value = [{ query: currentQuery, snapshot: null }]
-      const cached = await readRemote(currentQuery, { cachedOnly: true }); guard(request)
+      let cached = await readRemote(currentQuery, { cachedOnly: true }); guard(request)
       if (cached) { pages.value[0].snapshot = cached; await restoreScroll({ ...reading }) }
+      await readRemote({ kind: 'thread', id: item.threadId }, { cachedOnly: true }).catch(() => null); guard(request)
+      if (!online.value) {
+        if (!cached && currentQuery.beforeCursor) {
+          const head = query(); cached = await readRemote(head, { cachedOnly: true }); guard(request)
+          if (cached) { pages.value = [{ query: head, snapshot: cached }]; historyWindow.value = false; reading = { ...reading, atEnd: true, cursor: null, anchor: null }; await restoreScroll(reading) }
+        }
+        readRemote({ kind: 'agent', id: item.agentId }, { cachedOnly: true }).catch(() => {})
+        return
+      }
       if (remoteState.initializing) { await initializeRemote(); guard(request) }
       if (remoteState.activeAgentId !== item.agentId) remoteClient.connect(item.agentId, token).catch(failure => { if (!disposed && request === version) error.value = failure.message })
       // 先确认会话仍有效，再启动消息和队列读取，避免一个旧会话同时产生三路 404。
@@ -503,7 +530,7 @@ async function refreshConversation(options) {
   if (!selection.value || remoteUnavailableThreads.has(selection.value.threadId)) return
   if (retryUnavailable) retryRemoteThreadReads(selection.value.threadId)
   const saved = { ...reading }, request = version, readingRequest = readingVersion, current = query(pages.value.at(-1)?.query.beforeCursor || null)
-  try { guard(request); const data = await readRemote(current, { allowCached: false, retryUnavailable }); guard(request); const page = pages.value.find(page => JSON.stringify(page.query) === JSON.stringify(current)); if (page) page.snapshot = data; await restoreScroll(readingRequest === readingVersion ? saved : { ...reading }) }
+  try { guard(request); const data = await readRemote(current, { allowCached: !online.value, retryUnavailable }); guard(request); const page = pages.value.find(page => JSON.stringify(page.query) === JSON.stringify(current)); if (page) page.snapshot = data; await restoreScroll(readingRequest === readingVersion ? saved : { ...reading }) }
   catch (failure) { if (!disposed && request === version) error.value = failure.message }
 }
 async function older() {
@@ -606,7 +633,7 @@ async function send() {
   const request = version, item = { ...selection.value }, content = draft.value, files = attachments.value.map(file => ({ ...file })), imageRecognition = imageMode.value, workspaceReference = workspaceContext.value ? JSON.parse(JSON.stringify(workspaceContext.value)) : null
   error.value = ''
   const observationId = crypto.randomUUID(), editId = reading.editId || crypto.randomUUID()
-  sending.value = { observationId, threadId: item.threadId, content, attachments: files, phase: 'preparing' }
+  sending.value = { observationId, threadId: item.threadId, content, attachments: files, startedAt: Date.now(), phase: 'preparing' }
   reading.editId = editId; reading.sendRequestId = observationId
   try {
     await persistCurrent(); guard(request)
@@ -742,8 +769,23 @@ async function consumeNotificationOpen() {
   } catch (failure) { if (!disposed && request === version) error.value = failure.message }
   finally { openingNotice = false }
 }
-function resume() { if (!document.hidden && !disposed) { focusRemoteThread(verified.value && ['chat', 'home'].includes(tab.value) ? selection.value?.threadId : null); resumeRemote().catch(() => {}); consumeNotificationOpen() } }
-function saveOnHide() { persistCurrent().catch(() => {}) }
+async function resume() {
+  if (document.hidden || disposed) return
+  focusRemoteThread(verified.value && ['chat', 'home'].includes(tab.value) ? selection.value?.threadId : null)
+  const request = version, item = selection.value ? { ...selection.value } : null, editId = reading.editId
+  try {
+    await resumeRemote(); guard(request)
+    if (item && sessionReady.value && reading.sendRequestId) {
+      const saved = await readPresentation(sessionScope(item), token); guard(request)
+      // 只清理原生回执已确认接收的那份草稿，用户切回来后新写的内容保持原样。
+      if (saved && saved.editId !== editId && reading.editId === editId && saved.sendRequestId === null) {
+        reading = saved; draft.value = saved.draft; attachments.value = saved.attachments; workspaceContext.value = saved.workspaceContext || null
+      }
+    }
+  } catch { /* 恢复失败由连接状态提示，原请求与草稿继续保留。 */ }
+  if (!disposed) { quietlyRefreshRemoteUserAvatar(); consumeNotificationOpen() }
+}
+function saveOnHide() { suspendRemote(); persistCurrent().catch(() => {}) }
 function visibility() { if (document.hidden) saveOnHide(); else resume() }
 async function warmInbox() { try { guard(); await Promise.allSettled(['approvals', 'questions', 'tools', 'active_executions'].map(kind => readRemote({ kind }))) } catch { /* 连接提示保留在主界面，列表本身保留各自的读取错误。 */ } }
 
@@ -785,6 +827,8 @@ async function verifySelected() {
     const data = await readRemote({ kind: 'thread', id: item.threadId }, { allowCached: false }); guard(request)
     if (data?.thread?.agentId !== item.agentId) throw new Error('会话角色信息已改变，请重新选择')
     verified.value = true; queueReady.value = true
+    // 重连时丢弃当前画面中的旧页组合；需要继续向前阅读时再向服务端核验对应页。
+    pages.value = [{ query: query(reading.atEnd ? null : reading.cursor), snapshot: null }]; historyWindow.value = !reading.atEnd && !!reading.cursor
     await refreshConversation(); guard(request)
     await remoteClient.subscribe({ kind: 'thread', id: item.threadId }, token).catch(failure => {
       // 会话已核验；订阅短暂断线不撤销输入资格，消息仍可通过队列同步。

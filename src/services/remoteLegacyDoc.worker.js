@@ -73,6 +73,7 @@ self.onmessage = ({ data }) => {
       if (!Number.isInteger(at) || at + size > word.length) throw new Error('文档字符范围超出正文')
       output.push(new TextDecoder(compressed ? 'windows-1252' : 'utf-16le').decode(word.subarray(at, at + size))); total += chars
     }
+    // eslint-disable-next-line no-control-regex -- 旧 Word 正文使用控制字符标记单元格，需要转为制表符并移除其他控制字符。
     const text = output.join('').replace(/\r/g, '\n').replace(/\x07/g, '\t').replace(/[\x00-\x06\x08-\x0c\x0e-\x1f]/g, '').trim()
     if (!text) throw new Error('未找到可速览的正文，请保存原件查看')
     self.postMessage({ text })

@@ -3,9 +3,12 @@ import { remoteClient } from '../../services/remote'
 import { currentToken, assertToken, onModeInvalidated } from '../mode'
 import { applyRemoteFrame, createRemoteSurfaceState, installRemoteProjection } from '../../services/remoteSurface'
 import { remoteFeedbackMessage } from '../../services/remoteFeedback.js'
+import { quietlyRefreshRemoteUserAvatar } from '../../services/remoteUserAvatar'
+import { invalidateAllRemoteAvatars } from '../../services/remoteMedia'
+import { observeRemoteResult } from '../../services/remoteObservation.js'
 
 // 独立模式 Store 不参与远程数据投影；服务端是消息、任务与角色状态的权威。
-export const remoteState = shallowReactive({ connection: 'offline', sessionId: null, agents: [], activeAgentId: null, error: null, pendingError: null, notificationError: null, ready: false, initializing: false, restoringView: false })
+export const remoteState = shallowReactive({ connection: 'offline', sessionId: null, agents: [], activeAgentId: null, error: null, pendingError: null, notificationError: null, ready: false, initializing: false, restoringView: false, hasReadableData: false })
 export const remoteViews = reactive(new Map())
 export const remoteExecutions = reactive(new Map())
 export const remotePendingRequests = reactive(new Map())
@@ -30,6 +33,10 @@ let resuming = null
 let lastResumeAt = 0
 let queuedFrames = []
 let queuedFrame = null
+let foregroundTimer = null
+let focusedSync = null
+let resumeNeeded = false
+let recoveryEpoch = 0
 const blockedCodes = new Set(['REMOTE_AUTH_REQUIRED', 'REMOTE_IDENTITY_CHANGED', 'REMOTE_INCOMPATIBLE', 'CREDENTIAL_UNAVAILABLE', 'PROFILE_NOT_FOUND', 'INVALID_PROFILE'])
 const offlineCodes = new Set(['REMOTE_NETWORK', 'REMOTE_HTTP', 'REMOTE_RATE_LIMIT'])
 
@@ -42,6 +49,9 @@ function blockConnection(error) {
 }
 
 function key(query) { return JSON.stringify(query) }
+function noteReadable(query, data) {
+  if (query.kind === 'agents' && Array.isArray(data) && data.length || query.kind === 'conversation' && data?.protocolVersion === 1) remoteState.hasReadableData = true
+}
 function queryThread(query) {
   if (['thread', 'conversation', 'queue', 'queue_live', 'thread_tools'].includes(query.kind)) return query.id
   return query.threadId || null
@@ -50,7 +60,58 @@ function missingThread() { return Object.assign(new Error('这段对话已不可
 export function focusRemoteThread(id) {
   const next = id && !remoteUnavailableThreads.has(id) ? id : null
   focusedThread = next
-  if (next && remoteState.connection === 'online') scheduleRefresh()
+  if (next && remoteState.connection === 'online') { scheduleRefresh(); scheduleForegroundSync(150) }
+  else { clearTimeout(foregroundTimer); foregroundTimer = null }
+}
+export function suspendRemote() {
+  resumeNeeded = true
+  clearTimeout(foregroundTimer); foregroundTimer = null
+  cancelAnimationFrame(queuedFrame); queuedFrame = null; queuedFrames = []
+  for (const view of remoteViews.values()) view.stale = true
+}
+function replaceStalledReads() {
+  recoveryEpoch++; pendingVersion++; notificationVersion++; reconciliation = null
+  resuming = null; lastResumeAt = 0
+  remoteClient.resetReads(); pendingReads.clear(); focusedSync = null
+  // 新读取拥有新代次；迟到的旧响应不能盖回恢复后的消息和队列。
+  for (const view of remoteViews.values()) {
+    if (terminalReads.has(key(view.query))) continue
+    Object.assign(view, { requestVersion: ++readVersion, loading: false, stale: true, retryAfter: 0 })
+  }
+}
+async function synchronizeFocusedThread() {
+  const threadId = focusedThread
+  if (!threadId || document.hidden || remoteState.connection !== 'online' || !remoteState.ready || remoteUnavailableThreads.has(threadId)) return
+  if (focusedSync?.threadId === threadId) return focusedSync.promise
+  const token = currentToken()
+  const read = query => terminalReads.has(key(query)) ? Promise.resolve(null) : readRemote(query, { allowCached: false })
+  const promise = (async () => {
+    await Promise.allSettled([
+      read({ kind: 'conversation', id: threadId, pageSize: 60, beforeCursor: null }),
+      read({ kind: 'queue', id: threadId }),
+      read({ kind: 'active_executions' }),
+    ])
+    assertToken(token, 'remote')
+    const queue = remoteViews.get(key({ kind: 'queue', id: threadId }))
+    if (!queue?.cached && (queue?.data?.active || queue?.data?.items?.some(item => item.state === 'running'))) await read({ kind: 'queue_live', id: threadId })
+  })()
+  focusedSync = { threadId, promise }
+  try { await promise } finally { if (focusedSync?.promise === promise) focusedSync = null }
+}
+function scheduleForegroundSync(delay = 15000) {
+  clearTimeout(foregroundTimer); foregroundTimer = null
+  if (!focusedThread || document.hidden || ['auth_required', 'incompatible'].includes(remoteState.connection)) return
+  const token = currentToken()
+  foregroundTimer = setTimeout(async () => {
+    foregroundTimer = null
+    try {
+      assertToken(token, 'remote')
+      if (document.hidden) return
+      if (remoteState.connection === 'online' && remoteState.ready) await synchronizeFocusedThread()
+      else await resumeRemote()
+    } catch { /* 网络提示由连接状态承担，后台补收不重复弹出错误。 */ }
+    try { assertToken(token, 'remote'); scheduleForegroundSync() } catch { /* 模式切换后不继续同步旧连接。 */ }
+  }, delay)
 }
 export function retryRemoteThreadReads(id) {
   if (!id || remoteUnavailableThreads.has(id)) return
@@ -83,6 +144,9 @@ function autoRefreshable(view, ignoreDelay = false) {
 }
 export function clearRemoteState() {
   generation++
+  recoveryEpoch++
+  remoteClient.resetReads()
+  clearTimeout(foregroundTimer); foregroundTimer = null; focusedSync = null; resumeNeeded = false
   cancelAnimationFrame(queuedFrame); queuedFrame = null; queuedFrames = []
   clearTimeout(refreshTimer)
   refreshTimer = null
@@ -101,6 +165,7 @@ export function clearRemoteState() {
   remoteState.ready = false
   remoteState.initializing = false
   remoteState.restoringView = false
+  remoteState.hasReadableData = false
   remoteViews.clear()
   remoteUnavailableThreads.clear(); pendingReads.clear(); terminalReads.clear(); focusedThread = null
   remoteExecutions.clear()
@@ -232,6 +297,9 @@ async function listenOnce() {
       if (event.data.state === 'offline' && (event.data.sessionId !== remoteState.sessionId || remoteState.connection === 'auth_required')) return
       remoteState.connection = event.data.state
       if (event.data.state === 'online') {
+        for (const view of remoteViews.values()) view.stale = true
+        scheduleForegroundSync(150)
+        invalidateAllRemoteAvatars()
         remoteState.sessionId = event.data.sessionId
         if (event.data.principalId) remoteState.activeAgentId = event.data.principalId
         if (!remoteState.ready) scheduleBootstrap(150)
@@ -250,6 +318,9 @@ async function listenOnce() {
       } else scheduleRefresh()
     }
     if (event.kind === 'gateway' || event.kind === 'snapshot_required') {
+      if (event.kind === 'snapshot_required') invalidateAllRemoteAvatars()
+      if (event.kind === 'snapshot_required' || event.data?.payload?.ownerAvatarChanged === true) quietlyRefreshRemoteUserAvatar()
+      if (event.data?.payload?.action === 'state_update' && event.data.payload.ownerAvatarChanged === true && Object.keys(event.data.payload).length === 2) return
       // 群聊增量由据点视图逐帧消费，避免每个字都触发单聊和管理页面的全量重读。
       if (event.kind === 'gateway' && event.data?.payload?.action?.startsWith('stronghold_')) {
         if (['stronghold_round_completed', 'stronghold_agent_completed'].includes(event.data.payload.action)) {
@@ -300,28 +371,63 @@ export async function readRemote(query, { cachedOnly = false, allowCached = true
     else throw new Error('正在载入其他内容，稍等一下再试吧。')
   }
   const previous = remoteViews.get(id)
+  cachedOnly ||= allowCached && ['offline', 'connecting', 'reconnecting'].includes(remoteState.connection)
+  if (cachedOnly && previous) {
+    const saved = await queryOnce(query, true, token)
+    assertToken(token, 'remote'); assertReadable(query)
+    const current = remoteViews.get(id)
+    // 离线补读不创建新的请求代次，避免截断已经在途的服务端刷新。
+    if (current === previous && saved.data != null && (current.data == null || !current.loading && remoteState.connection !== 'online')) Object.assign(current, { data: saved.data, cached: true, stale: true })
+    noteReadable(query, current?.data ?? saved.data)
+    return current?.data ?? saved.data
+  }
   const requestVersion = ++readVersion
   remoteViews.set(id, { ...previous, query, requestVersion, loading: true, error: null })
   try {
+    if (!cachedOnly && allowCached && previous?.data == null) {
+      // 缓存先供阅读；同一次请求的服务端结果随后直接替换，不用缓存开启写操作。
+      const saved = await queryOnce(query, true, token).catch(() => null)
+      assertToken(token, 'remote'); assertReadable(query)
+      const view = remoteViews.get(id)
+      if (saved?.data != null && view?.requestVersion === requestVersion && view.loading) Object.assign(view, { data: saved.data, cached: true, stale: true })
+      noteReadable(query, saved?.data)
+    }
     const result = await queryOnce(query, cachedOnly, token)
     assertToken(token, 'remote')
+    noteReadable(query, result.data)
     if (retryUnavailable && query.kind === 'thread' && !cachedOnly && remoteViews.get(id)?.requestVersion === requestVersion) remoteUnavailableThreads.delete(query.id)
     assertReadable(query)
     if (remoteViews.get(id)?.requestVersion === requestVersion) {
       remoteViews.set(id, { query, requestVersion, loading: false, data: result.data, cached: result.cached, stale: result.cached, error: null })
+      if (!result.cached && !cachedOnly && query.kind === 'queue_live') installQueuedLive(result.data, query.id)
+      if (!result.cached && !cachedOnly && query.kind === 'queue' && !result.data?.active && !result.data?.items?.some(item => item.state === 'running')) installQueuedLive(null, query.id)
       if (query.kind === 'conversation' && !query.beforeCursor && !result.cached && !cachedOnly) {
-        for (const execution of remoteExecutions.values()) if (execution.threadId === query.id && execution.state !== 'observing') execution.needsRefresh = false
+        for (const execution of remoteExecutions.values()) {
+          if (execution.threadId !== query.id) continue
+          const confirmed = result.data?.surfaces?.filter(surface => {
+            const live = execution.presentation.surfaces.get(surface.surfaceId)
+            return live && live.generation === surface.generation && surface.revision >= live.revision && surface.state !== 'open'
+          }) || []
+          // 终态快照优先于漏掉提交帧的旧直播，不能让旧直播继续盖住已经保存的回复。
+          if (execution.state === 'observing' && confirmed.length) {
+            installRemoteProjection(execution.presentation, { ...result.data, surfaces: confirmed })
+            execution.state = 'completed'; execution.revision++
+          }
+          if (execution.state !== 'observing') execution.needsRefresh = false
+        }
       }
       if (query.kind === 'agents' && Array.isArray(result.data)) remoteState.agents = result.data
     }
     return result.data
   } catch (error) {
     try { assertToken(token, 'remote') } catch { throw error }
+    if (error.superseded) { error.message = ''; throw error }
     if (!cachedOnly && allowCached && offlineCodes.has(error.code)) {
       try {
         const cached = await queryOnce(query, true, token)
         assertToken(token, 'remote'); assertReadable(query)
         if (cached.data !== null && cached.data !== undefined) {
+          noteReadable(query, cached.data)
           if (remoteViews.get(id)?.requestVersion === requestVersion) {
             const failures = (previous?.failures || 0) + 1, delay = Math.min(30000, 1000 * 2 ** Math.min(failures, 5))
             remoteViews.set(id, { query, requestVersion, loading: false, data: cached.data, cached: true, stale: true, error: error.message, errorCode: error.code, failures, retryAfter: Date.now() + delay })
@@ -337,6 +443,7 @@ export async function readRemote(query, { cachedOnly = false, allowCached = true
     const terminal = ['REMOTE_NOT_FOUND', 'REMOTE_FORBIDDEN', 'REMOTE_INCOMPATIBLE', 'REMOTE_PROTOCOL', 'REMOTE_INVALID_INPUT'].includes(error.code)
     if (!cachedOnly && view?.requestVersion === requestVersion) {
       if (terminal) terminalReads.set(id, error)
+      if (['REMOTE_NOT_FOUND', 'REMOTE_FORBIDDEN'].includes(error.code)) Object.assign(view, { data: null, cached: false })
       const failures = (previous?.failures || 0) + 1
       Object.assign(view, { loading: false, error: error.message, errorCode: error.code, stale: !terminal, failures, retryAfter: terminal ? 0 : Date.now() + Math.min(30000, 1000 * 2 ** Math.min(failures, 5)), syncing: error.code === 'REMOTE_STALE_READ' })
       if (error.code === 'REMOTE_NOT_FOUND') {
@@ -356,34 +463,40 @@ export async function initializeRemote() {
   const token = currentToken()
   assertToken(token, 'remote')
   const version = generation
-  if (initialization?.version === version) return initialization.promise
+  const epoch = recoveryEpoch
+  const assertInitialization = () => {
+    assertToken(token, 'remote')
+    if (epoch !== recoveryEpoch) throw Object.assign(new Error('正在同步最新内容。'), { code: 'REMOTE_STALE_READ', superseded: true })
+  }
+  if (initialization?.version === version && initialization.epoch === epoch) return initialization.promise
   remoteState.initializing = true
   if (!['online', 'auth_required', 'incompatible'].includes(remoteState.connection)) remoteState.connection = 'connecting'
   const promise = (async () => {
     try {
       await listenOnce()
+      assertInitialization()
       // 本机辅助记录读取失败单独展示，不阻断设备鉴权和 Gateway 恢复。
-      await refreshRemotePendingRequests().catch(error => { assertToken(token, 'remote'); remoteState.pendingError = error.message })
-      await refreshRemoteNotifications().catch(error => { assertToken(token, 'remote'); remoteState.notificationError = error.message })
+      await refreshRemotePendingRequests().catch(error => { assertInitialization(); remoteState.pendingError = error.message })
+      await refreshRemoteNotifications().catch(error => { assertInitialization(); remoteState.notificationError = error.message })
       const cached = await readRemote({ kind: 'agents' }, { cachedOnly: true }).catch(() => null)
-      assertToken(token, 'remote')
+      assertInitialization()
       if (Array.isArray(cached)) {
         remoteState.agents = cached
       }
       // 优先恢复本连接的上次会话角色；没有选择时交给原生保存的主体或服务端发现。
       if (!remoteState.activeAgentId) {
-        const home = await remoteClient.uiRead({ kind: 'home' }, token).catch(error => { assertToken(token, 'remote'); remoteState.error = error.message; return null })
-        assertToken(token, 'remote')
+        const home = await remoteClient.uiRead({ kind: 'home' }, token).catch(error => { assertInitialization(); remoteState.error = error.message; return null })
+        assertInitialization()
         if (!remoteState.activeAgentId && home?.data?.agentId) remoteState.activeAgentId = home.data.agentId
       }
       // 原生先持有恢复目标；即使没有缓存角色且此刻离线，也会继续尝试发现角色。
       const connected = await remoteClient.connect(remoteState.activeAgentId, token)
-      assertToken(token, 'remote')
+      assertInitialization()
       remoteState.sessionId = connected.sessionId
       remoteState.connection = 'online'
       remoteState.activeAgentId = connected.principalId
       const agents = await readRemote({ kind: 'agents' }, { allowCached: false })
-      assertToken(token, 'remote')
+      assertInitialization()
       if (version !== generation) return
       if (!Array.isArray(agents)) throw new Error('暂时没能载入角色，请稍后再试。')
       remoteState.agents = agents
@@ -391,7 +504,7 @@ export async function initializeRemote() {
       if (!principal) throw Object.assign(new Error('服务端尚无可用角色'), { code: 'REMOTE_NOT_FOUND' })
       if (principal !== remoteState.activeAgentId) {
         const selected = await remoteClient.connect(principal, token)
-        assertToken(token, 'remote')
+        assertInitialization()
         remoteState.activeAgentId = selected.principalId
         remoteState.sessionId = selected.sessionId
       }
@@ -406,12 +519,13 @@ export async function initializeRemote() {
       })
     } catch (error) {
       assertToken(token, 'remote')
+      if (epoch !== recoveryEpoch || error.superseded) return
       remoteState.ready = false
       remoteState.error = error.message
       if (!blockConnection(error)) { remoteState.connection = 'offline'; scheduleBootstrap() }
     }
   })()
-  initialization = { version, promise }
+  initialization = { version, epoch, promise }
   try { await promise } finally { if (initialization?.promise === promise) { initialization = null; remoteState.initializing = false } }
 }
 export async function performRemote(action, options) {
@@ -458,7 +572,7 @@ export async function sendRemoteChat(input, { requestId = crypto.randomUUID() } 
   assertReadable({ kind: 'thread', id: input.threadId })
   await listenOnce()
   assertToken(token, 'remote')
-  const execution = reactive({ requestId, threadId: input.threadId, input: { ...input }, state: 'observing', frame: null, presentation: createRemoteSurfaceState(), revision: 0, needsRefresh: false, error: null })
+  const execution = reactive({ requestId, threadId: input.threadId, input: { ...input }, startedAt: Date.now(), state: 'observing', frame: null, presentation: createRemoteSurfaceState(), revision: 0, needsRefresh: false, error: null })
   // 展示缓存可以释放，待核对操作由独立的持久化记录恢复，不占用活跃执行名额。
   if (remoteExecutions.size >= 30) {
     for (const [id, item] of remoteExecutions) {
@@ -469,7 +583,10 @@ export async function sendRemoteChat(input, { requestId = crypto.randomUUID() } 
   }
   remoteExecutions.set(requestId, execution)
   try {
-    const result = await remoteClient.chat(input, { requestId, token })
+    const result = await observeRemoteResult(remoteClient.chat(input, { requestId, token }), {
+      timeout: 90000,
+      error: () => Object.assign(new Error('正在确认消息是否送达。'), { code: 'REMOTE_NETWORK', outcome: 'unknown', requestId }),
+    })
     assertToken(token, 'remote')
     execution.state = 'accepted'
     const query = { kind: 'queue', id: input.threadId }
@@ -505,7 +622,18 @@ function queueExecution(id, threadId) {
   }
   return remoteExecutions.get(key)
 }
-export function installQueuedLive(surface) {
+export function installQueuedLive(surface, threadId = surface?.threadId) {
+  if (!threadId) return
+  let retired = false
+  for (const execution of remoteExecutions.values()) {
+    if (execution.threadId !== threadId || !execution.requestId.startsWith('queue-live:') || execution.state !== 'observing') continue
+    if (surface?.state === 'open' && execution.requestId === `queue-live:${surface.surfaceId}`) continue
+    execution.state = 'completed'; execution.needsRefresh = true; retired = true
+  }
+  if (retired) {
+    for (const view of remoteViews.values()) if (view.query.kind === 'conversation' && view.query.id === threadId) view.stale = true
+    scheduleRefresh()
+  }
   if (!surface || surface.state !== 'open') return
   const execution = queueExecution(surface.surfaceId, surface.threadId)
   if (!execution) return
@@ -531,6 +659,7 @@ function applyQueuedSurface(frame) {
   } catch (error) { execution.needsRefresh = true; execution.error = error.message }
 }
 function scheduleQueuedSurface(frame) {
+  if (document.hidden) { suspendRemote(); return }
   if (queuedFrames.length >= 256) {
     queuedFrames = []
     for (const view of remoteViews.values()) view.stale = true
@@ -557,27 +686,33 @@ export async function reconnectRemote() {
   if (!remoteState.ready) throw new Error(remoteState.error || '服务端尚未就绪，请稍后再试')
 }
 export async function resumeRemote() {
+  if (document.hidden) return
+  if (resumeNeeded) { resumeNeeded = false; replaceStalledReads() }
   if (resuming) return resuming
-  if (initialization) return initialization.promise
   if (['auth_required', 'incompatible'].includes(remoteState.connection)) return
-  if (Date.now() - lastResumeAt < 4000) return
+  if (Date.now() - lastResumeAt < 4000) { scheduleRefresh(); scheduleForegroundSync(150); return }
   lastResumeAt = Date.now()
-  const token = currentToken()
+  const token = currentToken(), epoch = recoveryEpoch
   const promise = (async () => {
     try {
       try { await remoteClient.sessionStatus(token) }
       catch (error) { if (error.code !== 'REMOTE_NOT_FOUND') throw error }
       assertToken(token, 'remote')
+      if (epoch !== recoveryEpoch) return
       await reconnectRemote()
       assertToken(token, 'remote')
+      if (epoch !== recoveryEpoch) return
       for (const view of remoteViews.values()) view.stale = true
       scheduleRefresh(); scheduleNotifications()
+      await reconcileRemotePendingRequests().catch(error => { assertToken(token, 'remote'); remoteState.pendingError = error.message })
+      await synchronizeFocusedThread()
     } catch (error) {
       try { assertToken(token, 'remote') } catch { return }
+      if (epoch !== recoveryEpoch || error.superseded) return
       remoteState.error = error.message
       if (!blockConnection(error)) { remoteState.connection = 'offline'; remoteState.ready = false; scheduleBootstrap() }
     }
   })()
   resuming = promise
-  try { await promise } finally { if (resuming === promise) resuming = null }
+  try { await promise } finally { if (resuming === promise) { resuming = null; scheduleForegroundSync() } }
 }

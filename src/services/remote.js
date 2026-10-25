@@ -4,11 +4,18 @@ import { currentToken, assertToken, sameToken } from '../stores/mode'
 import { normalizeError } from './localChatClient'
 import { presentRemoteError } from './remoteFeedback.js'
 import { createRemoteReadCoordinator } from './remoteReadCoordinator.js'
+import { observeRemoteResult } from './remoteObservation.js'
+
+const observedReads = new Set(['remote_connect', 'remote_session_status', 'remote_pending_requests', 'remote_notifications', 'remote_ui_read', 'remote_subscribe'])
+const readObservers = new Set()
 
 async function scoped(command, args = {}, token = currentToken()) {
   assertToken(token, 'remote')
+  const observer = observedReads.has(command) ? new AbortController() : null
+  if (observer) readObservers.add(observer)
   try {
-    const result = await invoke(command, { ...args, token })
+    const operation = invoke(command, { ...args, token })
+    const result = await (observer ? observeRemoteResult(operation, { signal: observer.signal }) : operation)
     assertToken(token, 'remote')
     if (result?.modeToken && !sameToken(result.modeToken, token)) throw new Error('远程响应运行身份不匹配')
     return result
@@ -17,7 +24,7 @@ async function scoped(command, args = {}, token = currentToken()) {
     const requestId = args.requestId || args.request?.requestId
     if (requestId) error.requestId = requestId
     throw error
-  }
+  } finally { if (observer) readObservers.delete(observer) }
 }
 async function control(command, args) {
   try { return await invoke(command, args) } catch (error) { throw presentRemoteError(normalizeError(error)) }
@@ -30,6 +37,7 @@ export const remoteConnections = {
   remove: id => control('remote_delete_profile', { id }),
 }
 export const remoteClient = {
+  resetReads: () => { reads.reset(); for (const observer of readObservers) observer.abort(); readObservers.clear() },
   modelControls: (threadId, token) => scoped('remote_model_controls', { threadId }, token),
   prepareRegeneration: (input, token) => scoped('remote_prepare_regeneration', { ...input, requestId: crypto.randomUUID() }, token),
   commitRegeneration: (id, token) => scoped('remote_commit_regeneration', { id }, token),
@@ -38,7 +46,16 @@ export const remoteClient = {
   confirmRewind: (input, token) => scoped('remote_confirm_rewind', { ...input, requestId: crypto.randomUUID() }, token),
   manage: (request, { requestId = crypto.randomUUID(), token } = {}) => scoped('remote_manage', { request, requestId }, token),
   manageUpload: (kind, id, file, { fields = {}, requestId = crypto.randomUUID(), token } = {}) => scoped('remote_manage_upload', { kind, id, file, fields, requestId }, token),
-  tts: (input, { requestId = crypto.randomUUID(), token } = {}) => scoped('remote_voice_tts', { ...input, requestId }, token),
+  tts: async (input, { requestId = crypto.randomUUID(), token } = {}) => {
+    const packet = await scoped('remote_voice_tts', { input, requestId }, token)
+    const bytes = new Uint8Array(packet)
+    const size = bytes.length >= 6 ? bytes[4] * 256 + bytes[5] : 0
+    if (String.fromCharCode(...bytes.subarray(0, 4)) !== 'PCTS' || !size || size > 256 || bytes.length <= 6 + size) throw new Error('朗读服务未返回音频')
+    const mimeType = new TextDecoder().decode(bytes.subarray(6, 6 + size))
+    if (!mimeType.startsWith('audio/')) throw new Error('朗读服务未返回音频')
+    return { data: { mimeType, bytes: bytes.subarray(6 + size) } }
+  },
+  cancelTts: (requestId, token) => scoped('remote_cancel_tts', { requestId }, token),
   exportText: (name, content, token) => scoped('remote_export_text', { name, content }, token),
   query: (query, { cachedOnly = false, token = currentToken() } = {}) => reads.read(query, { cachedOnly, token }),
   action: (action, { requestId = crypto.randomUUID(), token } = {}) => scoped('remote_action', { action, requestId }, token),
@@ -60,9 +77,9 @@ export const remoteClient = {
   uiRead: (scope, token) => scoped('remote_ui_read', { scope }, token),
   uiWrite: (scope, value, token) => scoped('remote_ui_write', { scope, value }, token),
   upload: (threadId, file, { requestId = crypto.randomUUID(), token } = {}) => scoped('remote_upload', { threadId, file, requestId }, token),
-  resource: (resource, { range = null, token } = {}) => scoped('remote_resource', { resource, range }, token),
-  resourceInfo: (resource, token) => scoped('remote_resource_info', { resource }, token),
-  resolveResource: (context, source, token) => scoped('remote_resolve_resource', { agentId: context.agentId, threadId: context.threadId, taskId: context.taskId || null, source }, token),
+  resource: (resource, { range = null, cachedOnly = false, token } = {}) => scoped('remote_resource', { resource, range, cachedOnly }, token),
+  resourceInfo: (resource, token, { cachedOnly = false } = {}) => scoped('remote_resource_info', { resource, cachedOnly }, token),
+  resolveResource: (context, source, token, { cachedOnly = false } = {}) => scoped('remote_resolve_resource', { agentId: context.agentId, threadId: context.threadId, taskId: context.taskId || null, source, cachedOnly }, token),
   htmlPreview: (resource, token) => scoped('remote_html_preview', { resource }, token),
   downloadResource: (resource, name, id, token) => scoped('remote_download_resource', { resource, name, id }, token),
   cancelDownload: (id, token) => scoped('remote_cancel_download', { id }, token),

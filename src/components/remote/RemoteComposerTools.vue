@@ -18,7 +18,9 @@
       <RemoteAction icon="close" :disabled="!content" @click="$emit('clear'); commands = false">清空输入</RemoteAction>
       <RemoteAction icon="folder" @click="$emit('workbench'); commands = false">引用工作区</RemoteAction>
       <RemoteAction icon="image" @click="$emit('image-mode'); commands = false">{{ imageLabel || '图片识别方式' }}</RemoteAction>
+      <RemoteAction icon="shield" :disabled="blocked" @click="commands = false; answerPreferencesOpen = true">{{ tr('回答偏好') }}</RemoteAction>
     </div></RoomDrawer>
+    <RemoteAnswerPreferences v-if="answerPreferencesOpen" ref="answerPreferences" @close="answerPreferencesOpen = false" @pending="$emit('pending')" />
     <RoomDrawer v-if="budgetOpen" title="上下文用量" @close="budgetOpen = false"><section class="chat-context-details">
       <template v-if="budget"><strong>{{ compact(budget.usedTokens) }}<small v-if="budget.maxInputTokens > 0"> / {{ compact(budget.maxInputTokens) }} Token</small></strong><progress v-if="budget.maxInputTokens > 0" :value="budget.usedTokens || 0" :max="budget.maxInputTokens" aria-label="预计上下文占用" /><p>{{ budget.maxInputTokens > 0 ? '预计用量，实际使用可能略有变化。' : '当前模型尚未设置上下文大小。' }}</p></template>
       <template v-else><p>{{ running ? '角色正在回复，完成后会更新用量。' : blocked ? '连接恢复后可以查看用量。' : '暂时没有可用的估算。' }}</p><RemoteAction icon="refresh" :disabled="blocked || running" @click="loadBudget">重新估算</RemoteAction></template>
@@ -34,12 +36,16 @@ import RemoteSelect from './RemoteSelect.vue'
 import RemoteModelControls from './RemoteModelControls.vue'
 import RemoteIcon from './RemoteIcon.vue'
 import RemoteAction from './RemoteAction.vue'
+import RemoteAnswerPreferences from './RemoteAnswerPreferences.vue'
+import { t } from '../../i18n/remote'
 import { remoteClient } from '../../services/remote'
 import { currentToken, assertToken, sameToken } from '../../stores/mode'
 const props = defineProps({ threadId: String, agentId: String, content: String, blocked: Boolean, running: Boolean, modeDisabled: Boolean, interactionMode: String, imageLabel: String })
 defineEmits(['interaction', 'image-mode', 'settings', 'voice', 'new-thread', 'clear', 'workbench', 'changed', 'capabilities', 'pending', 'restore', 'busy'])
 const token = currentToken(), budget = ref(null), budgetError = ref(''), budgetOpen = ref(false), commands = ref(false), recovery = ref(null)
 const recoveryOpen = ref(false)
+const answerPreferencesOpen = ref(false), answerPreferences = ref(null)
+const tr = source => t(source, [], 'answer-preferences')
 const modeOptions = [{ value: 'minimal', label: '极简', description: '轻量对话' }, { value: 'chat', label: '聊天', description: '日常交流' }, { value: 'work', label: '工作', description: '处理任务与工具操作' }]
 const modeIcon = computed(() => props.interactionMode === 'work' ? 'code' : 'chat')
 const budgetLabel = computed(() => budget.value?.maxInputTokens > 0 ? `${compact(budget.value.usedTokens)} / ${compact(budget.value.maxInputTokens)}` : props.running ? '生成中' : '上下文')
@@ -55,11 +61,11 @@ function schedule() { request++; clearTimeout(timer); if (props.blocked || props
 async function loadRecovery() { if (!props.threadId || props.blocked) return; const id = props.threadId; try { const { data } = await remoteClient.regenerationRecovery(id, token); if (!disposed && id === props.threadId) recovery.value = data } catch { /* 本机恢复记录不可用时不影响普通发送。 */ } }
 const recoveryError = ref('')
 async function clearRecovery() { if (!recovery.value) return; try { assertToken(token, 'remote'); await remoteClient.discardRegeneration(recovery.value.planId, token); if (!disposed) { recovery.value = null; recoveryError.value = '' } } catch (failure) { if (!disposed) recoveryError.value = failure.message } }
-function refresh(event) { if (event?.detail && (!sameToken(event.detail.token, token) || event.detail.threadId !== props.threadId)) return; schedule(); loadRecovery() }
+function refresh(event) { if (event?.detail && (!sameToken(event.detail.token, token) || event.detail.threadId && event.detail.threadId !== props.threadId)) return; schedule(); loadRecovery() }
 watch(() => [props.content, props.threadId, props.blocked, props.running], schedule, { immediate: true })
 watch(() => props.threadId, () => { recovery.value = null; loadRecovery() }, { immediate: true })
 watch(() => props.blocked, value => { if (!value) loadRecovery() })
-onMounted(() => { window.addEventListener('ppc:conversation-changed', refresh); window.addEventListener('ppc:thread-model-changed', refresh); document.addEventListener('visibilitychange', refresh) })
-onBeforeUnmount(() => { disposed = true; request++; clearTimeout(timer); window.removeEventListener('ppc:conversation-changed', refresh); window.removeEventListener('ppc:thread-model-changed', refresh); document.removeEventListener('visibilitychange', refresh) })
-defineExpose({ clearRecovery, refresh: loadRecovery })
+onMounted(() => { window.addEventListener('ppc:conversation-changed', refresh); window.addEventListener('ppc:thread-model-changed', refresh); window.addEventListener('ppc:answer-preferences-changed', refresh); document.addEventListener('visibilitychange', refresh) })
+onBeforeUnmount(() => { disposed = true; request++; clearTimeout(timer); window.removeEventListener('ppc:conversation-changed', refresh); window.removeEventListener('ppc:thread-model-changed', refresh); window.removeEventListener('ppc:answer-preferences-changed', refresh); document.removeEventListener('visibilitychange', refresh) })
+defineExpose({ clearRecovery, refresh: loadRecovery, prepareLeave: () => answerPreferences.value?.prepareLeave?.() })
 </script>

@@ -55,10 +55,6 @@
   background: transparent;
   box-shadow: none;
 }
-.remote-themed[data-ui='soft'][data-remote-theme='dark'] :is(.remote-select-options, .choice-options) > button {
-  background: var(--ui-paper);
-  border-color: transparent;
-}
 .remote-themed[data-ui='soft'][data-remote-theme='dark'] :is(.remote-select-options, .choice-options) > button.selected {
   background: var(--ui-soft);
   border-color: var(--ui-contour);
@@ -85,11 +81,6 @@
 .remote-themed[data-ui='soft'][data-remote-theme='dark'] .phase-conversation-hub .phase-tabs button:nth-child(2).selected {
   background: var(--ui-rose-soft);
   color: var(--ui-rose);
-}
-.remote-themed[data-ui='soft'][data-remote-theme='dark'] :is(.conversation-actions, .remote-action-menu) > button {
-  background: var(--ui-paper);
-  box-shadow: none;
-  border: 1px solid var(--ui-line);
 }
 
 /* 页面与导航更安静，把视线留给头像、内容和当前选择。 */
@@ -219,8 +210,6 @@
 .remote-themed[data-ui='soft'][data-remote-theme='dark'] .model-number.is-custom { border-color: var(--ui-tone-edge); }
 .remote-themed[data-ui='soft'][data-remote-theme='dark'] .model-reasoning-section { box-shadow: none; }
 .remote-themed[data-ui='soft'][data-remote-theme='dark'] .model-reasoning-section .reasoning-picker { background: var(--ui-inset); box-shadow: none; }
-.remote-themed[data-ui='soft'][data-remote-theme='dark'] .reasoning-options > button { background: var(--ui-paper); border-color: transparent; }
-.remote-themed[data-ui='soft'][data-remote-theme='dark'] .reasoning-options > button.selected { background: var(--effort-soft); border-color: var(--effort-edge); }
 .remote-themed[data-ui='soft'][data-remote-theme='dark'] .model-capability.enabled { box-shadow: inset 0 1px 0 var(--ui-edge); }
 
 /* 富文本强调结构，保留图片、视频及文档自身的颜色。 */
@@ -234,6 +223,5 @@
 .remote-themed[data-ui='soft'][data-remote-theme='dark'] .message-aside { color: color-mix(in srgb, var(--ui-violet) 80%, var(--ui-ink)); }
 
 @media (hover: hover) {
-  .remote-themed[data-ui='soft'][data-remote-theme='dark'] :is(.remote-select-options, .choice-options, .reasoning-options) > button:hover:not(:disabled) { background: var(--ui-soft); }
   .remote-themed[data-ui='soft'][data-remote-theme='dark'] .phase-quick-grid > button:hover:not(:disabled) { border-color: color-mix(in srgb, var(--ui-tone) 42%, var(--ui-paper)); }
 }

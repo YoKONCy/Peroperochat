@@ -89,7 +89,7 @@ async function changeScope(kind) {
   scope.value = kind === 'character' && props.agent?.id ? { kind, agentId: props.agent.id } : { kind: 'app' }
   original.value = null; clearTemporary(); removed.value = false; await load()
 }
-function applyPreset(preset) { const { id, label, ...values } = preset; Object.assign(material.value, values, { brightness: 1, saturation: 1, contrast: 1 }); draft.enabled = true }
+function applyPreset(preset) { const values = Object.fromEntries(Object.entries(preset).filter(([key]) => !['id', 'label'].includes(key))); Object.assign(material.value, values, { brightness: 1, saturation: 1, contrast: 1 }); draft.enabled = true }
 function isPreset(preset) { return draft.enabled && ['opacity','blur','overlayOpacity','surfaceOpacity','surfaceBlur'].every(key => Math.abs(material.value[key] - preset[key]) < .001) }
 function removeImage() { clearTemporary(); removed.value = !!original.value?.hasImage }
 async function importImage(event) {

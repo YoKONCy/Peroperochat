@@ -6,7 +6,7 @@
       <RemoteReasoning v-else-if="['native-reasoning', 'thinking'].includes(node.kind)" :node="node" :active="surface.state === 'open' && !disabled && !surface.suspended" :context="context" @resource="$emit('resource', $event)" @resize="$emit('resize')" />
       <details v-else-if="node.kind === 'model-retry'" class="remote-model-retry" :data-state="node.props.state"><summary><RoomIcon name="refresh" /><strong>{{ retryStatus(node.props.state) }}</strong><span v-if="Number.isSafeInteger(node.props.attempt)">已重试 {{ node.props.attempt }} 次<span v-if="Number.isSafeInteger(node.props.maxRetries)"> / 最多 {{ node.props.maxRetries }} 次</span></span></summary><p>{{ node.props.reason || '上游模型请求发生重试。' }}</p><p v-if="node.props.partialResponse" class="remote-help">上次请求已返回部分内容，请结合后续记录查看。</p></details>
       <RemoteRichBlock v-else-if="['code', 'math', 'mermaid'].includes(node.kind)" :block="{ kind: node.kind === 'math' ? 'formula' : node.kind === 'mermaid' ? 'diagram' : 'code', source: node.props.source || node.props.code || '', language: node.props.language || 'text' }" :context="context" @resource="$emit('resource', $event)" @resize="$emit('resize')" />
-      <div v-else-if="node.kind === 'status'" class="remote-execution-status" role="status"><span class="remote-status-dot" />{{ node.props.message || remoteStatus(node.props.state) }}</div>
+      <RemoteRunStatus v-else-if="node.kind === 'status'" :node="node" :surface="surface" :started-at="startedAt" />
       <p v-else-if="node.kind === 'error'" class="room-error">{{ node.props.message || '执行暂时未完成，请刷新核对' }}</p>
       <RemoteResourceCard v-else-if="node.kind === 'attachment'" :value="attachment(node)" :context="context" @open="$emit('resource', $event)" @resize="$emit('resize')" />
       <section v-else-if="node.kind === 'approval'" class="remote-input-card remote-approval-card"><span class="remote-eyebrow"><RoomIcon name="shield" />需要你确认 · {{ risk(node.props.riskLevel) }}</span><h3>{{ node.props.title || node.props.toolName }}</h3><p class="remote-help">请核对操作，再交给角色继续。</p><details><summary><RoomIcon name="code" />查看操作详情<RoomIcon name="down" /></summary><pre>{{ format(node.props.summary) }}</pre></details><div class="remote-actions"><button :disabled="disabled || busy || preview" @click="approval(node, 'deny_once')"><RoomIcon name="close" />拒绝</button><button class="room-primary-button" :disabled="disabled || busy || preview" @click="approval(node, 'allow_once')"><RoomIcon name="check" />允许这一次</button></div></section>
@@ -38,15 +38,15 @@ import RemoteRichText from './RemoteRichText.vue'
 import RemoteRichBlock from './RemoteRichBlock.vue'
 import RemoteToolTrace from './RemoteToolTrace.vue'
 import RemoteReasoning from './RemoteReasoning.vue'
+import RemoteRunStatus from './RemoteRunStatus.vue'
 import { traceRows } from '../../utils/remoteTrace'
 import { filesFromTool } from '../../services/remoteResources'
 import '../../styles/remote-trace.css'
 import '../../styles/remote-rich.css'
-import { remoteStatus } from '../../utils/remoteMarkdown'
 import { submitRemoteInput } from '../../stores/remote'
 import { currentToken, assertToken } from '../../stores/mode'
 function isTool(node) { return !!node && ['tool-call', 'tool-result'].includes(node.kind) }
-const props = defineProps({ surface: { type: Object, required: true }, label: String, disabled: Boolean })
+const props = defineProps({ surface: { type: Object, required: true }, label: String, disabled: Boolean, startedAt: [Number, String] })
 const emit = defineEmits(['resource', 'updated', 'resize'])
 const busy = ref(false), error = ref(''), messages = reactive({}), selections = reactive({}), taskMessage = ref('')
 const preview = computed(() => props.surface.surfaceId.startsWith('conversation:'))

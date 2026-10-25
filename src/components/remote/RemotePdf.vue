@@ -28,6 +28,7 @@
 import { ref, onMounted, onBeforeUnmount, watch } from 'vue'
 import { remoteClient } from '../../services/remote'
 import { currentToken, assertToken } from '../../stores/mode'
+import { remoteState } from '../../stores/remote'
 import RemoteIcon from './RemoteIcon.vue'
 import RemoteFileState from './RemoteFileState.vue'
 
@@ -83,7 +84,7 @@ onMounted(async () => {
     }
     class NativeRange extends engine.PDFDataRangeTransport {
       requestDataRange(begin, end) {
-        remoteClient.resource(props.resource, { range: { start: begin, end: end - 1 }, token }).then(result => {
+        remoteClient.resource(props.resource, { range: { start: begin, end: end - 1 }, token, cachedOnly: ['offline', 'connecting', 'reconnecting'].includes(remoteState.connection) }).then(result => {
           if (disposed) return
           if (result.contentRange !== `bytes ${begin}-${end - 1}/${props.info.size}` || result.bytes.length !== end - begin) throw new Error('PDF 内容范围已改变')
           this.onDataRange(begin, new Uint8Array(result.bytes))
@@ -98,7 +99,7 @@ onMounted(async () => {
     if (props.info.ranges && props.info.size > 0) input.range = new NativeRange(props.info.size, new Uint8Array(), true)
     else {
       if (props.info.size > 8 * 1024 * 1024) throw new Error('服务端不支持分段预览，请下载原件查看')
-      input.data = new Uint8Array((await remoteClient.resource(props.resource, { token })).bytes)
+      input.data = new Uint8Array((await remoteClient.resource(props.resource, { token, cachedOnly: ['offline', 'connecting', 'reconnecting'].includes(remoteState.connection) })).bytes)
     }
     if (disposed) return
     task = engine.getDocument(input)

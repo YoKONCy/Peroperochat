@@ -8,7 +8,7 @@ const conversations = new Map()
 
 function entryFor(threadId) {
   if (!conversations.has(threadId)) conversations.set(threadId, shallowReactive({
-    threadId, messages: [], busy: false, loaded: false, revision: 0, controller: null, speaker: null, activity: '',
+    threadId, messages: [], busy: false, startedAt: null, loaded: false, revision: 0, controller: null, speaker: null, activity: '',
   }))
   return conversations.get(threadId)
 }
@@ -43,6 +43,7 @@ export function useLocalConversation(channel = 'desktop') {
   const isLoading = computed(() => current.value.busy)
   const processingAgentId = computed(() => current.value.speaker)
   const activityText = computed(() => current.value.activity)
+  const startedAt = computed(() => current.value.startedAt)
 
   async function load() {
     const entry = current.value
@@ -56,6 +57,7 @@ export function useLocalConversation(channel = 'desktop') {
     const entry = entryFor(channel === 'group' ? 'group:family' : `desktop:${agentId}`)
     if (entry.busy) throw new Error('该会话正在回复，请稍后重试')
     entry.busy = true
+    entry.startedAt = Date.now()
     entry.activity = '正在听你说…'
     entry.controller = new AbortController()
     let started = false
@@ -143,6 +145,7 @@ export function useLocalConversation(channel = 'desktop') {
     } finally {
       clearTimeout(frameTimer)
       entry.busy = false
+      entry.startedAt = null
       entry.controller = null
       entry.speaker = null
       entry.activity = ''
@@ -163,7 +166,7 @@ export function useLocalConversation(channel = 'desktop') {
   }
 
   return {
-    messages, isLoading, processingAgentId, activityText, load, remove, removeById,
+    messages, isLoading, processingAgentId, activityText, startedAt, load, remove, removeById,
     send: (content, options = {}) => run({ content, ephemeral: !!options.ephemeral }, options),
     sendGroup: content => run({ content }, { command: 'local_group_chat' }),
     regenerate: (index) => {

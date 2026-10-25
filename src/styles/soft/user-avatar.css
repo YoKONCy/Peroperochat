@@ -1,0 +1,4 @@
+/* 用户头像保持紧凑，正文气泡不因新增头像挤掉阅读宽度。 */
+.remote-workspace[data-ui='soft'] .chat-user-meta > .chat-owner-avatar { width: 23px; height: 23px; min-width: 23px; flex: none; border: 1px solid var(--ui-line); border-radius: 8px; background: var(--ui-paper); }
+.remote-themed[data-ui='soft'] .phase-group-message.mine > .character-avatar { width: 31px; height: 31px; min-width: 31px; flex: none; border-radius: 11px; border: 1px solid var(--ui-contour); background: var(--ui-paper); }
+.remote-themed[data-ui='soft'] .remote-log-owner-avatar { width: 27px; height: 27px; vertical-align: middle; margin-right: 8px; border: 1px solid var(--ui-line); border-radius: 9px; }

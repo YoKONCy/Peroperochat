@@ -31,7 +31,6 @@ const { read, write, run, busy, error, unresolved } = useRemoteManagement()
 const rooms = ref([]), facilities = ref([]), current = ref(null), projection = ref(null), message = ref(''), mention = ref(''), operation = ref(null), form = ref({}), deleting = ref('')
 const titles = { facility: '创建设施', create: '创建房间', edit: '房间资料', member: '移动角色到此房间', environment: '更新环境变量', command: '管家指令', butler: '管家设置', delete: '删除房间', delete_message: '删除这轮群聊？' }
 const fields = computed(() => operation.value === 'create' ? [field('facilityId', 'number', { choices: facilities.value.map(item => ({ value: item.id, label: item.name })) }), field('name'), field('description', 'long')] : operation.value === 'member' ? [field('agentId', 'text', { choices: remoteState.agents.filter(item => item.isEnabled !== false && !item.isUser).map(item => ({ value: item.id, label: item.name })) })] : inferFields(form.value))
-const memberNames = computed(() => (projection.value?.members || []).map(member => agentName(member.agentId)).join('、'))
 const mentionOptions = computed(() => [{ value: '', label: '自动选择' }, { value: '@all', label: '全体成员' }, ...(projection.value?.members || []).map(member => ({ value: member.agentId, label: agentName(member.agentId) }))])
 const formBaseline = ref('{}'), discardOperation = ref(false)
 const hasChanges = computed(() => !!message.value.trim() || !!operation.value && JSON.stringify(form.value) !== formBaseline.value)

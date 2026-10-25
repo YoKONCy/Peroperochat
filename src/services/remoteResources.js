@@ -1,5 +1,6 @@
 import { remoteClient } from './remote'
 import { currentToken, assertToken } from '../stores/mode'
+import { remoteState } from '../stores/remote'
 
 const fileExtension = /\.(?:html?|svg|png|jpe?g|gif|webp|avif|bmp|ico|mp4|webm|mov|m4v|mkv|ogv|mp3|wav|ogg|oga|opus|m4a|aac|flac|pdf|zip|7z|rar|tar|gz|docx?|docm|xlsx?|xlsm|xlsb|pptx?|pptm|odt|ods|odp|rtf|epub|txt|md|markdown|csv|json|xml|ya?ml|toml|log)(?:[?#]|$)/i
 export function isResourceReference(value = '') {
@@ -39,7 +40,7 @@ export async function resolveRemoteResource(value, context = {}, token = current
   if (!source || source.length > 2048) throw new Error('文件引用为空或过长')
   // 即使附件看起来有 ID，也由服务端解析入口核对当前会话权限。
   if (!context.agentId || !context.threadId) throw new Error('此文件缺少所属会话，请从原会话打开')
-  const { data } = await remoteClient.resolveResource(context, source, token)
+  const { data } = await remoteClient.resolveResource(context, source, token, { cachedOnly: ['offline', 'connecting', 'reconnecting'].includes(remoteState.connection) })
   assertToken(token, 'remote')
   return fromDescriptor(data, context)
 }

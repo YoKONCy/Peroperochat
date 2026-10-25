@@ -110,6 +110,7 @@ pub fn run() {
         Ok(())
     })
     .manage(remote::Runtime::default())
+    .manage(remote::tts::Calls::default())
     .manage(remote::conversation::Workflows::default())
     .plugin(tauri_plugin_shell::init())
     .plugin(tauri_plugin_notification::init())
@@ -132,6 +133,7 @@ pub fn run() {
         remote::management::remote_manage,
         remote::management::remote_manage_upload,
         remote::management::remote_voice_tts,
+        remote::tts::remote_cancel_tts,
         remote::files::remote_export_text,
         remote::conversation::remote_prepare_regeneration,
         remote::conversation::remote_commit_regeneration,

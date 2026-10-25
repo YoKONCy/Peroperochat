@@ -44,7 +44,7 @@
 
       <div class="group-dock">
         <button v-if="!following && messages.length" class="group-latest room-secondary-button" @click="scrollToLatest(true)"><RoomIcon name="down" />回到最新</button>
-        <Transition name="room-soft"><div v-if="isLoading" class="group-activity" role="status"><CharacterAvatar v-if="processingAgent" :src="processingAgent.avatar" :label="processingAgent.name" /><span>{{ processingAgent?.name || '大家' }} · {{ activityText || '正在回应你…' }}</span><span class="group-typing" aria-hidden="true"><i /><i /><i /></span></div></Transition>
+        <Transition name="room-soft"><div v-if="isLoading" class="group-activity" role="status"><CharacterAvatar v-if="processingAgent" :src="processingAgent.avatar" :label="processingAgent.name" /><span>{{ processingAgent?.name || '大家' }} · {{ activityText || '正在回应你…' }}</span><ElapsedTime :started-at="startedAt" prefix="已等待" /><span class="group-typing" aria-hidden="true"><i /><i /><i /></span></div></Transition>
         <form class="group-composer" @submit.prevent="sendMessage">
           <CompanionEmblem class="composer-emblem" />
           <textarea ref="textarea" v-model="input" rows="1" maxlength="100000" placeholder="和大家说点什么…" aria-label="群聊消息" enterkeyhint="send" @input="resizeInput" @keydown="handleComposerKey" />
@@ -82,6 +82,7 @@ import CharacterAvatar from '../components/companion/CharacterAvatar.vue'
 import CompanionEmblem from '../components/companion/CompanionEmblem.vue'
 import RoomDrawer from '../components/companion/RoomDrawer.vue'
 import RoomIcon from '../components/companion/RoomIcon.vue'
+import ElapsedTime from '../components/companion/ElapsedTime.vue'
 import RoomSwitch from '../components/companion/RoomSwitch.vue'
 import ToolTimeline from '../components/companion/ToolTimeline.vue'
 import { useRoomViewport } from '../composables/useRoomViewport'
@@ -96,7 +97,7 @@ const router = useRouter()
 const { viewportStyle } = useRoomViewport()
 const tone = computed(() => activeAgentId.value === 'nana' ? 'nana' : 'pero')
 const conversation = useLocalConversation('group')
-const { messages, isLoading, processingAgentId, activityText } = conversation
+const { messages, isLoading, processingAgentId, activityText, startedAt } = conversation
 const members = ref([]), memberDraft = ref([]), showMembers = ref(false), savingMembers = ref(false), membersReady = ref(false)
 const pageLoading = ref(false), submitting = ref(false), deleting = ref(false), loadError = ref(''), actionError = ref(''), membersError = ref('')
 const input = ref(''), textarea = ref(null), chatList = ref(null), displayCount = ref(80), following = ref(true), selectedId = ref(null)
@@ -209,8 +210,12 @@ async function loadMore() {
   if (!disposed && chatList.value) chatList.value.scrollTop = top + chatList.value.scrollHeight - before
 }
 watch(() => [messages.value.at(-1)?.id, messages.value.at(-1)?.content, messages.value.at(-1)?.reasoning, isLoading.value], () => scrollToLatest())
-onMounted(() => { resizeInput(); load() })
-onBeforeUnmount(() => { disposed = true; loadVersion++ })
+function resumeConversation() {
+  if (document.hidden || disposed) return
+  conversation.load().catch(error => { if (!disposed) console.warn('恢复家庭群聊失败：', error) })
+}
+onMounted(() => { resizeInput(); load(); document.addEventListener('visibilitychange', resumeConversation); window.addEventListener('pageshow', resumeConversation); window.addEventListener('focus', resumeConversation) })
+onBeforeUnmount(() => { disposed = true; loadVersion++; document.removeEventListener('visibilitychange', resumeConversation); window.removeEventListener('pageshow', resumeConversation); window.removeEventListener('focus', resumeConversation) })
 </script>
 
 <style scoped>

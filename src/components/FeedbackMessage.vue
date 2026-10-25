@@ -1,4 +1,4 @@
-<template><!-- 气泡由全局浮层展示，不占据页面空间。 --></template>
+<template><span v-if="false" /><!-- 气泡由全局浮层展示，不占据页面空间。 --></template>
 <script setup>
 import { watch, inject, onBeforeUnmount } from 'vue'
 import { showFeedback } from '../services/appFeedback'

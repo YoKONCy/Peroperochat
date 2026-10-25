@@ -108,7 +108,7 @@ async function open(row) {
     const request = version, query = { kind: 'workspace_file', agentId: props.agentId, threadId: props.threadId, path: row.path }
     loading.value = true; error.value = ''
     try {
-      const file = await readRemote(query, { allowCached: false }); guard()
+      const file = await readRemote(query); guard()
       if (request !== version) return
       if (!file?.version) throw new Error('文件版本暂不可用，请刷新后重试')
       emit('resource', { kind: 'workspace', agentId: query.agentId, threadId: query.threadId, path: query.path, version: file.version, name: file.name || row.name })

@@ -11,7 +11,7 @@
             <button class="room-icon-button" aria-label="关闭" :disabled="busy" @click="requestClose"><component :is="remoteTheme ? RemoteIcon : RoomIcon" name="close" /></button>
           </header>
           <div class="room-drawer-content"><slot /></div>
-          <footer v-if="$slots.footer" class="room-drawer-footer"><slot name="footer" /></footer>
+          <footer v-if="$slots.footer" class="room-drawer-footer"><slot name="footer" :close="requestClose" /></footer>
         </section>
       </div>
     </Transition>

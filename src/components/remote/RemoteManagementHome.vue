@@ -26,11 +26,11 @@ const groups = computed(() => [
     { id: 'assignments', label: '模型分工', description: '默认模型、角色覆盖与视觉', icon: 'route' },
     { id: 'prompts', label: '提示词', description: '编辑、整理与发布', icon: 'document' },
     { id: 'voice', label: '语音', description: '识别与朗读', icon: 'audio' },
-    { id: 'user', label: '个人资料', description: '界面语言', icon: 'profile' },
+    { id: 'user', label: '个人资料', description: t('资料、语言与回答偏好', [], 'answer-preferences'), icon: 'profile', keywords: t('健全模式与回答预填充', [], 'answer-preferences') },
   ] },
   { id: 'insights', title: '实例概况', icon: 'pulse', items: [
     { id: 'usage', label: '用量统计', description: '累计用量', icon: 'chart' },
     { id: 'runtime', label: '运行概览', description: '当前在忙什么', icon: 'pulse' },
   ] },
-].map(group => ({ ...group, items: group.items.filter(item => !search.value.trim() || `${t(item.label)} ${t(item.description)}`.toLowerCase().includes(search.value.trim().toLowerCase())) })))
+].map(group => ({ ...group, items: group.items.filter(item => !search.value.trim() || `${t(item.label)} ${t(item.description)} ${item.keywords || ''}`.toLowerCase().includes(search.value.trim().toLowerCase())) })))
 </script>

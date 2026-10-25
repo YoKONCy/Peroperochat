@@ -71,7 +71,7 @@ import '../../styles/remote-rich.css'
 import { remoteClient } from '../../services/remote'
 import { currentToken, assertToken } from '../../stores/mode'
 import { documentKind, formatFileSize } from '../../services/remoteDocuments'
-import { remoteFileInfo, prepareRemoteFile, remoteFileLabel, mediaKinds } from '../../services/remoteFilePreview'
+import { remoteFileInfo, prepareRemoteFile, remoteFileLabel } from '../../services/remoteFilePreview'
 import { nativeResource, externalResourceUrl } from '../../services/remoteResources'
 const props = defineProps({ resource: Object, name: String })
 defineEmits(['close', 'resource'])

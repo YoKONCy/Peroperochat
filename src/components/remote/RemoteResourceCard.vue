@@ -28,6 +28,7 @@ import { remoteFileInfo, prepareRemoteFile, mediaKinds, remoteFileLabel } from '
 import { documentKind, formatFileSize } from '../../services/remoteDocuments'
 import { embeddedRemoteDocument } from '../../utils/remoteRichContent'
 import { currentToken, assertToken } from '../../stores/mode'
+import { remoteState } from '../../stores/remote'
 const RemotePdf = defineAsyncComponent(() => import('./RemotePdf.vue'))
 const props = defineProps({ value: [Object, String], context: Object })
 const emit = defineEmits(['open', 'resize'])
@@ -59,7 +60,7 @@ async function load(forceMedia = false) {
     const content = await prepareRemoteFile(file, meta, { compact: !forceMedia, signal })
     if (disposed || request !== serial || signal.aborted) { content.media?.release(); return }
     assertToken(token, 'remote'); preview.value?.media?.release(); preview.value = content
-  } catch (error) { if (!disposed && request === serial && !signal.aborted) failure.value = error.message }
+  } catch (error) { if (!disposed && request === serial && !signal.aborted) { failure.value = error.message; if (['REMOTE_NOT_FOUND', 'REMOTE_FORBIDDEN'].includes(error.code)) { release(); info.value = null; resolved.value = null; pdfReady.value = false } } }
   finally { if (!disposed && request === serial) { loading.value = false; emit('resize') } }
 }
 const loadMedia = () => load(true)
@@ -69,6 +70,12 @@ async function open() {
 }
 function visibility() { hidden.value = document.hidden; if (document.hidden) player.value?.pause(); else if (!started && inView.value) { started = true; load() } }
 watch(() => JSON.stringify([props.value, props.context]), () => { serial++; release(); info.value = null; resolved.value = null; pdfReady.value = false; pageCount.value = 0; loading.value = false; if (started && inView.value) load(); else started = false })
+watch(() => remoteState.connection, (state, previous) => {
+  if (state !== 'online' || previous === 'online') return
+  // 重连后核验文件描述与内容；加载期间保留旧缩略图，避免白闪。
+  serial++; controller?.abort(); loading.value = false; info.value = null; resolved.value = null; pdfReady.value = false
+  if (inView.value && !document.hidden) { started = true; load() } else started = false
+})
 onMounted(() => {
   const update = entries => {
     inView.value = entries.some(entry => entry.isIntersecting); clearTimeout(releaseTimer)

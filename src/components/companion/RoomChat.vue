@@ -12,7 +12,7 @@
     </header>
 
     <Transition name="room-soft"><button v-if="mode === 'rest' && (lastReply || busy)" class="last-reply" @click="$emit('update:mode', 'peek')">
-      <span class="last-reply-symbol"><RoomIcon name="chat" /></span><span>{{ busy ? activity || '正在想怎么回答你…' : lastReply }}</span><RoomIcon name="up" />
+      <span class="last-reply-symbol"><RoomIcon name="chat" /></span><span>{{ busy ? activity || '正在想怎么回答你…' : lastReply }}</span><ElapsedTime v-if="busy" :started-at="startedAt" prefix="已等待" /><RoomIcon name="up" />
     </button></Transition>
 
     <div v-if="historyMounted" v-show="mode !== 'rest'" ref="list" class="chat-messages" @scroll.passive="onScroll">
@@ -46,7 +46,7 @@
     </div>
 
     <button v-if="!following && mode !== 'rest'" class="latest-button" @click="scrollToLatest(true)"><RoomIcon name="down" />回到最新消息</button>
-    <Transition name="room-soft"><div v-if="busy && mode !== 'rest'" class="chat-activity" role="status"><span class="activity-dot" />{{ activity || `${agent.name} 正在回应你…` }}</div></Transition>
+    <Transition name="room-soft"><div v-if="busy && mode !== 'rest'" class="chat-activity" role="status"><span class="activity-dot" />{{ activity || `${agent.name} 正在回应你…` }}<ElapsedTime :started-at="startedAt" prefix="已等待" /></div></Transition>
     <Transition name="room-soft"><div v-if="image" class="composer-attachment"><img :src="image" alt="待发送图片" /><span>图片已准备好</span><button class="room-icon-button" aria-label="移除待发送图片" @click="$emit('remove-image')"><RoomIcon name="close" /></button></div></Transition>
 
     <form class="room-composer" @submit.prevent="submit">
@@ -62,6 +62,7 @@
 <script setup>
 import { computed, ref, watch, nextTick, onMounted, onBeforeUnmount } from 'vue'
 import RoomIcon from './RoomIcon.vue'
+import ElapsedTime from './ElapsedTime.vue'
 import MessageReasoning from './MessageReasoning.vue'
 import RoomAccent from './RoomAccent.vue'
 import ToolTimeline from './ToolTimeline.vue'
@@ -73,7 +74,7 @@ import { visibleMessage } from '../../utils/messageContent'
 const props = defineProps({
   agent: { type: Object, required: true }, messages: { type: Array, default: () => [] }, modelValue: { type: String, default: '' },
   mode: { type: String, default: 'rest' }, busy: Boolean, keyboardOpen: Boolean, image: { type: String, default: null },
-  activity: { type: String, default: '' }, jumpId: { type: Number, default: null },
+  activity: { type: String, default: '' }, startedAt: [Number, String], jumpId: { type: Number, default: null },
 })
 const emit = defineEmits(['update:modelValue', 'update:mode', 'send', 'stop', 'focus', 'attach', 'remove-image', 'copy', 'delete', 'regenerate', 'preview-image', 'dock-size'])
 const panelElement = ref(null)
@@ -282,7 +283,7 @@ defineExpose({ focus: () => input.value?.focus({ preventScroll: true }), blur: (
 .latest-button { position: absolute; bottom: 112px; left: 50%; transform: translateX(-50%); display: flex; align-items: center; gap: 6px; padding: 9px 14px; border: 1px solid var(--room-line); border-radius: 20px; background: var(--room-surface); box-shadow: var(--room-shadow); font-size: 12px; }
 .latest-button:active:not(:disabled) { transform: translateX(-50%) scale(.96); }
 .latest-button svg { width: 14px; height: 14px; }
-.chat-activity { font-size: 11px; color: var(--room-muted); padding: 5px 25px; display: flex; align-items: center; gap: 8px; }
+.chat-activity { font-size: 11px; color: var(--room-muted); padding: 5px 25px; display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
 .activity-dot { width: 5px; height: 5px; border-radius: 50%; background: var(--room-accent); animation: room-breathe 1.6s infinite; }
 .room-composer { display: flex; align-items: flex-end; gap: 6px; padding: 6px; margin: 6px 12px 0; border: 1px solid var(--room-line); border-radius: 4px 12px 4px 4px; background: var(--room-surface); flex: none; }
 .room-chat--rest .room-composer { margin: 0; border-color: #ffffffcc; border-bottom: 2px solid var(--room-accent-bright); background: #fffffff2; box-shadow: 0 4px 16px #263b510d; }

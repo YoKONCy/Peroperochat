@@ -2,16 +2,19 @@ import { remoteClient } from './remote'
 import { currentToken, assertToken, onModeInvalidated } from '../stores/mode'
 import { reactive } from 'vue'
 import { avatarImageMime } from '../utils/avatarImage'
+import { remoteState } from '../stores/remote'
 
 const urls = new Set()
 const avatars = new Map()
 export const remoteAvatarRevisions = reactive(new Map())
 export function invalidateRemoteAvatar(id) {
   const token = currentToken(); assertToken(token, 'remote')
-  const key = `${token.target.profileId}:${token.epoch}:${id}`, entry = avatars.get(key)
-  avatars.delete(key)
-  if (entry && entry.refs === 0) entry.media?.release()
+  for (const [key, entry] of avatars) if (entry.id === id) { avatars.delete(key); if (entry.refs === 0) entry.media?.release() }
   remoteAvatarRevisions.set(id, (remoteAvatarRevisions.get(id) || 0) + 1)
+}
+export function invalidateAllRemoteAvatars() {
+  const ids = new Set([...avatars.values()].map(entry => entry.id))
+  for (const id of ids) invalidateRemoteAvatar(id)
 }
 const avatarQueue = []
 let avatarLoads = 0
@@ -26,20 +29,21 @@ function pumpAvatars() {
   while (avatarLoads < 3 && avatarQueue.length) {
     const job = avatarQueue.shift()
     avatarLoads++
-    Promise.resolve().then(() => { assertToken(job.token, 'remote'); return loadRemoteResource({ kind: 'agent_avatar', id: job.id }) })
+    Promise.resolve().then(() => { assertToken(job.token, 'remote'); return loadRemoteResource({ kind: 'agent_avatar', id: job.id }, { cachedOnly: job.cachedOnly }) })
       .then(job.resolve, job.reject).finally(() => { avatarLoads--; pumpAvatars() })
   }
 }
-export async function acquireRemoteAvatar(id) {
+export async function acquireRemoteAvatar(id, { cachedOnly = false } = {}) {
   const token = currentToken()
   assertToken(token, 'remote')
-  const key = `${token.target.profileId}:${token.epoch}:${id}`
+  const key = `${token.target.profileId}:${token.epoch}:${id}:${cachedOnly ? 'cached' : 'live'}`
   let entry = avatars.get(key)
+  if (entry?.media && entry.expiresAt <= Date.now() && !cachedOnly) { avatars.delete(key); if (!entry.refs) entry.media.release(); entry = null }
   if (!entry) {
-    entry = { refs: 0, media: null }
-    entry.promise = new Promise((resolve, reject) => { avatarQueue.push({ id, token, resolve, reject }); pumpAvatars() }).then(media => {
+    entry = { id, refs: 0, media: null, expiresAt: 0 }
+    entry.promise = new Promise((resolve, reject) => { avatarQueue.push({ id, token, cachedOnly, resolve, reject }); pumpAvatars() }).then(media => {
       if (!media.previewable || !media.mimeType.startsWith('image/')) { media.release(); throw new Error('头像图片暂时无法显示') }
-      entry.media = media; return media
+      entry.expiresAt = Date.now() + 60000; entry.media = media; return media
     })
     avatars.set(key, entry)
   }
@@ -48,7 +52,7 @@ export async function acquireRemoteAvatar(id) {
     const media = await entry.promise
     assertToken(token, 'remote')
     let released = false
-    return { ...media, release() {
+    return { ...media, expiresAt: entry.expiresAt, release() {
       if (released) return
       released = true; entry.refs--
       if (entry.refs === 0 && avatars.get(key) !== entry) { entry.media?.release(); return }
@@ -66,17 +70,18 @@ export async function uploadRemoteFile(threadId, file) {
 }
 export async function loadRemoteResource(resource, options = {}) {
   const token = currentToken()
-  const result = await remoteClient.resource(resource, { ...options, token })
+  const cachedOnly = options.cachedOnly ?? ['offline', 'connecting', 'reconnecting'].includes(remoteState.connection)
+  const result = await remoteClient.resource(resource, { ...options, cachedOnly, token })
   assertToken(token, 'remote')
   // HTML、SVG 等主动内容只作为文本或下载数据；不注入应用 DOM。
   const bytes = new Uint8Array(result.bytes)
-  const mime = resource.kind === 'agent_avatar' ? avatarImageMime(bytes) : result.mimeType.split(';')[0].trim().toLowerCase()
+  const mime = ['agent_avatar', 'owner_avatar'].includes(resource.kind) ? avatarImageMime(bytes) : result.mimeType.split(';')[0].trim().toLowerCase()
   const passive = /^(image\/(png|jpeg|webp|gif|avif|bmp|x-icon)|audio\/[a-z0-9.+-]+|video\/[a-z0-9.+-]+|application\/pdf)$/.test(mime)
   const blob = new Blob([bytes], { type: passive ? mime : 'text/plain' })
   const url = URL.createObjectURL(blob)
   urls.add(url)
   return {
-    url, blob, mimeType: mime, contentRange: result.contentRange, previewable: passive,
+    url, blob, mimeType: mime, contentRange: result.contentRange, previewable: passive, cached: result.cached === true,
     release() { URL.revokeObjectURL(url); urls.delete(url) },
   }
 }

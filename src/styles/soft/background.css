@@ -52,7 +52,7 @@
 :is(.standalone-design.companion-surface, .remote-themed)[data-ui='soft'][data-background='active'] :is(.expression-reasoning[data-effort], .remote-reasoning) { background: linear-gradient(110deg, color-mix(in srgb, var(--effort-soft, var(--ui-thought)) 90%, transparent), var(--bg-reading-fill)); }
 :is(.standalone-design.companion-surface, .remote-themed)[data-ui='soft'][data-background='active'] .remote-file-card-meta { background: var(--bg-inset-reading-fill); }
 :is(.standalone-design.companion-surface, .remote-themed)[data-ui='soft'][data-background='active'] .room-drawer-panel { background: var(--bg-raised-fill); border-color: var(--ui-line); }
-:is(.standalone-design.companion-surface, .remote-themed)[data-ui='soft'][data-background='active'] :is(.remote-edit-footer, .room-drawer-footer, .phase-settings-save, .model-config-save, .file-save-dock) { background: var(--bg-raised-fill); }
+:is(.standalone-design.companion-surface, .remote-themed)[data-ui='soft'][data-background='active'] :is(.remote-edit-footer, .phase-settings-save, .model-config-save, .file-save-dock) { background: var(--bg-raised-fill); }
 
 /* 房间图片与应用背景分开处理，默认场景仍由 Rust 选择时段。 */
 .app.standalone-design[data-ui='soft'][data-background='active'] .room-background { object-fit: var(--bg-fit, cover); object-position: var(--bg-position, 50% 50%); opacity: var(--bg-image-opacity, .95); filter: blur(var(--bg-image-blur, 0px)) brightness(var(--bg-brightness, 1)) saturate(var(--bg-saturation, 1)) contrast(var(--bg-contrast, 1)); }

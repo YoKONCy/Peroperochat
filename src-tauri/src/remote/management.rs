@@ -49,9 +49,18 @@ fn validate_archive_edit(input:&Request)->ChatResult<()> {
 
 fn endpoint(input:&Request)->ChatResult<(Route,bool)> {
     validate_archive_edit(input)?;
+    validate_answer_preferences(input)?;
     let id=match &input.id {Some(id)=>segment(id)?,None=>String::new()};
     // 路径与方法只能从此目录产生，不接受任意 URL、HTTP 方法或子应用入口。
     let (method,path,keys,write):(&str,String,&[&str],bool)=match input.operation.as_str() {
+        "voice.tts_config"=>("GET","/voice/tts/config".into(),&[],false),
+        "voice.save_tts_config"=>("PUT","/voice/tts/config".into(),&[],true),
+        "voice.tts_adapters"=>("GET","/voice/tts/adapters".into(),&[],false),
+        "owner_avatar.get"|"owner_avatar.reset"=> {
+            if input.id.is_some() || input.body.is_some() {return Err(ChatError::new("INVALID_INPUT","用户头像不需要额外参数"));}
+            let reset=input.operation=="owner_avatar.reset";
+            (if reset {"DELETE"} else {"GET"},"/system/user-avatar".into(),&[],reset)
+        },
         "agents.list"=>("GET","/agents".into(),&[],false),
         "agents.get"=>("GET",format!("/agents/{id}"),&[],false),
         "agents.create"=>("POST","/agents".into(),&[],true),
@@ -267,6 +276,26 @@ fn endpoint(input:&Request)->ChatResult<(Route,bool)> {
     let body=if matches!(method,"POST"|"PUT"|"PATCH") {Some(input.body.clone().filter(|value|!value.is_null()).unwrap_or_else(||json!({})))} else {input.body.clone()};
     Ok((Route {method:reqwest::Method::from_bytes(method.as_bytes()).unwrap(),path,params,body},write))
 }
+fn validate_answer_preferences(input:&Request)->ChatResult<()> {
+    if input.operation!="configs.save_batch" {return Ok(());}
+    let Some(items)=input.body.as_ref().and_then(|body|body["items"].as_array()) else {return Ok(());};
+    for item in items {
+        match item["key"].as_str() {
+            Some("system.wholesomeMode")=> {
+                if !matches!(item["value"].as_str(),Some("true"|"false")) {return Err(ChatError::new("INVALID_INPUT","健全模式设置无效，请重新选择"));}
+            },
+            Some("system.assistantPrefill")=> {
+                let config=item["value"].as_str().and_then(|raw|serde_json::from_str::<Value>(raw).ok());
+                let valid=config.as_ref().is_some_and(|config|config.is_object() && config["enabled"].is_boolean()
+                    && config["content"].as_str().is_some_and(|text|text.encode_utf16().count()<=8000)
+                    && (config.get("mode").is_none() || matches!(config["mode"].as_str(),Some("once"|"continuous"))));
+                if !valid {return Err(ChatError::new("INVALID_INPUT","请检查预填充设置，正文最多 8000 个字符"));}
+            },
+            _=>{},
+        }
+    }
+    Ok(())
+}
 
 #[tauri::command]
 pub async fn remote_manage(app:AppHandle,token:Token,request:Request,request_id:String)->ChatResult<Value> {
@@ -289,6 +318,7 @@ async fn manage(app:&AppHandle,token:&Token,request:&Request,request_id:&str)->C
         cache::settle(app,token,request_id,receipt)?;
     }
     let data=result?;super::validate_token(app,token)?;
+    if request.operation=="owner_avatar.reset" {keep_avatar_snapshot(app,token,None,&data,None);}
     Ok(json!({"modeToken":token,"requestId":request_id,"data":data}))
 }
 fn audit_context(request:&Request,route:&Route)->Value {
@@ -303,12 +333,22 @@ pub async fn remote_manage_upload(app:AppHandle,token:Token,request_id:String,ki
 async fn upload(app:&AppHandle,token:&Token,request_id:&str,kind:&str,id:Option<&str>,file:super::resources::Upload,fields:std::collections::HashMap<String,String>)->ChatResult<Value> {
     let (path,_part,allowed)=match kind {
         "avatar"=>(format!("/agents/{}/avatar",segment(id.unwrap_or(""))?),"avatar",Vec::<&str>::new()),
+        "owner_avatar"=> {
+            if id.is_some() || file.mime_type!="image/png" {return Err(ChatError::new("INVALID_FILE","请选择裁切后的 PNG 头像"));}
+            validate_owner_avatar(&file.bytes)?;
+            ("/system/user-avatar".into(),"avatar",Vec::<&str>::new())
+        },
+        "tts_reference"=> {
+            super::tts::validate_reference(&file.bytes)?;
+            ("/voice/tts/references".into(),"audio",Vec::<&str>::new())
+        },
         "knowledge"=>("/knowledge/documents/upload".into(),"file",vec!["title","replaceId"]),
         "asr"=>("/voice/asr".into(),"audio",vec!["language"]),
         _=>return Err(ChatError::new("INVALID_INPUT","不支持的远程上传类型")),
     };
     if file.bytes.is_empty() || file.bytes.len()>transport::MAX_BODY || file.name.is_empty() || file.name.len()>240 || file.name.contains(['/', '\\']) || file.name.chars().any(char::is_control) || file.mime_type.len()>128 || file.mime_type.contains(['\r','\n'])
         || fields.iter().any(|(key,value)|!allowed.contains(&key.as_str()) || value.len()>2048) {return Err(ChatError::new("INVALID_FILE","文件或上传字段无效，文件上限 8 MiB"));}
+    let avatar_bytes=if matches!(kind,"avatar"|"owner_avatar") {Some(file.bytes.clone())} else {None};
     let sha=format!("{:x}",Sha256::digest(&file.bytes));
     let part=reqwest::multipart::Part::bytes(file.bytes).file_name(file.name).mime_str(&file.mime_type).map_err(|_|ChatError::new("INVALID_FILE","文件类型无效"))?;
     let mut form=reqwest::multipart::Form::new().part(part_name(kind),part);
@@ -317,35 +357,47 @@ async fn upload(app:&AppHandle,token:&Token,request_id:&str,kind:&str,id:Option<
     let session=tokio::select! {biased;_=changes.changed()=>return Err(super::inactive()),result=super::session(app,token)=>result?,};
     cache::prepare(app,token,request_id,&json!({"kind":"management_upload","operation":kind,"id":id,"sha256":sha,"fields":fields}))?;
     let result=tokio::select! {biased;_=changes.changed()=>return Err(super::inactive().with_outcome("unknown")),result=async {
-        let response=session.client.post(format!("{}/api{path}",session.profile.endpoint)).bearer_auth(&session.secret).timeout(std::time::Duration::from_secs(90)).multipart(form).send().await.map_err(transport::send_error)?;
+        let response=session.client.request(upload_method(kind),format!("{}/api{path}",session.profile.endpoint)).bearer_auth(&session.secret).timeout(std::time::Duration::from_secs(90)).multipart(form).send().await.map_err(transport::send_error)?;
         let response=super::checked_response(&session,response).await?;transport::envelope(&transport::body(response).await?)
     }=>result,};
     cache::settle(app,token,request_id,result.as_ref().map(|_|Value::Null).map_err(Clone::clone))?;
-    let data=result?;super::validate_token(app,token)?;Ok(json!({"modeToken":token,"data":data}))
+    let data=result?;super::validate_token(app,token)?;
+    if matches!(kind,"avatar"|"owner_avatar") {keep_avatar_snapshot(app,token,id,&data,avatar_bytes);}
+    Ok(json!({"modeToken":token,"data":data}))
 }
-fn part_name(kind:&str)->&'static str {match kind {"avatar"=>"avatar","asr"=>"audio",_=>"file"}}
+fn keep_avatar_snapshot(app:&AppHandle,token:&Token,agent:Option<&str>,profile:&Value,bytes:Option<Vec<u8>>) {
+    // 写成功的回执和已提交图片可立即供离线显示；缓存失败不把成功上传伪装成失败。
+    let _=(||->ChatResult<()> {
+        let resource=if let Some(id)=agent {json!({"kind":"agent_avatar","id":id})} else {
+            if !profile["name"].is_string() || !(profile["version"].is_null() || profile["version"].as_str().is_some_and(|version|uuid::Uuid::parse_str(version).is_ok())) {return Ok(());}
+            let key=serde_json::to_string(&super::operations::Query::OwnerAvatar).map_err(|_|super::inactive())?;
+            let ticket=cache::begin_read(app,token,&key)?;cache::save(app,token,&key,ticket,profile)?;
+            json!({"kind":"owner_avatar","version":profile["version"]})
+        };
+        if let Some(bytes)=bytes {
+            let key=json!({"resource":resource,"range":null}).to_string();let ticket=cache::begin_read(app,token,&format!("blob:{key}"))?;
+            cache::save_blob(app,token,&key,ticket,&cache::Blob {mime:"image/png".into(),content_range:None,bytes})?;
+        }
+        Ok(())
+    })();
+}
+fn part_name(kind:&str)->&'static str {match kind {"avatar"|"owner_avatar"=>"avatar","asr"|"tts_reference"=>"audio",_=>"file"}}
+fn upload_method(kind:&str)->reqwest::Method {if kind=="owner_avatar" {reqwest::Method::PUT} else {reqwest::Method::POST}}
+fn validate_owner_avatar(bytes:&[u8])->ChatResult<()> {
+    // 与 infOS 的裁切接口一致，只发送 512px 方形 PNG；头像内容不写入操作回执。
+    if bytes.len()<45 || bytes.len()>5*1024*1024 || !bytes.starts_with(b"\x89PNG\r\n\x1a\n")
+        || bytes[8..12]!=13u32.to_be_bytes() || &bytes[12..16]!=b"IHDR"
+        || bytes[16..20]!=512u32.to_be_bytes() || bytes[20..24]!=512u32.to_be_bytes()
+        || &bytes[bytes.len()-8..bytes.len()-4]!=b"IEND" {
+        return Err(ChatError::new("INVALID_FILE","请重新裁切头像后再保存"));
+    }
+    Ok(())
+}
 
 #[tauri::command]
-pub async fn remote_voice_tts(app:AppHandle,token:Token,text:String,voice:Option<String>,speed:Option<f64>,request_id:String)->ChatResult<Value> {
-    tts(&app,&token,&text,voice.as_deref(),speed,&request_id).await.map_err(transport::before_send)
+pub async fn remote_voice_tts(app:AppHandle,token:Token,input:super::tts::Input,request_id:String)->ChatResult<tauri::ipc::Response> {
+    super::tts::synthesize(app,token,request_id,input).await.map_err(transport::before_send)
 }
-async fn tts(app:&AppHandle,token:&Token,text:&str,voice:Option<&str>,speed:Option<f64>,request_id:&str)->ChatResult<Value> {
-    if text.trim().is_empty() || text.chars().count()>4096 || voice.is_some_and(|v|v.len()>200) || speed.is_some_and(|v|!v.is_finite() || !(0.25..=4.0).contains(&v)) {return Err(ChatError::new("INVALID_INPUT","朗读文字、音色或语速无效"));}
-    let mode=app.state::<Coordinator>();let mut changes=mode.subscribe();super::validate_token(app,token)?;
-    let session=tokio::select! {biased;_=changes.changed()=>return Err(super::inactive()),result=super::session(app,token)=>result?,};
-    let mut body=json!({"text":text,"format":"mp3"});if let Some(voice)=voice {body["voice"]=json!(voice);}if let Some(speed)=speed {body["speed"]=json!(speed);}
-    cache::prepare(app,token,request_id,&json!({"kind":"management","operation":"voice.tts","sha256":format!("{:x}",Sha256::digest(body.to_string().as_bytes()))}))?;
-    let result=tokio::select! {biased;_=changes.changed()=>return Err(super::inactive().with_outcome("unknown")),result=async {
-        let response=session.client.post(format!("{}/api/voice/tts",session.profile.endpoint)).bearer_auth(&session.secret).timeout(std::time::Duration::from_secs(90)).json(&body).send().await.map_err(transport::send_error)?;
-        let response=super::checked_response(&session,response).await?;
-        let mime=response.headers().get("content-type").and_then(|v|v.to_str().ok()).unwrap_or("audio/mpeg").to_owned();
-        if !mime.starts_with("audio/") {return Err(ChatError::new("REMOTE_PROTOCOL","朗读服务未返回音频"));}
-        Ok::<_,ChatError>(json!({"bytes":transport::body(response).await?,"mimeType":mime}))
-    }=>result,};
-    cache::settle(app,token,request_id,result.as_ref().map(|_|Value::Null).map_err(Clone::clone))?;
-    let data=result?;super::validate_token(app,token)?;Ok(json!({"modeToken":token,"data":data}))
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -361,6 +413,10 @@ mod tests {
     }
     #[test]
     fn reads_and_writes_use_actual_server_routes() {
+        let (config,write)=endpoint(&input("voice.tts_config",None,None)).unwrap();assert_eq!(config.path,"/voice/tts/config");assert!(!write);
+        let (saved,write)=endpoint(&input("voice.save_tts_config",None,Some(json!({"version":1})))).unwrap();assert_eq!(saved.method,reqwest::Method::PUT);assert!(write);
+        let (adapters,write)=endpoint(&input("voice.tts_adapters",None,None)).unwrap();assert_eq!(adapters.path,"/voice/tts/adapters");assert!(!write);
+        assert_eq!(part_name("tts_reference"),"audio");assert_eq!(upload_method("tts_reference"),reqwest::Method::POST);
         let (route,write)=endpoint(&input("maintenance.get",None,None)).unwrap();assert_eq!(route.path,"/scheduler/status");assert!(!write);
         let (route,write)=endpoint(&input("terminals.read",Some("terminal-a"),None)).unwrap();assert_eq!(route.path,"/terminals/terminal-a/read");assert_eq!(route.method,reqwest::Method::GET);assert!(!write);
         let (route,write)=endpoint(&input("tasks.resume-interrupted",Some("task-a"),None)).unwrap();assert!(write);assert_eq!(route.body,Some(json!({})));
@@ -376,6 +432,29 @@ mod tests {
         assert_ne!(context["sha256"],audit_context(&second,&endpoint(&second).unwrap().0)["sha256"]);
     }
     #[test]
+    fn answer_preferences_use_server_config_keys_and_preserve_prefill_exactly() {
+        let raw=json!({"enabled":true,"content":"  <reply>\n先想一想\n","mode":"continuous"}).to_string();
+        let body=json!({"items":[{"key":"system.wholesomeMode","value":"false"},{"key":"system.assistantPrefill","value":raw}]});
+        let request=input("configs.save_batch",None,Some(body.clone()));
+        let (route,write)=endpoint(&request).unwrap();assert!(write);assert_eq!(route.path,"/configs/batch");assert_eq!(route.method,reqwest::Method::PUT);assert_eq!(route.body,Some(body));
+        let audit=audit_context(&request,&route);assert!(!audit.to_string().contains("先想一想"));
+        let (route,write)=endpoint(&input("configs.batch",None,Some(json!({"keys":["system.wholesomeMode","system.assistantPrefill"]})))).unwrap();
+        assert!(!write);assert_eq!(route.method,reqwest::Method::POST);assert_eq!(route.path,"/configs/batch");
+    }
+    #[test]
+    fn answer_preferences_reject_invalid_flags_modes_and_utf16_overflow() {
+        let setting=|key:&str,value:Value|input("configs.save_batch",None,Some(json!({"items":[{"key":key,"value":value}]})));
+        for value in [json!(true),json!("on"),Value::Null] {assert!(endpoint(&setting("system.wholesomeMode",value)).is_err());}
+        for config in [Value::Null,json!({"enabled":"true","content":"正文"}),json!({"enabled":true}),json!({"enabled":true,"content":"正文","mode":"next"}),json!({"enabled":false,"content":"字".repeat(8001)})] {
+            assert!(endpoint(&setting("system.assistantPrefill",Value::String(config.to_string()))).is_err());
+        }
+        for config in [json!({"enabled":false,"content":""}),json!({"enabled":true,"content":"字".repeat(8000),"mode":"once"}),json!({"enabled":true,"content":"\u{1F600}".repeat(4000),"mode":"continuous"})] {
+            assert!(endpoint(&setting("system.assistantPrefill",Value::String(config.to_string()))).is_ok());
+        }
+        let config=json!({"enabled":true,"content":"\u{1F600}".repeat(4001)});
+        assert!(endpoint(&setting("system.assistantPrefill",Value::String(config.to_string()))).is_err());
+    }
+    #[test]
     fn archive_edits_follow_revision_routes_and_reject_invalid_payloads() {
         let memory=json!({"narrative":"我记得这次散步。","importance":5,"affect":{"tones":["轻松"],"valence":7,"arousal":2},"participants":[],"places":[],"objects":[],"topics":[],"expectedStatus":"archived","regenerateVector":false,"operationId":"00000000-0000-4000-8000-000000000001"});
         let request=input("memories.edit",Some("memory-a"),Some(memory.clone()));
@@ -388,6 +467,27 @@ mod tests {
         let context=audit_context(&request,&endpoint(&request).unwrap().0);assert!(!context.to_string().contains("散步"));
         let mut invalid=fact;invalid["confidence"]=json!(1.1);assert!(endpoint(&input("facts.edit",Some("fact-a"),Some(invalid))).is_err());
         assert!(endpoint(&input("facts.edit",None,None)).is_err());
+    }
+    #[test]
+    fn owner_avatar_routes_keep_method_and_identity_separate_from_agent_uploads() {
+        let (read,write)=endpoint(&input("owner_avatar.get",None,None)).unwrap();
+        assert_eq!(read.path,"/system/user-avatar");assert_eq!(read.method,reqwest::Method::GET);assert!(!write);
+        let (reset,write)=endpoint(&input("owner_avatar.reset",None,None)).unwrap();
+        assert_eq!(reset.path,read.path);assert_eq!(reset.method,reqwest::Method::DELETE);assert!(reset.body.is_none());assert!(write);
+        assert!(endpoint(&input("owner_avatar.reset",Some("other-user"),None)).is_err());
+        assert!(endpoint(&input("owner_avatar.get",None,Some(json!({"url":"https://example.invalid"})))).is_err());
+        assert_eq!(upload_method("owner_avatar"),reqwest::Method::PUT);assert_eq!(part_name("owner_avatar"),"avatar");
+        assert_eq!(upload_method("avatar"),reqwest::Method::POST);assert_eq!(upload_method("knowledge"),reqwest::Method::POST);
+    }
+    #[test]
+    fn owner_avatar_rejects_uncropped_wrong_format_and_oversized_images() {
+        let mut png=vec![0u8;64];png[..8].copy_from_slice(b"\x89PNG\r\n\x1a\n");png[8..12].copy_from_slice(&13u32.to_be_bytes());
+        png[12..16].copy_from_slice(b"IHDR");png[16..20].copy_from_slice(&512u32.to_be_bytes());png[20..24].copy_from_slice(&512u32.to_be_bytes());png[56..60].copy_from_slice(b"IEND");
+        assert!(validate_owner_avatar(&png).is_ok());
+        let mut wide=png.clone();wide[16..20].copy_from_slice(&1024u32.to_be_bytes());assert!(validate_owner_avatar(&wide).is_err());
+        let mut wrong=png.clone();wrong[0]=0;assert!(validate_owner_avatar(&wrong).is_err());
+        assert!(validate_owner_avatar(&[]).is_err());assert!(validate_owner_avatar(&vec![0;5*1024*1024+1]).is_err());
+        let mut unfinished=png;unfinished[56..60].fill(0);assert!(validate_owner_avatar(&unfinished).is_err());
     }
     #[test]
     fn mutation_payload_and_query_values_are_bounded() {

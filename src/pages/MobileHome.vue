@@ -22,7 +22,7 @@
       <ReminderStrip v-if="panelMode === 'rest' && !keyboardOpen && (reminderTotal || reminderError)" :entries="reminders" :total="reminderTotal" :error="reminderError" @open="drawer = 'reminders'" />
       <FeedbackMessage :message="loadError" action-label="重试" @action="loadRoomData" />
       <FeedbackMessage :message="actionError" @dismiss="actionError = ''" />
-      <RoomChat :key="activeAgentId" ref="chatPanel" v-model="draft.text" v-model:mode="panelMode" :agent="agent" :messages="messages" :busy="isLoading" :activity="activityText" :image="draft.image" :keyboard-open="keyboardOpen" :jump-id="jumpId" @focus="onComposerFocus" @send="send" @stop="conversation.stop" @attach="fileInput?.click()" @remove-image="draft.image = null" @copy="copy" @delete="removeMessage" @regenerate="regenerate" @preview-image="openImage" @dock-size="restDockSpace = $event" />
+      <RoomChat :key="activeAgentId" ref="chatPanel" v-model="draft.text" v-model:mode="panelMode" :agent="agent" :messages="messages" :busy="isLoading" :activity="activityText" :started-at="startedAt" :image="draft.image" :keyboard-open="keyboardOpen" :jump-id="jumpId" @focus="onComposerFocus" @send="send" @stop="conversation.stop" @attach="fileInput?.click()" @remove-image="draft.image = null" @copy="copy" @delete="removeMessage" @regenerate="regenerate" @preview-image="openImage" @dock-size="restDockSpace = $event" />
       <input ref="fileInput" class="room-hidden-input" type="file" accept="image/*" aria-label="选择聊天图片" tabindex="-1" @change="attachImage" />
     </div>
 
@@ -102,7 +102,7 @@ import '../styles/companion.css'
 const router = useRouter()
 const route = useRoute()
 const conversation = useLocalConversation()
-const { messages, isLoading, activityText } = conversation
+const { messages, isLoading, activityText, startedAt } = conversation
 const { keyboardOpen, viewportStyle } = useRoomViewport()
 const agent = computed(() => AGENTS[activeAgentId.value] || { id: activeAgentId.value, name: '伙伴' })
 const tone = computed(() => activeAgentId.value === 'nana' ? 'nana' : 'pero')
@@ -179,7 +179,11 @@ async function refreshRoomScene() {
   sceneRequest = { key, promise }
   try { await promise } finally { if (sceneRequest?.promise === promise) sceneRequest = null }
 }
-function onRoomReentry() { if (!document.hidden) refreshRoomScene() }
+function onRoomReentry() {
+  if (document.hidden || disposed) return
+  refreshRoomScene()
+  conversation.load().catch(error => { if (!disposed) console.warn('恢复本地对话失败：', error) })
+}
 const draft = computed(() => drafts.get(activeAgentId.value))
 const panelMode = computed({ get: () => draft.value.mode, set: value => { draft.value.mode = value; if (value === 'rest') chatPanel.value?.blur() } })
 const restDockHeight = computed(() => restDockSpace.value ? `${restDockSpace.value}px` : `calc(${messages.value.some(message => message.role === 'assistant' && message.status === 'active') || isLoading.value ? 126 : 86}px + env(safe-area-inset-bottom))`)

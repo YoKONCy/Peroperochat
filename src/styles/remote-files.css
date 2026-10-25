@@ -55,7 +55,7 @@
 .remote-themed.room-drawer-overlay--file .room-drawer-header > .drawer-emblem { display: none; }
 .remote-themed.room-drawer-overlay--file .room-drawer-header > .room-icon-button { width: 38px; height: 38px; border: 1px solid var(--room-line); border-radius: 50%; background: var(--room-subtle); }
 .remote-themed.room-drawer-overlay--file .room-drawer-content { display: flex; flex: 1; min-height: 0; padding: 0; overflow: hidden; }
-.remote-themed.room-drawer-overlay--file .room-drawer-footer { padding: 0; border: 0; margin: 0; background: var(--room-surface); }
+.remote-themed.room-drawer-overlay--file .room-drawer-footer { padding: 0; border: 0; margin: 0; background: transparent; }
 .remote-resource.remote-file-reader { display: flex; flex-direction: column; padding: 0; overflow: hidden; }
 .file-identity { position: relative; display: flex; align-items: center; gap: 15px; padding: 20px 22px; flex: none; border-bottom: 1px solid var(--room-line); background: linear-gradient(115deg, color-mix(in srgb, var(--room-accent) 5%, var(--room-surface)), var(--room-surface) 75%); }
 .file-identity > .remote-file-cover { width: 57px; height: 70px; transform: rotate(-5deg); --file-label-size: 8px; }

@@ -3,6 +3,7 @@ import { loadRemoteResource } from './remoteMedia'
 import { nativeResource, externalResourceUrl } from './remoteResources'
 import { documentKind, officePreview, csvPreview } from './remoteDocuments'
 import { currentToken, assertToken, onModeInvalidated } from '../stores/mode'
+import { remoteState } from '../stores/remote'
 
 export const mediaKinds = new Set(['image', 'audio', 'video'])
 const textKinds = new Set(['text', 'csv', 'markdown', 'html', 'svg', 'rtf'])
@@ -11,7 +12,7 @@ export const remoteFileLabel = kind => ({ image: '图片 / GIF', audio: '音频'
 export async function remoteFileInfo(resource, token = currentToken()) {
   assertToken(token, 'remote')
   if (resource.kind === 'external') return { name: resource.name || new URL(resource.url).pathname.split('/').pop() || '在线文件', mimeType: resource.mimeType || 'application/octet-stream', size: resource.size ?? null, ranges: false }
-  return (await remoteClient.resourceInfo(nativeResource(resource), token)).data
+  return (await remoteClient.resourceInfo(nativeResource(resource), token, { cachedOnly: ['offline', 'connecting', 'reconnecting'].includes(remoteState.connection) })).data
 }
 async function readBytes(resource, info, limit, signal, partial = false) {
   const token = currentToken(); assertToken(token, 'remote'); signal?.throwIfAborted()
@@ -34,7 +35,7 @@ async function readBytes(resource, info, limit, signal, partial = false) {
   for (let start = 0; start < end; start += 2 * 1024 * 1024) {
     signal?.throwIfAborted(); assertToken(token, 'remote')
     const stop = Math.min(end - 1, start + 2 * 1024 * 1024 - 1)
-    const part = await remoteClient.resource(native, { range: { start, end: stop }, token })
+    const part = await remoteClient.resource(native, { range: { start, end: stop }, token, cachedOnly: ['offline', 'connecting', 'reconnecting'].includes(remoteState.connection) })
     const span = part.contentRange?.match(/^bytes (\d+)-(\d+)\/(\d+)$/)
     if (!span || Number(span[1]) !== start || Number(span[2]) > stop || Number(span[2]) - start + 1 !== part.bytes.length || size !== null && (Number(span[3]) !== size || Number(span[2]) !== stop)) throw new Error('文件内容已变化，请重新打开')
     chunks.push(new Uint8Array(part.bytes))
@@ -45,7 +46,7 @@ async function readBytes(resource, info, limit, signal, partial = false) {
 function archivePreview(bytes, kind, signal) {
   return new Promise((resolve, reject) => {
     const worker = new Worker(new URL('./remoteDocument.worker.js', import.meta.url), { type: 'module' })
-    const finish = (error, data) => { clearTimeout(timer); worker.terminate(); signal?.removeEventListener('abort', abort); error ? reject(error) : resolve(data) }
+    const finish = (error, data) => { clearTimeout(timer); worker.terminate(); signal?.removeEventListener('abort', abort); if (error) reject(error); else resolve(data) }
     const abort = () => finish(new Error('文件预览已关闭'))
     const timer = setTimeout(() => finish(new Error('文档解析超时，可保存原件查看')), 10000)
     worker.onmessage = ({ data }) => finish(data.error ? new Error(data.error) : null, data)
@@ -117,7 +118,7 @@ async function readLegacyDoc(bytes, signal) {
   // 旧 Word 的复合文档解析放在 Worker 内，避免阻塞消息滚动。
   return new Promise((resolve, reject) => {
     const worker = new Worker(new URL('./remoteLegacyDoc.worker.js', import.meta.url), { type: 'module' })
-    const finish = (error, text) => { clearTimeout(timer); worker.terminate(); signal?.removeEventListener('abort', abort); error ? reject(error) : resolve(text) }
+    const finish = (error, text) => { clearTimeout(timer); worker.terminate(); signal?.removeEventListener('abort', abort); if (error) reject(error); else resolve(text) }
     const abort = () => finish(new Error('文件预览已关闭')), timer = setTimeout(() => finish(new Error('旧 Word 文档解析超时，请保存原件')), 8000)
     worker.onmessage = ({ data }) => finish(data.error ? new Error(data.error) : null, data.text)
     worker.onerror = () => finish(new Error('旧 Word 文档无法速览，请保存原件'))
