@@ -24,5 +24,8 @@
   "还没有归档的记忆": "No archived memories yet",
   "这里还没有记忆": "No memories here yet",
   "归档的记忆会放在这里，需要时可以恢复。": "Archived memories appear here. You can restore them whenever you need.",
-  "记下的事情会出现在这里。": "Things your companion remembers will appear here."
+  "记下的事情会出现在这里。": "Things your companion remembers will appear here.",
+  "记忆操作": "Memory actions",
+  "归档记忆": "Archive memory",
+  "保存修改后可归档或恢复记忆。": "Save your changes before archiving or restoring this memory."
 }

@@ -42,7 +42,7 @@ pub extern "system" fn Java_com_peroperochat_mobile_RemoteReceiverBridge_nativeR
             }));
         drop(shared);
         if let Err(error)=&result {if error.code!="MODE_INACTIVE" {
-            let blocked=matches!(error.code.as_str(),"REMOTE_AUTH_REQUIRED"|"REMOTE_IDENTITY_CHANGED"|"REMOTE_INCOMPATIBLE"|"REMOTE_PROTOCOL");
+            let blocked=super::certificates::is_certificate_error(&error.code) || matches!(error.code.as_str(),"REMOTE_AUTH_REQUIRED"|"REMOTE_IDENTITY_CHANGED"|"REMOTE_INCOMPATIBLE"|"REMOTE_PROTOCOL");
             let _=store::state(root,&token,if blocked {"blocked"} else {"reconnecting"},if blocked {&error.code} else {""});
         }}
         result.map(|_|Value::Null)

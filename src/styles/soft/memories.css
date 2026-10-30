@@ -4,12 +4,23 @@
 .memory-browse-tabs > button { display: flex; flex: 1; justify-content: center; align-items: center; gap: 7px; min-width: 0; min-height: 42px; padding: 9px; border: 1px solid transparent; border-radius: 12px; background: transparent; color: var(--ui-muted); font: inherit; font-size: var(--ui-label); }
 .memory-browse-tabs > button.selected { color: var(--ui-violet); background: var(--ui-violet-soft); border-color: var(--ui-violet-edge); font-weight: 600; }
 .memory-browse-tabs > button > svg { width: 18px; height: 18px; flex: none; }
-.memory-entry-actions { display: grid; gap: 12px; width: 100%; min-width: 0; margin: 8px 0 18px; }
-.memory-status-label { display: inline-flex; align-items: center; gap: 5px; justify-self: start; color: var(--ui-mint); font-size: 11px; }
-.memory-status-label[data-archived='true'] { color: var(--ui-violet); }
+.memory-entry-actions { display: grid; grid-template-columns: minmax(0, 1fr); gap: 10px; width: 100%; max-width: 680px; min-width: 0; margin: 0 auto; isolation: isolate; }
+.memory-status-label { display: inline-flex; align-items: center; gap: 5px; justify-self: start; min-width: 0; max-width: 100%; padding: 3px 8px; border: 1px solid var(--ui-mint-edge); border-radius: 8px; background: var(--ui-mint-soft); color: var(--ui-mint); font-size: var(--ui-caption); line-height: 1.6; }
+.memory-status-label[data-archived='true'] { color: var(--ui-violet); background: var(--ui-violet-soft); border-color: var(--ui-violet-edge); }
 .memory-status-label > svg { width: 15px; height: 15px; }
-.memory-entry-buttons { display: flex; flex-wrap: wrap; gap: 9px; }
-.memory-entry-buttons > .remote-purpose-action { flex: 1 1 auto; min-width: 0; justify-content: center; padding: 9px 12px; }
+.memory-entry-buttons { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) 44px; align-items: stretch; gap: 8px; min-width: 0; }
+:is(.companion-surface, .remote-themed)[data-ui='soft'] .memory-entry-buttons > .remote-purpose-action { position: relative; display: flex; align-items: center; justify-content: center; gap: 6px; min-width: 0; min-height: 44px; margin: 0; padding: 10px 8px; border-radius: 13px; font-size: var(--ui-label); line-height: 1.5; text-align: center; }
+.memory-entry-buttons > .remote-purpose-action > svg { flex: none; width: 17px; height: 17px; }
+.memory-entry-buttons > .remote-purpose-action > span { min-width: 0; white-space: normal; overflow-wrap: anywhere; }
+:is(.companion-surface, .remote-themed)[data-ui='soft'] .memory-entry-buttons > .memory-archive-button { color: var(--ui-violet); border-color: var(--ui-violet-edge); background: var(--ui-violet-soft); box-shadow: inset 0 1px 0 var(--ui-edge); }
+.memory-entry-buttons > .memory-delete-button > span { display: none; }
+.memory-entry-actions.is-archive-only { margin: 0; width: auto; justify-self: start; }
+.memory-entry-actions.is-archive-only > .memory-entry-buttons { display: flex; }
+/* 记忆编辑使用独立的单列外壳；不再继承通用 editor 的横向内容布局。 */
+.room-drawer-overlay--archive.companion-surface .room-drawer-panel { display: flex; flex-direction: column; flex: none; width: min(100%, 760px); height: 100%; max-height: 900px; min-width: 0; margin-inline: auto; padding-bottom: 0; }
+.room-drawer-overlay--archive.companion-surface .room-drawer-panel > .room-drawer-header { flex: none; margin-bottom: 0; }
+.room-drawer-overlay--archive.companion-surface .room-drawer-panel > .room-drawer-content { display: block; flex: 1 1 auto; width: 100%; min-width: 0; min-height: 0; padding: 0; overflow: hidden; }
+.room-drawer-overlay--archive.companion-surface .room-drawer-panel > .room-drawer-footer { flex: none; width: 100%; min-width: 0; padding-bottom: max(16px, env(safe-area-inset-bottom)); }
 .memory-operation-confirm { display: grid; justify-items: start; gap: 14px; min-width: 0; padding: 2px 0 10px; --memory-action-color: var(--ui-violet); --memory-action-soft: var(--ui-violet-soft); }
 .memory-operation-confirm[data-danger='true'] { --memory-action-color: var(--ui-rose); --memory-action-soft: var(--ui-rose-soft); }
 .memory-confirm-symbol { display: grid; place-items: center; width: 44px; height: 44px; border-radius: 15px 15px 15px 7px; background: var(--memory-action-soft); color: var(--memory-action-color); }

@@ -25,12 +25,13 @@ async fn session(root:&Path,token:&Token,secret:&str,show:&mut impl FnMut(&Value
     if secret.is_empty() || secret.len()>4096 || secret.contains(['\r','\n']) {return Err(ChatError::new("REMOTE_AUTH_REQUIRED","后台凭据不可用，请重新授权"));}
     let profile=store::runnable(root,token)?;
     store::state(root,token,"connecting","")?;
-    let identity=transport::probe(&profile.endpoint,secret).await?;
+    let client=transport::client_for(&profile.endpoint,profile.certificate.as_ref())?;
+    let identity=transport::probe_with(&client,&profile.endpoint,secret).await?;
     if identity.server_id!=profile.server_id {return Err(ChatError::new("REMOTE_IDENTITY_CHANGED","服务地址对应的 infOS 实例已改变"));}
     let conn=store::connection(root,token)?;
     let mut principal=store::principal(&conn)?;drop(conn);
     if principal.is_none() {
-        let response=transport::client()?.get(format!("{}/api/agents",profile.endpoint)).bearer_auth(secret).timeout(Duration::from_secs(15)).send().await.map_err(|_|transport::network())?;
+        let response=client.get(format!("{}/api/agents",profile.endpoint)).bearer_auth(secret).timeout(Duration::from_secs(15)).send().await.map_err(transport::send_error)?;
         transport::status(response.status())?;
         let agents=transport::envelope(&transport::body(response).await?)?;
         let items=agents.as_array().ok_or_else(||ChatError::new("REMOTE_PROTOCOL","后台角色列表格式无效"))?;
@@ -44,10 +45,10 @@ async fn session(root:&Path,token:&Token,secret:&str,show:&mut impl FnMut(&Value
     let mut request=url.as_str().into_client_request().map_err(|_|transport::network())?;
     request.headers_mut().insert("Authorization",format!("Bearer {secret}").parse().map_err(|_|transport::network())?);
     let config=tokio_tungstenite::tungstenite::protocol::WebSocketConfig::default().max_message_size(Some(256*1024)).max_frame_size(Some(256*1024));
-    let (mut socket,_)=tokio::time::timeout(Duration::from_secs(12),tokio_tungstenite::connect_async_with_config(request,Some(config),false)).await
+    let (mut socket,_)=tokio::time::timeout(Duration::from_secs(12),tokio_tungstenite::connect_async_tls_with_config(request,Some(config),false,Some(tokio_tungstenite::Connector::Rustls(super::certificates::tls_config(&profile.endpoint,profile.certificate.as_ref())?)))).await
         .map_err(|_|transport::network())?.map_err(|error| {
             if let tokio_tungstenite::tungstenite::Error::Http(response)=&error {if let Err(error)=transport::status(response.status()) {return error;}}
-            transport::network()
+            super::certificates::error(&error).unwrap_or_else(transport::network)
         })?;
     let mut hello=envelope(&node,"hello");hello["payload"]=json!({"nodeId":node,"principalId":principal,"deviceName":"PeroperoChat 通知接收",
         "platform":{"os":"android","runtime":"native"},"supportedVersions":[1],"features":["audience-v1","cursor-v1"]});

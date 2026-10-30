@@ -9,9 +9,12 @@ pub const MAX_PROJECTION_BODY:usize=64*1024*1024;
 #[serde(rename_all="camelCase")]
 pub struct Identity {pub server_id:String,pub display_name:String,pub app_version:String}
 
-pub fn client()->ChatResult<reqwest::Client> {
-    reqwest::Client::builder().redirect(reqwest::redirect::Policy::none()).connect_timeout(Duration::from_secs(10))
-        .build().map_err(|_|ChatError::new("REMOTE_NETWORK","远程网络客户端初始化失败"))
+pub fn client()->ChatResult<reqwest::Client> {client_for("http://localhost",None)}
+pub fn client_for(endpoint:&str,pin:Option<&super::certificates::TrustedCertificate>)->ChatResult<reqwest::Client> {
+    let mut builder=reqwest::Client::builder().redirect(reqwest::redirect::Policy::none()).connect_timeout(Duration::from_secs(10));
+    if endpoint.starts_with("https:") {builder=builder.use_preconfigured_tls((*super::certificates::tls_config(endpoint,pin)?).clone());}
+    else if pin.is_some() {return Err(ChatError::new("REMOTE_CERTIFICATE_INVALID","已信任的证书不能用于未加密连接"));}
+    builder.build().map_err(|_|network())
 }
 pub async fn body(response:reqwest::Response)->ChatResult<Vec<u8>> {body_with_limit(response,MAX_BODY).await}
 pub async fn body_with_limit(mut response:reqwest::Response,limit:usize)->ChatResult<Vec<u8>> {
@@ -26,7 +29,7 @@ pub async fn body_with_limit(mut response:reqwest::Response,limit:usize)->ChatRe
 fn too_large()->ChatError {ChatError::new("REMOTE_TOO_LARGE","这部分内容暂时无法载入，请稍后再试")}
 pub fn network()->ChatError {ChatError::new("REMOTE_NETWORK","暂时连接不上 infOS，请检查网络")}
 pub fn send_error(error:reqwest::Error)->ChatError {
-    if error.is_connect() {network().with_outcome("not_sent")} else {network()}
+    if let Some(failure)=super::certificates::error(&error) {failure.with_outcome("not_sent")} else if error.is_connect() {network().with_outcome("not_sent")} else {network()}
 }
 pub fn before_send(error:ChatError)->ChatError {
     if error.outcome.is_some() {error} else {error.with_outcome("not_sent")}
@@ -65,7 +68,10 @@ pub fn envelope(bytes:&[u8])->ChatResult<Value> {
     Ok(value["data"].clone())
 }
 pub async fn probe(endpoint:&str,token:&str)->ChatResult<Identity> {
-    let response=client()?.get(format!("{endpoint}/api/distributed/identity")).bearer_auth(token).timeout(Duration::from_secs(12)).send().await.map_err(|_|network())?;
+    probe_with(&client()?,endpoint,token).await
+}
+pub async fn probe_with(client:&reqwest::Client,endpoint:&str,token:&str)->ChatResult<Identity> {
+    let response=client.get(format!("{endpoint}/api/distributed/identity")).bearer_auth(token).timeout(Duration::from_secs(12)).send().await.map_err(send_error)?;
     status(response.status())?;
     let value=envelope(&body(response).await?)?;
     let identity:Identity=serde_json::from_value(value).map_err(|_|ChatError::new("REMOTE_PROTOCOL","目标服务未提供 infOS 实例身份"))?;

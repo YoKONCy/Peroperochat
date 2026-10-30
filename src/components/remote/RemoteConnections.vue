@@ -8,6 +8,7 @@
       <p v-if="pendingCount" class="connections-pending"><RoomIcon name="clock" />{{ pendingCount }} 项操作待核对，切换后仍会保留。</p>
       <RemoteFeedback :message="error" />
       <RemoteFeedback :message="savedName ? '连接已保存' : ''" tone="success" />
+      <RemoteFeedback :message="certificateNotice" tone="success" />
       <p v-if="busy" class="connections-progress" role="status"><RoomIcon class="room-spinning" name="refresh" />{{ progressLabel }}</p>
 
       <section ref="connectionSection" class="connections-saved" aria-label="已保存的 infOS">
@@ -21,7 +22,7 @@
             <div class="connection-actions"><button type="button" class="connection-enter" :disabled="busy || scanning || activeId === profile.id && !expired(profile)" @click="expired(profile) ? reauthorize(profile) : enter(profile)">{{ expired(profile) ? '重新配对' : activeId === profile.id ? '当前连接' : '进入空间' }}<RoomIcon v-if="activeId !== profile.id" name="arrow" /></button><button type="button" class="connection-more" :disabled="busy || scanning" :aria-expanded="expandedProfile === profile.id" :aria-label="`${profileName(profile)} 的连接选项`" @click="expandedProfile = expandedProfile === profile.id ? null : profile.id; removing = null"><RoomIcon name="more" /></button></div>
             <div v-if="expandedProfile === profile.id" class="connection-details">
               <dl><div><dt>名称</dt><dd>{{ profile.displayName || 'infOS' }}</dd></div><div><dt>地址</dt><dd>{{ profile.endpoint }}</dd></div><div v-if="profile.device"><dt>登录有效期</dt><dd>{{ expired(profile) ? '已过期' : expiry(profile.device.expiresAt) }}</dd></div></dl>
-              <div class="connection-detail-actions"><button type="button" :disabled="busy || scanning" @click="reauthorize(profile)"><RoomIcon name="shield" />重新配对</button><button v-if="activeId !== profile.id" type="button" :disabled="busy || scanning" @click="removing = profile.id"><RoomIcon name="trash" />移除连接</button></div>
+              <div class="connection-detail-actions"><button v-if="profile.endpoint.startsWith('https:')" type="button" :disabled="busy || scanning" @click="checkCertificate(profile)"><RoomIcon name="shield" />{{ tr('核对证书') }}</button><button type="button" :disabled="busy || scanning" @click="reauthorize(profile)"><RoomIcon name="shield" />重新配对</button><button v-if="activeId !== profile.id" type="button" :disabled="busy || scanning" @click="removing = profile.id"><RoomIcon name="trash" />移除连接</button></div>
               <div v-if="removing === profile.id" class="connections-confirm"><p>从手机移除？电脑上的设备授权会保留。</p><div><button type="button" :disabled="busy" @click="removing = null">保留</button><button type="button" class="is-danger" :disabled="busy" @click="remove(profile.id)">移除</button></div></div>
             </div>
           </article>
@@ -51,10 +52,13 @@
       <details class="connections-settings" @toggle="settingsOpen = $event.target.open"><summary><RoomIcon name="bell" /><span>通知与连接选项</span><RoomIcon name="down" /></summary><div class="connections-settings-body"><p class="connections-online"><span>在线消息提醒</span><small>{{ activeId && remoteState.connection === 'online' ? '已连接' : '连接后接收' }}</small></p><RemoteBackground v-if="activeId && settingsOpen" :key="activeId" /><p v-if="!activeId" class="connections-hint">进入 infOS 后可设置后台接收。</p><template v-if="currentProfile?.device"><button v-if="!logoutConfirm" type="button" class="connections-text" :disabled="busy || scanning" @click="logoutConfirm = true">退出此连接的登录</button><div v-else class="connections-confirm"><p>退出后需要重新配对，对话记录会保留。</p><div><button type="button" :disabled="busy" @click="logoutConfirm = false">取消</button><button type="button" class="is-danger" :disabled="busy" @click="logout">退出登录</button></div></div></template></div></details>
     </div>
   </RoomDrawer>
+  <RemoteCertificateConfirmation v-if="certificateInspection" :inspection="certificateInspection" @confirm="finishCertificate(true)" @cancel="finishCertificate(false)" />
   <Teleport to="body"><div v-if="scanning" class="remote-scanner-controls" role="status"><span>对准 infOS 配对二维码</span><button type="button" @click="cancelScan">取消扫描</button></div></Teleport>
 </template>
 <script setup>
 import RemoteFeedback from './RemoteFeedback.vue'
+import RemoteCertificateConfirmation from './RemoteCertificateConfirmation.vue'
+import { t } from '../../i18n/remote'
 import { computed, ref, onMounted, onBeforeUnmount, nextTick } from 'vue'
 import RoomDrawer from '../companion/RoomDrawer.vue'
 import ChoicePicker from '../companion/ChoicePicker.vue'
@@ -63,6 +67,11 @@ import RoomIcon from './RemoteIcon.vue'
 import { remoteConnections, remoteClient } from '../../services/remote'
 import { modeState, switchMode, refreshMode, currentToken } from '../../stores/mode'
 import { remotePendingRequests, remoteState } from '../../stores/remote'
+const tr = source => t(source, [], 'certificates')
+const certificateInspection = ref(null), certificateNotice = ref('')
+let certificateResolve = null
+function finishCertificate(accepted) { certificateInspection.value = null; certificateResolve?.(accepted); certificateResolve = null }
+function confirmCertificate(inspection) { certificateInspection.value = inspection; return new Promise(resolve => { certificateResolve = resolve }) }
 const props = defineProps({ prepareSwitch: Function })
 const emit = defineEmits(['close'])
 const profiles = ref([]), endpoint = ref(''), secret = ref(''), allowInsecure = ref(false), busy = ref(false), error = ref(''), removing = ref(null)
@@ -77,7 +86,7 @@ const secretInput = ref(null), profilesLoading = ref(false), listError = ref('')
 const activeId = computed(() => modeState.snapshot?.selectedTarget?.mode === 'remote' ? modeState.snapshot.selectedTarget.profileId : null)
 const pendingCount = computed(() => remotePendingRequests.size)
 const currentProfile = computed(() => profiles.value.find(profile => profile.id === activeId.value))
-const progressLabel = computed(() => ({ preparing: '正在准备…', authorizing: '正在配对…', switching: '正在切换空间…', removing: '正在移除…', revoking: '正在退出登录…' }[step.value]))
+const progressLabel = computed(() => ({ preparing: '正在准备…', authorizing: '正在配对…', switching: '正在切换空间…', removing: '正在移除…', revoking: '正在退出登录…', certificate: tr('正在核对证书…') }[step.value]))
 let disposed = false, listVersion = 0
 async function applyPairingLink(raw) {
   const version = scanVersion
@@ -132,18 +141,23 @@ async function loadProfiles() {
 }
 async function run(action) {
   if (busy.value || scanning.value) return
-  busy.value = true; error.value = ''; savedName.value = ''; step.value = 'preparing'
+  busy.value = true; error.value = ''; savedName.value = ''; certificateNotice.value = ''; step.value = 'preparing'
   try { await action() } catch (failure) { if (!disposed) error.value = failure.message } finally { if (!disposed) busy.value = false }
 }
 async function prepare() { await props.prepareSwitch?.(); if (disposed) throw new Error('连接面板已关闭') }
-async function enter(profile) { await run(async () => { await prepare(); step.value = 'switching'; await switchMode({ mode: 'remote', profileId: profile.id }); emit('close') }) }
+async function enter(profile) { await run(async () => { await prepare(); if (!await verifyCertificate(profile)) return; step.value = 'switching'; await switchMode({ mode: 'remote', profileId: profile.id }); emit('close') }) }
 async function save() {
   await run(async () => {
-    await prepare(); step.value = 'authorizing'
+    await prepare(); step.value = 'certificate'
+    const inspection = await remoteConnections.inspectCertificate(endpoint.value.trim(), editingId.value, allowInsecure.value)
+    if (disposed || inspection.requiresConfirmation && !await confirmCertificate(inspection)) return
+    if (disposed) return
+    step.value = 'authorizing'
     let profile
     try {
       profile = await remoteConnections.save({ endpoint: endpoint.value.trim(), method: method.value,
         token: method.value === 'bearer' ? secret.value : '', code: method.value === 'bearer' ? '' : secret.value,
+        certificateFingerprint: inspection.requiresConfirmation ? inspection.certificate.fingerprint : null,
         name: deviceName.value, remember: remember.value, profileId: editingId.value, allowInsecure: allowInsecure.value })
     } finally { secret.value = '' }
     if (disposed) return
@@ -156,6 +170,21 @@ async function save() {
     await switchMode({ mode: 'remote', profileId: profile.id })
     emit('close')
   })
+}
+async function verifyCertificate(profile) {
+  if (!profile.endpoint.startsWith('https:')) return true
+  step.value = 'certificate'
+  const inspection = await remoteConnections.inspectCertificate(profile.endpoint, profile.id, false)
+  if (disposed) return false
+  if (inspection.requiresConfirmation) {
+    if (!await confirmCertificate(inspection) || disposed) return false
+    await remoteConnections.trustCertificate(profile.id, inspection.certificate.fingerprint)
+    await refreshMode(); await loadProfiles()
+  }
+  return !disposed
+}
+async function checkCertificate(profile) {
+  await run(async () => { await prepare(); if (await verifyCertificate(profile)) certificateNotice.value = tr('证书已核对') })
 }
 async function reauthorize(profile) {
   scanVersion++
@@ -189,7 +218,7 @@ async function logout() { await run(async () => { await prepare(); step.value = 
 async function standalone() { await run(async () => { await prepare(); step.value = 'switching'; await switchMode({ mode: 'standalone' }); emit('close') }) }
 async function remove(id) { await run(async () => { step.value = 'removing'; await remoteConnections.remove(id); await loadProfiles(); removing.value = null; if (editingId.value === id) newConnection() }) }
 onMounted(loadProfiles)
-onBeforeUnmount(() => { disposed = true; listVersion++; secret.value = ''; pairingLink.value = ''; cancelScan() })
+onBeforeUnmount(() => { disposed = true; finishCertificate(false); listVersion++; secret.value = ''; pairingLink.value = ''; cancelScan() })
 </script>
 <style>
 body.ppc-pairing-scanning { background: transparent !important; }

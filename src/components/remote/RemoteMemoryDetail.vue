@@ -5,7 +5,6 @@
       <RemoteFeedback :message="error" />
       <p v-if="loading && !memory" class="room-empty">正在展开记忆…</p>
       <template v-if="memory || detail.summary">
-        <RemoteMemoryActions v-if="memory" ref="memoryActions" :record="memory" :disabled="loading || sourceLoading" @edit="editing = true" @changed="memoryChanged" @busy="memoryActionsBusy = $event" @pending="$emit('pending')" />
         <h2>{{ summary || '一段记忆' }}</h2>
         <RemoteRichText v-if="narrative && narrative !== summary" :source="narrative" node-id="memory-body" :context="context" @resource="$emit('resource', $event)" />
         <p v-if="memory?.createdAt" class="memory-date">{{ date(memory.createdAt) }}</p>
@@ -20,8 +19,9 @@
         </template>
       </section>
     </section>
+    <template v-if="memory" #footer><RemoteMemoryActions ref="memoryActions" :record="memory" :disabled="loading || sourceLoading || editing" @edit="editing = true" @changed="memoryChanged" @busy="memoryActionsBusy = $event" @pending="$emit('pending')" /></template>
   </RoomDrawer>
-  <RemoteArchiveEditor v-if="editing && memory" ref="archiveEditor" kind="memories" :record="memory" @close="editing = false" @saved="edited" @pending="$emit('pending')" />
+  <RemoteArchiveEditor v-if="editing && memory" ref="archiveEditor" kind="memories" :record="memory" @close="editing = false" @saved="edited" @changed="memoryChanged" @pending="$emit('pending')" />
 </template>
 <script setup>
 import { ref, computed, onMounted, onBeforeUnmount } from 'vue'

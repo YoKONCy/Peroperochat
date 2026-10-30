@@ -71,7 +71,7 @@ class RemoteNotificationService : Service() {
                     override fun show(payload: String): Boolean = !stopped.get() && showNotice(JSONObject(payload))
                 }))
                 val code = result.optJSONObject("error")?.optString("code")
-                if (code in setOf("REMOTE_AUTH_REQUIRED", "REMOTE_IDENTITY_CHANGED", "REMOTE_INCOMPATIBLE", "REMOTE_PROTOCOL")) break
+                if (code?.startsWith("REMOTE_CERTIFICATE_") == true || code in setOf("REMOTE_AUTH_REQUIRED", "REMOTE_IDENTITY_CHANGED", "REMOTE_INCOMPATIBLE", "REMOTE_PROTOCOL")) break
                 if (stopped.get()) break
                 if (System.currentTimeMillis() - began > 60_000) delay = 2_000
                 val wait = delay + Random.nextLong(0, 1_000)

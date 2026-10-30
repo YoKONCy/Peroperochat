@@ -81,7 +81,7 @@ pub async fn remote_download_resource(app:AppHandle,token:Token,id:String,resour
             let mut url=reqwest::Url::parse(&format!("{}/api{path}",session.profile.endpoint)).map_err(|_|failed())?;
             url.query_pairs_mut().extend_pairs(params);
             let response=session.client.get(url).bearer_auth(&session.secret)
-                .header("Accept-Encoding","identity").timeout(Duration::from_secs(30*60)).send().await.map_err(|_|failed())?;
+                .header("Accept-Encoding","identity").timeout(Duration::from_secs(30*60)).send().await.map_err(super::transport::send_error)?;
             let response=super::checked_response(&session,response).await?;
             if response.status()!=reqwest::StatusCode::OK {return Err(failed());}
             let total=response.content_length();check_size(0,total)?;

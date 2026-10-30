@@ -69,6 +69,11 @@ async fn fetch_models(app:AppHandle,api_base:String,api_key:String,api_format:Op
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
   tauri::Builder::default()
+    .manage(remote::preview::Runtime::default())
+    .register_asynchronous_uri_scheme_protocol("ppc-preview", |context,request,responder| {
+        let app=context.app_handle().clone();
+        tauri::async_runtime::spawn(async move {responder.respond(remote::preview::respond(&app,request).await);});
+    })
     .setup(|app| {
         #[cfg(mobile)]
         app.handle().plugin(tauri_plugin_barcode_scanner::init())?;
@@ -125,6 +130,8 @@ pub fn run() {
         appearance_background::appearance_background_save,
         mode::mode_snapshot,
         mode::mode_switch,
+        remote::certificates::remote_inspect_certificate,
+        remote::certificates::remote_trust_certificate,
         remote::profiles::remote_profiles,
         remote::profiles::remote_decode_pairing,
         remote::profiles::remote_save_profile,

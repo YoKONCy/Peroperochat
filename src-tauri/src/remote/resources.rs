@@ -136,7 +136,7 @@ pub async fn remote_resolve_resource(app:AppHandle,token:Token,agent_id:String,t
             let response=session.client.post(format!("{}/api/attachments/resolve-reference",session.profile.endpoint))
                 .bearer_auth(&session.secret).timeout(std::time::Duration::from_secs(35))
                 .json(&input)
-                .send().await.map_err(|_|transport::network())?;
+                .send().await.map_err(transport::send_error)?;
             let response=super::checked_response(&session,response).await?;
             transport::envelope(&transport::body(response).await?)
     }).await
@@ -157,13 +157,13 @@ pub async fn remote_html_preview(app:AppHandle,token:Token,resource:Resource)->C
         _=>return Err(ChatError::new("INVALID_FILE","此资源不支持 HTML 页面预览")),
     };
     let mode=app.state::<Coordinator>();let mut changes=mode.subscribe();
-    let url=tokio::select! {biased;
+    let path=tokio::select! {biased;
         _=changes.changed()=>return Err(super::inactive()),
         result=async {
             let session=super::session(&app,&token).await?;
             let response=session.client.post(format!("{}/api/attachments/browser-preview",session.profile.endpoint))
                 .bearer_auth(&session.secret).timeout(std::time::Duration::from_secs(35)).json(&input)
-                .send().await.map_err(|_|transport::network())?;
+                .send().await.map_err(transport::send_error)?;
             let response=super::checked_response(&session,response).await?;
             let data=transport::envelope(&transport::body(response).await?)?;
             let path=data.get("path").and_then(Value::as_str).ok_or_else(||ChatError::new("REMOTE_PROTOCOL","服务端未提供页面预览地址"))?;
@@ -171,10 +171,11 @@ pub async fn remote_html_preview(app:AppHandle,token:Token,resource:Resource)->C
             if path.len()>8192 || ticket.len()!=64 || !ticket.bytes().all(|byte|byte.is_ascii_hexdigit()) || path.contains(['\r','\n','\\']) {
                 return Err(ChatError::new("REMOTE_PROTOCOL","页面预览地址不符合 infOS 票据格式"));
             }
-            Ok::<_,ChatError>(format!("{}{path}",session.profile.endpoint.trim_end_matches('/')))
+            super::preview::register(&app,&session,path)?;
+            Ok::<_,ChatError>(path.to_owned())
         }=>result?,
     };
-    super::validate_token(&app,&token)?;Ok(json!({"modeToken":token,"data":{"url":url}}))
+    super::validate_token(&app,&token)?;Ok(json!({"modeToken":token,"data":{"path":path}}))
 }
 #[tauri::command]
 pub async fn remote_resource_info(app:AppHandle,token:Token,resource:Resource,cached_only:Option<bool>)->ChatResult<Value> {
@@ -186,7 +187,7 @@ pub async fn remote_resource_info(app:AppHandle,token:Token,resource:Resource,ca
             let mut url=reqwest::Url::parse(&format!("{}/api{path}",session.profile.endpoint)).map_err(|_|transport::network())?;
             url.query_pairs_mut().extend_pairs(params);
             let response=session.client.head(url).bearer_auth(&session.secret).header("Accept-Encoding","identity")
-                .timeout(std::time::Duration::from_secs(30)).send().await.map_err(|_|transport::network())?;
+                .timeout(std::time::Duration::from_secs(30)).send().await.map_err(transport::send_error)?;
             let response=super::checked_response(&session,response).await?;
             // HEAD 的 content_length() 在部分客户端固定为零，必须读取原始响应头。
             let size=response.headers().get("content-length").and_then(|v|v.to_str().ok()).and_then(|v|v.parse::<u64>().ok());
@@ -218,7 +219,7 @@ pub async fn remote_resource(app:AppHandle,token:Token,resource:Resource,range:O
             if !params.is_empty() {url.query_pairs_mut().extend_pairs(params);}
             let mut request=session.client.get(url).bearer_auth(&session.secret).timeout(std::time::Duration::from_secs(60));
             if let Some(range)=&range {request=request.header("Range",format!("bytes={}-{}",range.start,range.end));}
-            let response=request.send().await.map_err(|_|transport::network())?;
+            let response=request.send().await.map_err(transport::send_error)?;
             let response=super::checked_response(&session,response).await?;
             if range.is_some() && response.status()!=reqwest::StatusCode::PARTIAL_CONTENT {return Err(ChatError::new("REMOTE_RANGE_UNSUPPORTED","服务端未按资源范围响应，已停止读取"));}
             let mime=response.headers().get("content-type").and_then(|v|v.to_str().ok()).unwrap_or("application/octet-stream").to_owned();

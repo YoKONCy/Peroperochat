@@ -1,5 +1,6 @@
 //! infOS 主体客户端。只执行传输、身份隔离和展示投影，不运行本地 Agent 或工具。
 pub mod profiles;
+pub mod certificates;
 mod access;
 pub mod vault;
 mod transport;
@@ -13,6 +14,7 @@ pub mod conversation;
 mod context;
 mod gateway;
 pub mod resources;
+pub mod preview;
 pub mod presentation;
 pub mod notifications;
 pub mod background;
@@ -32,6 +34,7 @@ pub struct Runtime {
     gateway:Mutex<Option<gateway::Handle>>,
     desired:Mutex<Option<(Token,Option<String>)>>,
     retry_blocked:Mutex<bool>,
+    blocked_error:Mutex<Option<ChatError>>,
     connect_lock:tokio::sync::Mutex<()>,
     subscriptions:Mutex<std::collections::HashSet<String>>,
     confirmed_subscriptions:Mutex<std::collections::HashSet<String>>,
@@ -42,6 +45,9 @@ pub struct Runtime {
 pub(super) struct Session {app:AppHandle,token:Token,profile:profiles::Profile,secret:String,client:reqwest::Client}
 pub(super) fn inactive()->ChatError {ChatError::new("MODE_INACTIVE","远程运行代次已失效，请刷新当前模式")}
 pub fn stop_all(app:&AppHandle) {
+    preview::clear(app);
+    if let Ok(mut error)=app.state::<Runtime>().blocked_error.lock() {*error=None;}
+    if let Ok(mut blocked)=app.state::<Runtime>().retry_blocked.lock() {*blocked=false;}
     if let Ok(mut handle)=app.state::<Runtime>().gateway.lock() {if let Some(handle)=handle.take() {handle.stop();}}
     if let Ok(mut desired)=app.state::<Runtime>().desired.lock() {*desired=None;}
     if let Ok(mut subscriptions)=app.state::<Runtime>().subscriptions.lock() {subscriptions.clear();}
@@ -50,13 +56,14 @@ pub fn stop_all(app:&AppHandle) {
     if let Ok(mut seen)=app.state::<Runtime>().seen_messages.lock() {seen.clear();}
 }
 pub(super) fn notify_error(app:&AppHandle,token:&Token,error:&ChatError) {
-    if error.code!="REMOTE_AUTH_REQUIRED" {return;}
+    if error.code!="REMOTE_AUTH_REQUIRED" && !certificates::is_certificate_error(&error.code) {return;}
     if let Ok(_gate)=app.state::<Coordinator>().gate(Some(token),false) {
-        background::authorization_failed(app,token);
+        background::connection_failed(app,token,&error.code);
         let runtime=app.state::<Runtime>();
         if let Ok(mut blocked)=runtime.retry_blocked.lock() {*blocked=true;}
+        if let Ok(mut value)=runtime.blocked_error.lock() {*value=Some(error.clone());}
         if let Ok(mut handle)=runtime.gateway.lock() {if let Some(handle)=handle.take() {handle.stop();}}
-        let _=app.emit("remote-event",json!({"modeToken":token,"kind":"connection","data":{"state":"auth_required","code":error.code,"message":error.message}}));
+        let _=app.emit("remote-event",json!({"modeToken":token,"kind":"connection","data":{"state":if certificates::is_certificate_error(&error.code) {"incompatible"} else {"auth_required"},"code":error.code,"message":error.message}}));
     }
 }
 async fn checked_response(session:&Session,response:reqwest::Response)->ChatResult<reqwest::Response> {
@@ -75,8 +82,9 @@ pub fn start(app:AppHandle) {
             match ensure_gateway(&app,token.clone()).await {
                 Ok(_)=>delay=2,
                 Err(error)=> {
-                    let blocked=["REMOTE_AUTH_REQUIRED","REMOTE_IDENTITY_CHANGED","REMOTE_INCOMPATIBLE","REMOTE_PROTOCOL","CREDENTIAL_UNAVAILABLE","PROFILE_NOT_FOUND","INVALID_PROFILE"].contains(&error.code.as_str());
+                    let blocked=["REMOTE_AUTH_REQUIRED","REMOTE_IDENTITY_CHANGED","REMOTE_INCOMPATIBLE","REMOTE_PROTOCOL","REMOTE_CERTIFICATE_CHANGED","REMOTE_CERTIFICATE_UNTRUSTED","REMOTE_CERTIFICATE_EXPIRED","REMOTE_CERTIFICATE_INVALID","CREDENTIAL_UNAVAILABLE","PROFILE_NOT_FOUND","INVALID_PROFILE"].contains(&error.code.as_str());
                     if let Ok(mut value)=app.state::<Runtime>().retry_blocked.lock() {*value=blocked;}
+                    if let Ok(mut value)=app.state::<Runtime>().blocked_error.lock() {*value=if blocked {Some(error.clone())} else {None};}
                     if let Ok(_gate)=app.state::<Coordinator>().gate(Some(&token),false) {
                         let state=if error.code=="REMOTE_AUTH_REQUIRED" {"auth_required"} else if blocked {"incompatible"} else {"reconnecting"};
                         let _=app.emit("remote-event",json!({"modeToken":token,"kind":"connection","data":{"state":state,"code":error.code,"message":error.message}}));
@@ -111,10 +119,11 @@ async fn session(app:&AppHandle,token:&Token)->ChatResult<Session> {
             notify_error(app,token,&error);error
         } else {error}
     })?;
-    let identity=transport::probe(&profile.endpoint,&secret).await.map_err(|error| {notify_error(app,token,&error);error})?;
+    let client=transport::client_for(&profile.endpoint,profile.certificate.as_ref())?;
+    let identity=transport::probe_with(&client,&profile.endpoint,&secret).await.map_err(|error| {notify_error(app,token,&error);error})?;
     if identity.server_id!=profile.server_id {return Err(ChatError::new("REMOTE_IDENTITY_CHANGED","此地址对应的 infOS 实例已改变，请另存连接；旧缓存不会复用"));}
     validate_token(app,token)?;
-    Ok(Session {app:app.clone(),token:token.clone(),profile,secret,client:transport::client()?})
+    Ok(Session {app:app.clone(),token:token.clone(),profile,secret,client})
 }
 async fn perform(session:&Session,route:operations::Route)->ChatResult<Value> {
     let limit=if route.path.ends_with("/projection") || route.path.starts_with("/chat/threads/") || route.path.starts_with("/chat/queue/") {transport::MAX_PROJECTION_BODY} else {transport::MAX_BODY};
@@ -131,7 +140,7 @@ async fn perform_limited(session:&Session,route:operations::Route,limit:usize)->
 #[tauri::command]
 pub async fn remote_session_status(app:AppHandle,token:Token)->ChatResult<Value> {
     let session=session(&app,&token).await?;
-    let data=access::status(&session.profile.endpoint,&session.secret).await.map_err(|error| {notify_error(&app,&token,&error);error})?;
+    let data=access::status(&session.client,&session.profile.endpoint,&session.secret).await.map_err(|error| {notify_error(&app,&token,&error);error})?;
     validate_token(&app,&token)?;
     if data["authenticated"]!=true {
         let error=ChatError::new("REMOTE_AUTH_REQUIRED","设备授权已失效，请重新配对");notify_error(&app,&token,&error);return Err(error);
@@ -143,7 +152,7 @@ pub async fn remote_session_status(app:AppHandle,token:Token)->ChatResult<Value>
 pub async fn remote_logout_device(app:AppHandle,token:Token)->ChatResult<Value> {
     let session=session(&app,&token).await?;
     if session.profile.device.is_none() {return Err(ChatError::new("REMOTE_FORBIDDEN","兼容凭据不支持撤销设备，请在 infOS 管理端处理"));}
-    access::revoke(&session.profile.endpoint,&session.secret).await?;
+    access::revoke(&session.client,&session.profile.endpoint,&session.secret).await?;
     validate_token(&app,&token)?;
     notify_error(&app,&token,&ChatError::new("REMOTE_AUTH_REQUIRED","已撤销此设备授权，原连接记录保留，可重新配对"));
     Ok(json!({"modeToken":token,"data":{"authenticated":false}}))
@@ -266,6 +275,7 @@ pub async fn remote_connect(app:AppHandle,token:Token,principal_id:Option<String
         let _gate=app.state::<Coordinator>().gate(Some(&token),false)?;
         *app.state::<Runtime>().desired.lock().map_err(|_|inactive())?=Some((token.clone(),principal_id.clone()));
         *app.state::<Runtime>().retry_blocked.lock().map_err(|_|inactive())?=false;
+        *app.state::<Runtime>().blocked_error.lock().map_err(|_|inactive())?=None;
         if force==Some(true) {
             if let Some(handle)=runtime.gateway.lock().map_err(|_|inactive())?.take() {handle.stop();}
             runtime.confirmed_subscriptions.lock().map_err(|_|inactive())?.clear();
@@ -273,6 +283,7 @@ pub async fn remote_connect(app:AppHandle,token:Token,principal_id:Option<String
     }
     ensure_gateway(&app,token).await
 }
+fn blocked_error(runtime:&Runtime)->ChatError {runtime.blocked_error.lock().ok().and_then(|value|value.clone()).unwrap_or_else(||ChatError::new("REMOTE_AUTH_REQUIRED","设备授权需要重新确认，请重新配对或登录"))}
 fn validate_selection(runtime:&Runtime,token:&Token,principal:&Option<String>)->ChatResult<()> {
     let selected=runtime.desired.lock().map_err(|_|inactive())?;
     if selected.as_ref()!=Some(&(token.clone(),principal.clone())) {return Err(ChatError::new("REMOTE_SELECTION_CHANGED","远程角色选择已经改变，请重新读取当前连接"));}Ok(())
@@ -281,7 +292,7 @@ async fn ensure_gateway(app:&AppHandle,token:Token)->ChatResult<Value> {
     let runtime=app.state::<Runtime>();let _connect=runtime.connect_lock.lock().await;
     let mode=app.state::<Coordinator>();let mut changes=mode.subscribe();validate_token(&app,&token)?;
     let requested=runtime.desired.lock().map_err(|_|inactive())?.clone().filter(|(target,_)|*target==token).ok_or_else(inactive)?.1;
-    if *runtime.retry_blocked.lock().map_err(|_|inactive())? {return Err(ChatError::new("REMOTE_AUTH_REQUIRED","设备授权需要重新确认，请重新配对或登录"));}
+    if *runtime.retry_blocked.lock().map_err(|_|inactive())? {return Err(blocked_error(&runtime));}
     // 恢复意图已经登记；角色发现失败也会由原生监督循环继续恢复。
     let principal_id=match requested.clone().or(cache::principal(app,&token,None)?) {
         Some(principal)=>principal,
@@ -303,7 +314,7 @@ async fn ensure_gateway(app:&AppHandle,token:Token)->ChatResult<Value> {
     if let Some(handle)=existing {
         restore_subscriptions(app,&token,&handle).await?;
         validate_selection(&runtime,&token,&requested)?;
-        if *runtime.retry_blocked.lock().map_err(|_|inactive())? {return Err(ChatError::new("REMOTE_AUTH_REQUIRED","设备授权已失效，请重新配对"));}
+        if *runtime.retry_blocked.lock().map_err(|_|inactive())? {return Err(blocked_error(&runtime));}
         return Ok(json!({"modeToken":token,"state":"online","principalId":principal_id,"sessionId":handle.session_id}));
     }
     let new=tokio::select! {biased;
@@ -321,7 +332,7 @@ async fn ensure_gateway(app:&AppHandle,token:Token)->ChatResult<Value> {
     if let Err(error)=validate_selection(&runtime,&token,&requested) {new.stop();return Err(error);}
     cache::principal(app,&token,Some(&principal_id))?;
     let _gate=mode.gate(Some(&token),false)?;
-    if *runtime.retry_blocked.lock().map_err(|_|inactive())? {new.stop();return Err(ChatError::new("REMOTE_AUTH_REQUIRED","设备授权已失效，请重新配对"));}
+    if *runtime.retry_blocked.lock().map_err(|_|inactive())? {new.stop();return Err(blocked_error(&runtime));}
     let data=json!({"state":"online","principalId":principal_id,"sessionId":new.session_id});
     app.emit("remote-event",json!({"modeToken":token,"kind":"connection","data":data})).map_err(|_|inactive())?;
     Ok(json!({"modeToken":token,"state":"online","principalId":principal_id,"sessionId":new.session_id}))

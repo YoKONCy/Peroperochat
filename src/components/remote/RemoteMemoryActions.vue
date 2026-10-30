@@ -1,11 +1,11 @@
 <template>
-  <div class="memory-entry-actions">
-    <span class="memory-status-label" :data-archived="record.status === 'archived'"><RemoteIcon :name="record.status === 'archived' ? 'archive' : 'memory'" />{{ tr(record.status === 'archived' ? '已归档' : '当前记忆') }}</span>
+  <div class="memory-entry-actions" :class="{ 'is-archive-only': !allowEdit && !allowDelete }" role="group" :aria-label="tr('记忆操作')">
+    <span v-if="showStatus" class="memory-status-label" :data-archived="record.status === 'archived'"><RemoteIcon :name="record.status === 'archived' ? 'archive' : 'memory'" />{{ tr(record.status === 'archived' ? '已归档' : '当前记忆') }}</span>
     <div v-if="editable" class="memory-entry-buttons">
-      <RemoteAction icon="edit" tone="primary" :disabled="locked" @click="$emit('edit')">{{ tr('编辑记忆') }}</RemoteAction>
-      <RemoteAction v-if="record.status === 'active'" icon="archive" :disabled="locked" @click="open('archive')">{{ tr('归档') }}</RemoteAction>
-      <RemoteAction v-else icon="restore" :disabled="locked" @click="open('restore')">{{ tr('恢复归档') }}</RemoteAction>
-      <RemoteAction icon="trash" tone="danger" :disabled="locked" @click="open('delete')">{{ tr('删除') }}</RemoteAction>
+      <RemoteAction v-if="allowEdit" icon="edit" tone="primary" class="memory-edit-button" :disabled="locked" @click="$emit('edit')">{{ tr('编辑记忆') }}</RemoteAction>
+      <RemoteAction v-if="record.status === 'active'" icon="archive" class="memory-archive-button" :disabled="locked" @click="open('archive')">{{ tr('归档记忆') }}</RemoteAction>
+      <RemoteAction v-else icon="restore" class="memory-archive-button" :disabled="locked" @click="open('restore')">{{ tr('恢复归档') }}</RemoteAction>
+      <RemoteAction v-if="allowDelete" icon="trash" tone="danger" class="memory-delete-button" :disabled="locked" :aria-label="tr('删除')" :title="tr('删除')" @click="open('delete')" />
     </div>
     <RemoteAction v-if="unresolved && !confirmation" icon="bell" @click="$emit('pending')">{{ tr('查看操作结果') }}</RemoteAction>
     <RoomDrawer v-if="confirmation" :title="tr(copy.title)" :busy="busy" @close="confirmation = null">
@@ -29,7 +29,7 @@ import RemoteFeedback from './RemoteFeedback.vue'
 import { useRemoteManagement } from '../../composables/useRemoteManagement'
 import { remoteState } from '../../stores/remote'
 import { t } from '../../i18n/remote'
-const props = defineProps({ record: { type: Object, required: true }, disabled: Boolean })
+const props = defineProps({ record: { type: Object, required: true }, disabled: Boolean, allowEdit: { type: Boolean, default: true }, allowDelete: { type: Boolean, default: true }, showStatus: { type: Boolean, default: true } })
 const emit = defineEmits(['edit', 'changed', 'pending', 'busy'])
 const { token, read, write, run, guard, busy, error, unresolved } = useRemoteManagement()
 const tr = key => t(key, [], 'memory-actions')
@@ -43,7 +43,7 @@ const descriptions = {
 }
 const copy = computed(() => descriptions[confirmation.value?.action] || descriptions.archive)
 function prepareLeave() { if (busy.value) throw new Error(tr('正在处理，请稍等。')) }
-defineExpose({ prepareLeave })
+defineExpose({ prepareLeave, unresolved })
 watch(busy, value => emit('busy', value), { flush: 'sync' })
 watch(() => props.record.id, () => { confirmation.value = null })
 function open(action) {

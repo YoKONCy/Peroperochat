@@ -36,10 +36,10 @@ pub fn reauthorized(app:&AppHandle)->ChatResult<()> {
     execute(app,"reauthorized",&json!({"modeToken":token}))?;Ok(())
 }
 /// 调用方已经持有运行门，这里不能再递归获取控制事务。
-pub(super) fn authorization_failed(app:&AppHandle,token:&Token) {
+pub(super) fn connection_failed(app:&AppHandle,token:&Token,code:&str) {
     if let Ok(root)=app.path().app_data_dir() {
         if let Ok(conn)=super::background_store::connection(&root.join("data"),token) {
-            let _=conn.execute("UPDATE notification_runtime SET blocked='REMOTE_AUTH_REQUIRED',state='blocked',updated=?1 WHERE id=1",[chrono::Utc::now().timestamp_millis()]);
+            let _=conn.execute("UPDATE notification_runtime SET blocked=?1,state='blocked',updated=?2 WHERE id=1",rusqlite::params![code,chrono::Utc::now().timestamp_millis()]);
         }
     }
 }

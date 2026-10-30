@@ -91,9 +91,9 @@ pub async fn connect(app:&AppHandle,session:&super::Session,principal:&str)->Cha
         .max_message_size(Some(super::transport::MAX_PROJECTION_BODY)).max_frame_size(Some(super::transport::MAX_PROJECTION_BODY));
     let (mut socket,_)=tokio::select! {biased;
         _=changes.changed()=>return Err(super::inactive()),
-        result=tokio::time::timeout(Duration::from_secs(12),tokio_tungstenite::connect_async_with_config(request,Some(config),false))=>result.map_err(|_|super::transport::network())?.map_err(|error| {
+        result=tokio::time::timeout(Duration::from_secs(12),tokio_tungstenite::connect_async_tls_with_config(request,Some(config),false,Some(tokio_tungstenite::Connector::Rustls(super::certificates::tls_config(&session.profile.endpoint,session.profile.certificate.as_ref())?))))=>result.map_err(|_|super::transport::network())?.map_err(|error| {
             if let tokio_tungstenite::tungstenite::Error::Http(response)=&error {if let Err(error)=super::transport::status(response.status()) {return error;}}
-            super::transport::network()
+            super::certificates::error(&error).unwrap_or_else(super::transport::network)
         })?,
     };
     socket.send(Message::Text(envelope(&node,&uuid::Uuid::new_v4().to_string(),"hello",json!({"nodeId":node,"principalId":principal,

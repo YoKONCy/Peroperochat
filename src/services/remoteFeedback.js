@@ -1,4 +1,9 @@
 const messages = {
+  REMOTE_CERTIFICATE_CHANGED: '服务器证书有变化，请到连接选项中核对。',
+  REMOTE_CERTIFICATE_UNTRUSTED: '请先在连接选项中核对服务器证书。',
+  REMOTE_CERTIFICATE_EXPIRED: '服务器证书已过期或尚未生效，请检查证书和手机时间。',
+  REMOTE_CERTIFICATE_INVALID: '无法读取此服务器的证书，请检查服务配置。',
+
   REMOTE_NETWORK: '暂时连接不上 infOS，请检查网络。',
   REMOTE_HTTP: 'infOS 暂时没有响应，请稍后再试。',
   REMOTE_TOO_LARGE: '这部分内容暂时无法载入，请稍后再试。',

@@ -31,6 +31,8 @@ async function control(command, args) {
 }
 const reads = createRemoteReadCoordinator({ query: (query, options) => scoped('remote_query', { query, cachedOnly: options.cachedOnly }, options.token), assertActive: token => assertToken(token, 'remote') })
 export const remoteConnections = {
+  inspectCertificate: (endpoint, profileId, allowInsecure) => control('remote_inspect_certificate', { endpoint, profileId, allowInsecure, modeToken: currentToken() }),
+  trustCertificate: (profileId, fingerprint) => control('remote_trust_certificate', { profileId, fingerprint, modeToken: currentToken() }),
   decodePairing: raw => control('remote_decode_pairing', { raw, modeToken: currentToken() }),
   list: () => control('remote_profiles'),
   save: input => control('remote_save_profile', { input, modeToken: currentToken() }),

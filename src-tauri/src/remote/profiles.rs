@@ -10,11 +10,13 @@ pub struct Profile {
     #[serde(default)] pub credential_id:Option<String>,
     #[serde(default)] pub device:Option<super::access::Device>,
     #[serde(default)] pub session_owner:Option<String>,
+    #[serde(default)] pub certificate:Option<super::certificates::TrustedCertificate>,
 }
 impl Profile {pub fn credential_key(&self)->&str {self.credential_id.as_deref().unwrap_or(&self.id)}}
 #[derive(Deserialize)]
 #[serde(rename_all="camelCase",deny_unknown_fields)]
 pub struct ProfileInput {
+    #[serde(default)] pub certificate_fingerprint:Option<String>,
     pub endpoint:String,#[serde(default)] pub token:String,#[serde(default)] pub code:String,
     #[serde(default)] pub method:super::access::Method,
     #[serde(default="device_name")] pub name:String,#[serde(default="remember")] pub remember:bool,
@@ -79,15 +81,18 @@ pub async fn remote_save_profile(app:AppHandle,input:ProfileInput,mode_token:Tok
     let endpoint=normalize_endpoint(&input.endpoint,input.allow_insecure)?;
     let previous=input.profile_id.as_deref().map(|id|get(&mode,id)).transpose()?;
     if previous.as_ref().is_some_and(|profile|profile.endpoint!=endpoint) {return Err(ChatError::new("REMOTE_IDENTITY_CHANGED","重新授权不能更改连接地址，请另存连接"));}
+    let certificate=super::certificates::prepare(&endpoint,previous.as_ref().and_then(|profile|profile.certificate.as_ref()),input.certificate_fingerprint.as_deref()).await?;
+    {let _gate=mode.gate(Some(&mode_token),false)?;}
+    let client=super::transport::client_for(&endpoint,certificate.as_ref())?;
     // 兑换完成后核对稳定实例身份；同一地址换了实例也不能复用旧数据分区。
     let code=if matches!(input.method,super::access::Method::Bearer) {&input.token} else {&input.code};
-    let credential=super::access::exchange(&endpoint,input.method,code,&input.name,input.remember).await?;
+    let credential=super::access::exchange(&client,&endpoint,input.method,code,&input.name,input.remember).await?;
     let result=async {
-        let identity=super::transport::probe(&endpoint,&credential.secret).await?;
+        let identity=super::transport::probe_with(&client,&endpoint,&credential.secret).await?;
         if previous.as_ref().is_some_and(|profile|profile.server_id!=identity.server_id) {return Err(ChatError::new("REMOTE_IDENTITY_CHANGED","地址对应的 infOS 实例已改变，不能复用原连接的数据分区"));}
         let profile=Profile {id:previous.as_ref().map(|profile|profile.id.clone()).unwrap_or_else(||uuid::Uuid::new_v4().to_string()),
             server_id:identity.server_id,endpoint:endpoint.clone(),display_name:identity.display_name,app_version:identity.app_version,
-            credential_id:Some(uuid::Uuid::new_v4().to_string()),device:credential.device.clone(),
+            credential_id:Some(uuid::Uuid::new_v4().to_string()),device:credential.device.clone(),certificate,
             session_owner:if credential.device.is_some() && !input.remember {Some(mode.snapshot()?.runtime_owner_id)} else {None}};
         let _switch=mode.switch_lock.lock().await;
         {let _gate=mode.gate(Some(&mode_token),false)?;}
@@ -139,7 +144,7 @@ pub async fn remote_save_profile(app:AppHandle,input:ProfileInput,mode_token:Tok
     // 未保存的新设备会话尽力撤销；不撤销用户原来的管理或兼容凭据。
     if result.is_err() && credential.device.is_some() {
         let retained=input.profile_id.as_deref().and_then(|id|get(&mode,id).ok()).is_some_and(|profile|profile.device.as_ref().map(|device|&device.id)==credential.device.as_ref().map(|device|&device.id));
-        if !retained {let _=super::access::revoke(&endpoint,&credential.secret).await;}
+        if !retained {let _=super::access::revoke(&client,&endpoint,&credential.secret).await;}
     }
     result
 }

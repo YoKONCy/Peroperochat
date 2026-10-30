@@ -57,6 +57,7 @@
 <script setup>
 import { ref, computed, watch, onMounted, onBeforeUnmount } from 'vue'
 import { open as openSystemUrl } from '@tauri-apps/plugin-shell'
+import { convertFileSrc } from '@tauri-apps/api/core'
 import RoomDrawer from '../companion/RoomDrawer.vue'
 import RemoteIcon from './RemoteIcon.vue'
 import RemoteFeedback from './RemoteFeedback.vue'
@@ -123,7 +124,7 @@ async function load() {
     info.value = await remoteFileInfo(props.resource, token)
     if (disposed) return
     if (documentKind(fileName.value, info.value.mimeType) === 'html' && nativeInput.value) {
-      try { const response = await remoteClient.htmlPreview(nativeInput.value, token); assertToken(token, 'remote'); if (disposed) return; htmlTicket.value = response.data.url }
+      try { const response = await remoteClient.htmlPreview(nativeInput.value, token); assertToken(token, 'remote'); if (disposed) return; htmlTicket.value = new URL(response.data.path, convertFileSrc('', 'ppc-preview')).href }
       catch (failure) { assertToken(token, 'remote'); if (disposed) return; notice.value = `会话资源预览暂不可用：${failure.message}` }
     }
     const content = await prepareRemoteFile(props.resource, { ...info.value, name: fileName.value }, { signal: controller.signal })

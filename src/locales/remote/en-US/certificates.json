@@ -1,0 +1,17 @@
+{
+  "服务器证书有变化": "Server certificate changed",
+  "确认服务器证书": "Confirm server certificate",
+  "请在电脑端核对指纹，相同后再继续。": "Compare this fingerprint with your computer before continuing.",
+  "上次的指纹": "Previous fingerprint",
+  "证书详情": "Certificate details",
+  "签发给": "Issued to",
+  "签发者": "Issued by",
+  "有效期至": "Valid until",
+  "已与电脑端核对指纹": "I checked the fingerprint on my computer",
+  "信任只保存在此设备，证书变化时会再次询问。": "Trust is saved only on this device. A changed certificate needs confirmation again.",
+  "取消": "Cancel",
+  "信任并继续": "Trust and continue",
+  "核对证书": "Check certificate",
+  "正在核对证书…": "Checking certificate…",
+  "证书已核对": "Certificate checked"
+}
