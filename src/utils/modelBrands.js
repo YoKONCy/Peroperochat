@@ -44,6 +44,7 @@ export function modelBrandDefinition(brand) {
   return brand && Object.hasOwn(MODEL_BRANDS, brand) ? MODEL_BRANDS[brand] : undefined
 }
 
+/** @type {[string, RegExp][]} */
 const modelRules = [
   // 派生模型先识别明确的发布品牌，避免 Llama-Nemotron 被当作原版 Llama。
   ['nvidia', /(?:^|[-_.])nemotron(?:[-_.]|\d|$)/],
@@ -114,6 +115,7 @@ const providerBrands = {
   agnesai: 'agnes',
 }
 
+/** @type {[string, string[]][]} */
 const providerDomains = [
   ['openai', ['openai.com']],
   ['anthropic', ['anthropic.com']],

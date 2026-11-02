@@ -3,10 +3,10 @@ import { expressionExtensions } from './parenthetical'
 import DOMPurify from 'dompurify'
 import { open } from '@tauri-apps/plugin-shell'
 
-const parser = new Marked({ gfm: true, breaks: true, extensions: expressionExtensions })
+const parser = new Marked({ gfm: true, async: false, breaks: true, extensions: expressionExtensions })
 
 export function remoteMarkdown(value) {
-  const html = DOMPurify.sanitize(parser.parse(typeof value === 'string' ? value : ''), {
+  const html = DOMPurify.sanitize(parser.parse(typeof value === 'string' ? value : '', { async: false }), {
     USE_PROFILES: { html: true }, FORBID_TAGS: ['img', 'video', 'audio', 'iframe', 'object', 'embed', 'style', 'form', 'input', 'button'],
   })
   const fragment = document.createElement('template')

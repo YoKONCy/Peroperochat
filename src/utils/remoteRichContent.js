@@ -4,7 +4,7 @@ import DOMPurify from 'dompurify'
 import { isResourceReference } from '../services/remoteResources'
 
 export const escapeRich = value => String(value ?? '').replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;').replaceAll('"', '&quot;')
-const lexer = new Marked({ gfm: true, breaks: true })
+const lexer = new Marked({ gfm: true, async: false, breaks: true })
 lexer.use({ extensions: [{ name: 'ppcFormula', level: 'block', start: source => source.search(/(?:^|\n)[ \t]*(?:\$\$|\\\[)/), tokenizer(source) { const match = source.match(/^[ \t]*(?:\$\$[ \t]*\n?([\s\S]*?)\$\$|\\\[[ \t]*\n?([\s\S]*?)\\\])[ \t]*(?:\n|$)/); if (match) return { type: 'ppcFormula', raw: match[0], text: (match[1] ?? match[2]).trim() } } }] })
 const blockTags = /<\/?(?:html|body|main|article|section|div|header|footer|nav|form|svg|script|style)\b[^>]*>/gi
 function stateLine(line, state) {
@@ -58,6 +58,7 @@ export class RemoteMarkdownSegmenter {
   }
 }
 function unwrap(source) { return source.match(/^\s*```(?:markdown|md)\s*\n([\s\S]*?)\n?```\s*$/i)?.[1] ?? source }
+/** @returns {{ id: string; kind: string; source: string; language?: string; name?: string; format?: string; streaming?: boolean }[]} */
 function stableParts(source, start = 0) {
   let offset = start
   return lexer.lexer(unwrap(source)).map(token => {
@@ -91,10 +92,10 @@ export function renderRemoteMarkdown(source) {
       try { const url = new URL(token.href); if (!['https:', 'http:'].includes(url.protocol) || url.username || url.password) throw new Error(); return `<a href="${escapeRich(url.href)}" rel="noopener noreferrer">${label}</a>` } catch { return label }
     },
   }
-  const parser = new Marked({ gfm: true, breaks: true, renderer, extensions: expressionExtensions, tokenizer: { del: () => undefined } })
+  const parser = new Marked({ gfm: true, async: false, breaks: true, renderer, extensions: expressionExtensions, tokenizer: { del: () => undefined } })
   let fence = ''
   const normalized = source.split('\n').map(line => { const match = line.match(/^[ \t]*(`{3,}|~{3,})/); if (match) { if (!fence) fence = match[1]; else if (match[1][0] === fence[0] && match[1].length >= fence.length) fence = ''; return line }; return fence ? line : line.replace(/^[ \t]{4,}(?=#{1,6}(?:[ \t]+|$))/, '') }).join('\n')
-  const clean = DOMPurify.sanitize(parser.parse(normalized), { ADD_ATTR: ['data-resource-source'], FORBID_TAGS: ['img', 'audio', 'video', 'iframe', 'object', 'embed', 'style', 'script', 'form', 'button'], FORBID_ATTR: ['style'] })
+  const clean = DOMPurify.sanitize(parser.parse(normalized, { async: false }), { ADD_ATTR: ['data-resource-source'], FORBID_TAGS: ['img', 'audio', 'video', 'iframe', 'object', 'embed', 'style', 'script', 'form', 'button'], FORBID_ATTR: ['style'] })
   const fragment = document.createElement('template'); fragment.innerHTML = clean
   for (const input of fragment.content.querySelectorAll('input')) {
     input.disabled = true; input.tabIndex = -1

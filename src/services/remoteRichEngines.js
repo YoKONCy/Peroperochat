@@ -1,6 +1,8 @@
 import DOMPurify from 'dompurify'
 
-let highlightJob, mathJob, diagramJob, diagramQueue = Promise.resolve()
+let highlightJob, mathJob, diagramJob
+/** @type {Promise<unknown>} */
+let diagramQueue = Promise.resolve()
 export async function highlightRemoteCode(source, language) {
   if (source.length > 32000) return null
   highlightJob ||= Promise.all([

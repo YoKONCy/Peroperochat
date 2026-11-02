@@ -10,13 +10,14 @@
       <RemoteFeedback :message="error" />
       <div ref="viewport" class="owner-crop-stage" role="application" tabindex="0" :aria-label="t('拖动图片调整位置，也可以使用方向键。')" @pointerdown="startDrag" @pointermove="moveDrag" @pointerup="endDrag" @pointercancel="endDrag" @lostpointercapture="drag = null" @keydown="moveKey"><img :src="imageUrl" :style="cropStyle" alt="" draggable="false" /><div class="owner-crop-mask" /></div>
       <p class="remote-help">{{ t('拖动图片调整位置，也可以使用方向键。') }}</p>
-      <label class="owner-crop-zoom"><span>{{ t('缩放') }}</span><input :value="crop.zoom" type="range" min="1" max="3" step="0.01" :aria-label="t('缩放')" :disabled="locked" @input="update({ zoom: Number($event.target.value) })" /><output>{{ Math.round(crop.zoom * 100) }}%</output></label>
+      <label class="owner-crop-zoom"><span>{{ t('缩放') }}</span><input :value="crop.zoom" type="range" min="1" max="3" step="0.01" :aria-label="t('缩放')" :disabled="locked" @input="update({ zoom: Number(inputValue($event)) })" /><output>{{ Math.round(crop.zoom * 100) }}%</output></label>
       <template #footer><div class="owner-crop-footer"><button type="button" class="room-text-button" :disabled="locked" @click="update({ zoom: 1, x: 0, y: 0 })">{{ t('居中') }}</button><span /><button type="button" class="room-secondary-button" :disabled="working || avatar.busy" @click="close">{{ t('取消') }}</button><button type="button" class="room-primary-button" :disabled="locked" @click="save">{{ t(working || avatar.busy ? '正在保存…' : '保存头像') }}</button></div></template>
     </RoomDrawer>
     <RoomDrawer v-if="confirmReset" :title="t('恢复默认头像？')" :busy="working || avatar.busy" @close="confirmReset = false"><RemoteFeedback :message="error" /><div class="remote-purpose-actions"><button type="button" class="room-secondary-button" :disabled="working || avatar.busy" @click="confirmReset = false">{{ t('取消') }}</button><button type="button" class="room-primary-button" :disabled="locked" @click="reset">{{ t('恢复默认头像') }}</button></div></RoomDrawer>
   </section>
 </template>
 <script setup>
+import { inputValue } from '../../utils/domEvents'
 import { computed, ref, shallowRef, onMounted, onBeforeUnmount } from 'vue'
 import RoomDrawer from '../companion/RoomDrawer.vue'
 import RemoteIcon from './RemoteIcon.vue'

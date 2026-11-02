@@ -1,37 +1,28 @@
 <template>
-  <div class="phase2 phase-management-home">
-    <section class="phase-welcome chromatic-management-hero" data-ui-tone="rose"><RemoteAvatar v-if="agent?.id" :id="agent.id" :label="agent.name" /><div><h2>{{ t('把日常，调成喜欢的样子。') }}</h2><p>{{ t('角色、模型和陪伴，都在手边。') }}</p><span class="chromatic-tag" :data-ui-tone="online ? 'mint' : 'amber'"><RemoteIcon name="connection" />{{ t(online ? '已连接 infOS' : '离线中') }}</span></div></section>
-    <label class="phase-search"><RemoteIcon name="search" /><input v-model="search" :placeholder="t('输入关键词查找')" :aria-label="t('输入关键词查找')" /></label>
-    <template v-for="group in groups" :key="group.id"><h3 v-if="group.items.length" class="phase-section-title"><RemoteIcon :name="group.icon" />{{ t(group.title) }}</h3><div :class="group.id === 'daily' ? 'phase-quick-grid' : group.id === 'insights' ? 'phase-insight-links' : 'phase-destinations'"><button v-for="item in group.items" :key="item.id" type="button" :data-ui-tone="destinationTone(item.id)" @click="$emit('open', item.id)"><span class="phase-tile-icon"><RemoteIcon :name="item.icon" /></span><span><strong>{{ t(item.label) }}</strong><small>{{ t(item.description) }}</small></span><RemoteIcon name="next" /></button></div></template>
-    <p v-if="!groups.some(group => group.items.length)" class="phase-empty">{{ t('没有找到对应内容') }}</p>
+  <div class="phase2 phase-management-home renewal-management">
+    <section v-if="!category && !search" class="renewal-profile-strip"><RemoteAvatar v-if="agent?.id" :id="agent.id" :label="agent.name" /><span><strong>{{ agent?.name || tr('我的 infOS') }}</strong><small>{{ tr(online ? '已连接，随时接着聊。' : '离线中，已保存的内容仍可查看。') }}</small></span><i :data-online="online" /></section>
+    <label class="phase-search"><RemoteIcon name="search" /><input v-model="search" :placeholder="tr('查找设置')" :aria-label="tr('查找设置')" /></label>
+    <Transition name="renewal-category" mode="out-in">
+      <div v-if="!category && !search" key="overview" class="renewal-management-grid"><button v-for="group in remoteManagementGroups" :key="group.id" type="button" :data-ui-tone="group.tone" @click="select(group.id)"><span class="renewal-category-symbol"><RemoteIcon :name="group.icon" /></span><strong>{{ tr(group.title) }}</strong><small>{{ tr(group.description) }}</small><RemoteIcon class="renewal-category-next" name="next" /></button></div>
+      <div v-else :key="search ? 'search' : category"><div v-for="group in groups" :key="group.id" class="renewal-management-group" :data-ui-tone="group.tone"><h3 v-if="search" class="phase-section-title">{{ tr(group.title) }}</h3><div class="phase-destinations"><button v-for="item in group.items" :key="item.id" type="button" :data-ui-tone="group.tone" @click="open(group, item)"><span class="phase-tile-icon"><RemoteIcon :name="item.icon" /></span><span><strong>{{ tr(item.label) }}</strong><small>{{ tr(item.description) }}</small></span><RemoteIcon name="next" /></button></div></div><p v-if="!groups.length" class="phase-empty">{{ tr('没有找到对应内容') }}</p></div>
+    </Transition>
   </div>
 </template>
 <script setup>
-import { computed, ref } from 'vue'
+import { computed, ref, watch } from 'vue'
 import RemoteIcon from './RemoteIcon.vue'
 import RemoteAvatar from './RemoteAvatar.vue'
+import { remoteManagementGroups } from '../../constants/remoteNavigation'
 import { t } from '../../i18n/remote'
-import { uiSectionTone as destinationTone } from '../../utils/uiPalette'
-defineProps({ profileName: String, agent: Object, online: Boolean })
-defineEmits(['open'])
-const search = ref('')
-const groups = computed(() => [
-  { id: 'daily', title: '常用设置', icon: 'settings', items: [
-    { id: 'models', label: '模型与连接', description: '默认模型、角色覆盖与视觉', icon: 'model' },
-    { id: 'agents', label: '角色资料', description: '称呼、人设与互动', icon: 'people' },
-    { id: 'proactive', label: '主动陪伴', description: '联系的节奏', icon: 'heart' },
-    { id: 'appearance', label: '外观与语言', description: '本机显示与界面语言', icon: 'palette' },
-  ] },
-  { id: 'more', title: '更多日常配置', icon: 'route', items: [
-    { id: 'assignments', label: '模型分工', description: '默认模型、角色覆盖与视觉', icon: 'route' },
-    { id: 'prompts', label: '提示词', description: '编辑、整理与发布', icon: 'document' },
-    { id: 'prefill', label: t('预填充模式', [], 'answer-preferences'), description: t('回答开头与填充方式', [], 'answer-preferences'), icon: 'edit', keywords: t('单次填充与持续填充', [], 'answer-preferences') },
-    { id: 'voice', label: '语音', description: '识别与朗读', icon: 'audio' },
-    { id: 'user', label: '个人资料', description: t('资料、语言与回答偏好', [], 'answer-preferences'), icon: 'profile', keywords: t('健全模式与回答预填充', [], 'answer-preferences') },
-  ] },
-  { id: 'insights', title: '实例概况', icon: 'pulse', items: [
-    { id: 'usage', label: '用量统计', description: '累计用量', icon: 'chart' },
-    { id: 'runtime', label: '运行概览', description: '当前在忙什么', icon: 'pulse' },
-  ] },
-].map(group => ({ ...group, items: group.items.filter(item => !search.value.trim() || `${t(item.label)} ${t(item.description)} ${item.keywords || ''}`.toLowerCase().includes(search.value.trim().toLowerCase())) })))
+const props = defineProps({ agent: Object, online: Boolean, initialCategory: String })
+const emit = defineEmits(['open', 'category-change'])
+const tr = key => t(key, [], 'renewal')
+const search = ref(''), category = ref(props.initialCategory || null)
+const groups = computed(() => remoteManagementGroups.filter(group => search.value || group.id === category.value).map(group => ({ ...group, items: group.items.filter(item => !search.value || `${tr(item.label)} ${tr(item.description)}`.toLowerCase().includes(search.value.toLowerCase().trim())) })).filter(group => group.items.length))
+function select(id) { category.value = id; search.value = '' }
+function open(group, item) { select(group.id); emit('open', item.id) }
+watch(category, value => emit('category-change', value), { immediate: true })
+watch(() => props.initialCategory, value => { category.value = value || null })
+function back() { if (search.value) search.value = ''; else select(null) }
+defineExpose({ back, category, hasSubpage: computed(() => !!category.value || !!search.value) })
 </script>

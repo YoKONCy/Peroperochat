@@ -1,5 +1,5 @@
 <template>
-  <section ref="panel" class="mode-transition" :class="{ 'is-remote': remote, 'is-paused': !busy }" :aria-busy="busy" role="dialog" aria-modal="true" aria-label="切换空间" tabindex="-1" @keydown="trapFocus">
+  <section ref="panel" class="mode-transition" :class="{ 'is-remote': remote, 'is-paused': !busy }" :aria-busy="busy" role="dialog" aria-modal="true" :aria-label="tr('切换模式')" tabindex="-1" @keydown="trapFocus">
     <header class="mode-brand"><svg viewBox="0 0 40 24" fill="none" aria-hidden="true"><path d="m18 11-12-7v16l12-7m4-2 12-7v16l-12-7M12 7l-3 5 3 5m16-10 3 5-3 5" /><path d="m20 8 4 4-4 4-4-4Z" /></svg><span>PeroperoChat</span></header>
     <div class="mode-transition-content">
       <div class="mode-art" aria-hidden="true">
@@ -40,31 +40,33 @@
           <g class="mode-little-moon"><path class="mode-moon" d="M260 73a15 15 0 0 1-15-23 16 16 0 1 0 15 23Z" /><path class="mode-spark" d="m262 52 1.5 4.5L268 58l-4.5 1.5L262 64l-1.5-4.5L256 58l4.5-1.5Z" /></g>
         </svg>
       </div>
-      <p class="mode-destination">{{ remote ? 'infOS' : '独立空间' }}</p>
+      <p class="mode-destination">{{ tr(remote ? '电脑上的 infOS' : '本机独立空间') }}</p>
       <h1 role="status">{{ title }}</h1>
+      <p class="mode-transition-context">{{ tr(remote ? '将使用电脑上的角色与记录，本机独立空间的内容会保留。' : '回到本机的角色与记录，电脑上的 infOS 内容仍保留。') }}</p>
       <div v-if="busy" class="mode-loading-dots" aria-hidden="true"><i /><i /><i /></div>
-      <p v-else class="mode-transition-error" role="alert">{{ error || '暂时没能到达，再试一次吧。' }}</p>
-      <div v-if="!busy" class="mode-transition-actions"><button class="room-primary-button" @click="retry">{{ modeState.restoreError ? '再读一次' : '再试一次' }}</button><button v-if="modeState.restoreError && isStandalone" class="room-secondary-button" @click="router.push({ path: '/settings', query: { section: 'data' } })">数据备份与恢复</button><button v-if="remote" class="room-secondary-button" @click="returnStandalone">先回独立空间</button></div>
+      <p v-else class="mode-transition-error" role="alert">{{ tr(error || '暂时没能打开，请重试。') }}</p>
+      <div v-if="!busy" class="mode-transition-actions"><button class="room-primary-button" @click="retry">{{ tr(modeState.restoreError ? '重新读取记录' : '重试进入') }}</button><button v-if="modeState.restoreError && isStandalone" class="room-secondary-button" @click="router.push({ path: '/settings', query: { section: 'data' } })">{{ tr('数据备份与恢复') }}</button><button v-if="remote" class="room-secondary-button" @click="returnStandalone">{{ tr('先使用独立空间') }}</button></div>
     </div>
-    <footer class="mode-tip" aria-live="off"><span class="mode-tip-label"><svg viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="m8 1 2 5 5 2-5 2-2 5-2-5-5-2 5-2Z" /></svg>TIPS</span><Transition name="mode-tip" mode="out-in"><p :key="tip">{{ tip }}</p></Transition></footer>
+    <footer class="mode-tip" aria-live="off"><span class="mode-tip-label"><svg viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="m8 1 2 5 5 2-5 2-2 5-2-5-5-2 5-2Z" /></svg>{{ tr('使用提示') }}</span><Transition name="mode-tip" mode="out-in"><p :key="tip">{{ tr(tip) }}</p></Transition></footer>
   </section>
 </template>
 <script setup>
 import { computed, ref, watch, onMounted, onBeforeUnmount } from 'vue'
 import { useRouter } from 'vue-router'
 import { modeState, modeTransition, isStandalone, initializeMode, refreshMode, switchMode, retryModeData } from '../stores/mode'
+import { t } from '../i18n/remote'
 const props = defineProps({ waiting: Boolean })
 const router = useRouter(), panel = ref(null)
+const tr = key => t(key, [], 'connections')
 const failure = ref(''), acting = ref(false), tip = ref('')
 let tipTimer = null, previousFocus = null
 const remote = computed(() => (modeTransition.target || modeState.requestedTarget || modeState.snapshot?.selectedTarget)?.mode === 'remote')
 const busy = computed(() => props.waiting || acting.value || modeState.loading || modeState.restoring || !!modeState.snapshot && ['activating', 'quiescing'].includes(modeState.snapshot.phase))
 const error = computed(() => failure.value || modeState.restoreError || modeState.error)
-const title = computed(() => busy.value ? remote.value ? '去另一边，见你' : '回到熟悉的小天地' : '这里稍微卡住了')
-const commonTips = ['有话慢慢说，今天还很长。', '累了的话，就休息一小会儿。', '聊天里的小事，也可以很重要。', '换个配色，也换一点心情。']
-const remoteTips = ['上次的话题，会在另一边等你。', '手机收起来，远程任务也能继续。', '想换个心情，可以试试显示偏好。']
-const localTips = ['房间里的日记，只属于这个空间。', '想动一动？可以切换到 Live2D。', '不动的时候，静态立绘也很好看。']
-function pickTip() { const tips = [...commonTips, ...(remote.value ? remoteTips : localTips)].filter(value => value !== tip.value); tip.value = tips[Math.floor(Math.random() * tips.length)] }
+const title = computed(() => tr(!busy.value ? remote.value ? '暂时无法进入 infOS 客户端' : '独立空间暂时没有打开' : modeState.snapshot?.phase === 'quiescing' ? '正在收起当前模式…' : modeState.restoring ? '正在读取本机记录…' : remote.value ? '正在打开 infOS 客户端…' : '正在返回独立空间…'))
+const remoteTips = ['连接后，请在「会话」中选择电脑上的角色开始聊天。', '使用客户端时，请让电脑上的 infOS 保持运行。', '想回到本机？从首页的「管理连接与切换模式」返回独立空间。']
+const localTips = ['这里显示本机保存的角色与聊天记录。', '下次想用电脑上的 infOS，点击首页的连接入口即可。', '独立空间与电脑上的 infOS 分别保存各自的记录。']
+function pickTip() { const tips = (remote.value ? remoteTips : localTips).filter(value => value !== tip.value); tip.value = tips[Math.floor(Math.random() * tips.length)] }
 watch(remote, pickTip, { immediate: true })
 function trapFocus(event) {
   if (event.key !== 'Tab') return
@@ -100,6 +102,7 @@ onBeforeUnmount(() => { clearInterval(tipTimer); document.removeEventListener('f
 .mode-loading-dots { display: flex; align-items: center; gap: 7px; height: 34px; margin-top: 9px; }.mode-loading-dots i { width: 4px; height: 4px; border-radius: 50%; background: var(--switch-accent); opacity: .35; animation: mode-dot 1.4s ease-in-out infinite; }.mode-loading-dots i:nth-child(2) { animation-delay: .16s; }.mode-loading-dots i:nth-child(3) { animation-delay: .32s; }
 .mode-tip { width: min(100%, 310px); min-height: 66px; flex: none; color: var(--switch-muted); }.mode-tip-label { display: inline-flex; align-items: center; gap: 6px; font-size: 8px; letter-spacing: 2px; color: var(--switch-accent); }.mode-tip-label svg { width: 11px; height: 11px; stroke: currentColor; stroke-width: 1; }.mode-tip p { margin: 10px 0 0; font-size: 11px; line-height: 1.9; letter-spacing: .25px; text-wrap: balance; }.mode-tip-enter-active, .mode-tip-leave-active { transition: opacity .25s, transform .25s; }.mode-tip-enter-from { opacity: 0; transform: translateY(4px); }.mode-tip-leave-to { opacity: 0; transform: translateY(-4px); }
 .mode-transition-error { max-width: 300px; margin: 14px 0 0; font-size: 11px; line-height: 1.9; color: #a76986; overflow-wrap: anywhere; }.mode-transition-actions { display: flex; flex-direction: column; gap: 9px; width: min(100%, 230px); margin-top: 22px; }.mode-transition-actions button { min-height: 40px; padding: 10px 15px; border: 1px solid color-mix(in srgb, var(--switch-accent) 30%, transparent); border-radius: 13px; font: inherit; font-size: 12px; background: var(--switch-paper); color: var(--switch-accent); }.mode-transition-actions .room-primary-button { background: var(--switch-accent); color: var(--switch-paper); }.mode-transition-actions button:focus-visible { outline: 2px solid var(--switch-secondary); outline-offset: 3px; }.is-paused .mode-letter-scene * { animation-play-state: paused; }
+.mode-transition-context { margin: 12px 0 0; max-width: 290px; font-size: 12px; line-height: 1.85; color: var(--switch-muted); }
 @keyframes mode-letter-float { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-7px); } }@keyframes mode-letter-slip { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-3px); } }@keyframes mode-shadow { 50% { transform: scaleX(.87); opacity: .6; } }@keyframes mode-orbit { to { transform: rotate(360deg); } }@keyframes mode-tail-left { 50% { transform: rotate(6deg); } }@keyframes mode-tail-right { 50% { transform: rotate(-7deg); } }@keyframes mode-moon-drift { 50% { transform: translateY(4px); } }@keyframes mode-twinkle { 50% { opacity: .3; } }@keyframes mode-dot { 50% { opacity: .9; transform: translateY(-3px); } }
 @media (prefers-color-scheme: dark) { .mode-transition { --switch-accent: #a99bcc; --switch-secondary: #86a9cc; --switch-ink: #e4deee; --switch-muted: #a199b4; --switch-paper: #302c43; --switch-soft: #3c3852; --switch-ribbon: #756a9e; background: radial-gradient(ellipse at 10% 10%, #292e45, transparent 55%), radial-gradient(ellipse at 95% 90%, #32273f, transparent 50%), #211f2d; }.mode-transition.is-remote { --switch-accent: #baa5d8; --switch-ribbon: #6d7b9d; }.mode-art-halo { border-color: #d7cdeb14; background: #e5dbff04; box-shadow: inset 0 0 35px #c4b5e510, 0 0 50px #40345820; }.mode-glass-edge { stroke-opacity: .18; } }
 @media (max-height: 620px) { .mode-transition { padding-top: calc(16px + env(safe-area-inset-top)); }.mode-art { width: min(65vw, 240px); }.mode-transition-content { padding-bottom: 12px; }.mode-tip { min-height: 55px; } }

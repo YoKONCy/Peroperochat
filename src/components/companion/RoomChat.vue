@@ -72,7 +72,7 @@ import { createTextRenderCache } from '../../utils/textRenderCache'
 import { visibleMessage } from '../../utils/messageContent'
 
 const props = defineProps({
-  agent: { type: Object, required: true }, messages: { type: Array, default: () => [] }, modelValue: { type: String, default: '' },
+  agent: { type: Object, required: true }, messages: { type: /** @type {import('vue').PropType<import('../../types/ui').ChatMessage[]>} */ (Array), default: () => [] }, modelValue: { type: String, default: '' },
   mode: { type: String, default: 'rest' }, busy: Boolean, keyboardOpen: Boolean, image: { type: String, default: null },
   activity: { type: String, default: '' }, startedAt: [Number, String], jumpId: { type: Number, default: null },
 })

@@ -9,7 +9,7 @@ import RemoteIcon from '../remote/RemoteIcon.vue'
 import ReasoningIcon from './ReasoningIcon.vue'
 import { reasoningLevel, reasoningLabels, reasoningHints } from '../../utils/reasoningAppearance'
 import { t } from '../../i18n/remote'
-const props = defineProps({ modelValue: { type: String, default: '' }, options: { type: Array, default: () => [] }, effective: { type: String, default: 'unknown' }, inherit: Boolean, compact: Boolean, disabled: Boolean })
+const props = defineProps({ modelValue: { type: String, default: '' }, options: { type: /** @type {import('vue').PropType<import('../../types/ui').ChoiceOption[]>} */ (Array), default: () => [] }, effective: { type: String, default: 'unknown' }, inherit: Boolean, compact: Boolean, disabled: Boolean })
 const emit = defineEmits(['update:modelValue'])
 const tr = (key, values) => t(key, values, 'expression')
 const open = ref(false)

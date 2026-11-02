@@ -58,6 +58,7 @@ async function inlineMath(markup) {
   while (walker.nextNode()) if (!walker.currentNode.parentElement?.closest('code,pre,a')) nodes.push(walker.currentNode)
   let count = 0
   for (const node of nodes) {
+    if (!(node instanceof Text)) continue
     const source = node.data, pattern = /(?<![\\$])\$(?!\$)([^\n$]+?)(?<!\\)\$(?!\$)/g
     if (!pattern.test(source)) continue
     pattern.lastIndex = 0

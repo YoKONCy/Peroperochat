@@ -1,14 +1,15 @@
 <template>
   <Teleport to="body">
     <Transition name="room-drawer" appear @after-leave="$emit('close')">
-      <div v-if="visible" class="room-drawer-overlay companion-surface" data-ui="soft" :class="[`room-drawer-overlay--${variant}`, { 'remote-themed': remoteTheme, 'standalone-design': !remoteTheme && localTheme }]" :data-tone="tone" :data-background="background?.active ? 'active' : undefined" :data-remote-theme="remoteTheme?.mode" :data-decoration="remoteTheme?.decoration" :data-bubble="remoteTheme?.bubble" :data-reduce-motion="remoteTheme ? remoteTheme.reduceMotion : localTheme?.reduceMotion" :style="[viewportStyle, remoteTheme ? remoteTheme.style : localTheme?.style]" @click.self="requestClose">
+      <div v-if="visible" class="room-drawer-overlay companion-surface" data-ui="soft" :class="[`room-drawer-overlay--${variant}`, { 'is-detail-page': fullPage, 'remote-themed': remoteTheme, 'standalone-design': !remoteTheme && localTheme }]" :data-tone="tone" :data-background="background?.active ? 'active' : undefined" :data-remote-theme="remoteTheme?.mode" :data-decoration="remoteTheme?.decoration" :data-bubble="remoteTheme?.bubble" :data-reduce-motion="remoteTheme ? remoteTheme.reduceMotion : localTheme?.reduceMotion" :style="[viewportStyle, remoteTheme ? remoteTheme.style : localTheme?.style]" @click.self="requestClose">
         <section ref="panel" class="room-drawer-panel" role="dialog" aria-modal="true" :aria-label="title" tabindex="-1" @keydown="handleKeydown">
-          <RoomAccent v-if="!remoteTheme && localTheme" class="drawer-accent" kind="orbit" />
+          <RoomAccent v-if="!fullPage && !remoteTheme && localTheme" class="drawer-accent" kind="orbit" />
           <header class="room-drawer-header">
-            <RemoteIcon v-if="remoteTheme && remoteTheme.decoration !== 'none'" class="drawer-emblem" :name="remoteTheme.decoration" artwork />
+            <button v-if="fullPage" class="room-icon-button drawer-page-back" :aria-label="t('返回')" :disabled="busy" @click="requestClose"><component :is="remoteTheme ? RemoteIcon : RoomIcon" name="back" /></button>
+            <RemoteIcon v-else-if="remoteTheme && remoteTheme.decoration !== 'none'" class="drawer-emblem" :name="remoteTheme.decoration" artwork />
             <CompanionEmblem v-else-if="!remoteTheme" class="drawer-emblem" />
             <div><span v-if="subtitle" class="room-drawer-eyebrow">{{ subtitle }}</span><h2>{{ title }}</h2></div>
-            <button class="room-icon-button" aria-label="关闭" :disabled="busy" @click="requestClose"><component :is="remoteTheme ? RemoteIcon : RoomIcon" name="close" /></button>
+            <button v-if="!fullPage" class="room-icon-button" :aria-label="t('关闭')" :disabled="busy" @click="requestClose"><component :is="remoteTheme ? RemoteIcon : RoomIcon" name="close" /></button>
           </header>
           <div class="room-drawer-content"><slot /></div>
           <footer v-if="$slots.footer" class="room-drawer-footer"><slot name="footer" :close="requestClose" /></footer>
@@ -19,7 +20,8 @@
 </template>
 
 <script setup>
-import { ref, inject, onMounted, onBeforeUnmount, nextTick } from 'vue'
+import { ref, computed, inject, onMounted, onBeforeUnmount, nextTick } from 'vue'
+import { t } from '../../i18n/remote'
 import { REMOTE_THEME } from '../../services/remoteTheme'
 import { LOCAL_APPEARANCE } from '../../stores/appearance'
 import { APP_BACKGROUND } from '../../services/appBackground'
@@ -37,8 +39,10 @@ const { viewportStyle } = useRoomViewport()
 const remoteTheme = inject(REMOTE_THEME, null)
 const localTheme = inject(LOCAL_APPEARANCE, null)
 const background = inject(APP_BACKGROUND, null)
+const fullPage = computed(() => props.variant === 'page' || !!remoteTheme && ['editor', 'archive'].includes(props.variant))
 let previousFocus = null, unregisterFeedback = null
 function requestClose() { if (!props.busy && props.beforeClose?.() !== false) visible.value = false }
+defineExpose({ requestClose })
 function handleKeydown(event) {
   if (event.key === 'Escape') { event.stopPropagation(); requestClose(); return }
   if (event.key !== 'Tab') return
@@ -71,6 +75,14 @@ onBeforeUnmount(() => { unregisterFeedback?.(); if (previousFocus?.isConnected) 
 .room-drawer-overlay--editor .room-drawer-header { border-bottom: 1px solid var(--room-line); padding-top: 20px; padding-bottom: 18px; }
 .room-drawer-overlay--editor .room-drawer-content { display: flex; flex: 1; padding: 0; overflow: hidden; }
 .room-drawer-panel { transform-origin: bottom center; }
+.room-drawer-overlay.is-detail-page { padding: 0; align-items: stretch; background: var(--room-page); }
+.room-drawer-overlay.is-detail-page .room-drawer-panel { width: min(100%, 760px); height: 100%; max-height: 100%; border: 0; border-radius: 0; box-shadow: none; }
+.is-detail-page .room-drawer-header { padding-top: max(16px, env(safe-area-inset-top)); border-bottom: 1px solid var(--room-line); }
+.is-detail-page .room-drawer-content { flex: 1; padding-top: 18px; }
+.is-detail-page .room-drawer-header .drawer-page-back { background: transparent; width: 40px; height: 40px; }
+.is-detail-page .room-drawer-header .drawer-page-back:hover svg { transform: none; }
+.room-drawer-enter-from.is-detail-page .room-drawer-panel { transform: translateX(18px); }
+.room-drawer-leave-to.is-detail-page .room-drawer-panel { transform: translateX(10px); }
 .room-drawer-enter-active { transition: opacity .28s; }
 .room-drawer-leave-active { transition: opacity .18s; }
 .room-drawer-enter-active .room-drawer-panel { transition: transform .28s var(--room-spring); }

@@ -25,7 +25,7 @@
         <div :key="panel + ':' + selectedIndex" class="prompt-editor-scroll">
           <template v-if="panel === 'documents'">
             <RemoteFields v-model="currentEntry" :fields="[field('name', 'text', { max: 100 })]" :disabled="busy" />
-            <label v-if="editingPrompt" class="prompt-body-field"><span>{{ tr('提示词正文') }}<small>{{ tr('{0} 字', [currentEntry.body?.length || 0]) }}</small></span><textarea :value="currentEntry.body || ''" :aria-label="tr('提示词正文')" :disabled="busy" maxlength="200000" spellcheck="false" @input="updateBody($event.target.value)" /></label>
+            <label v-if="editingPrompt" class="prompt-body-field"><span>{{ tr('提示词正文') }}<small>{{ tr('{0} 字', [currentEntry.body?.length || 0]) }}</small></span><textarea :value="currentEntry.body || ''" :aria-label="tr('提示词正文')" :disabled="busy" maxlength="200000" spellcheck="false" @input="updateBody(inputValue($event))" /></label>
             <article v-else class="prompt-body-preview"><RemoteRichText v-if="currentEntry.body" :source="currentEntry.body" :node-id="'prompt-' + currentEntry.id" /><p v-else class="remote-help">{{ tr('正文还是空的，切到编辑开始写吧') }}</p></article>
             <details class="prompt-entry-metadata"><summary><RemoteIcon name="settings" /><span>{{ tr('条目设置') }}</span><RemoteIcon name="down" /></summary><p class="remote-help">{{ tr('标识用于框架引用，修改前请确认关联项') }}</p><RemoteFields v-model="currentEntry" :fields="documentMetadata" :disabled="busy" /></details>
           </template>
@@ -44,6 +44,7 @@
   </div>
 </template>
 <script setup>
+import { inputValue } from '../../utils/domEvents'
 import RemoteFeedback from './RemoteFeedback.vue'
 import { ref, computed, onMounted, watch } from 'vue'
 import RemoteRichText from './RemoteRichText.vue'

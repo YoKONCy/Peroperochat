@@ -1,18 +1,19 @@
 <template>
-  <details v-if="items.length" class="tool-timeline" @pointerdown.stop @click.stop @contextmenu.stop @toggle="$emit('resize')">
-    <summary><RoomIcon name="model" /><span>工具 · {{ items.length }} 项</span><small>{{ stateLabel }}</small><RoomIcon class="tool-timeline-chevron" name="down" /></summary>
+  <SoftDisclosure v-if="items.length" class="tool-timeline" @pointerdown.stop @click.stop @contextmenu.stop @resize="$emit('resize')">
+    <template #summary><RoomIcon name="model" /><span>工具 · {{ items.length }} 项</span><small>{{ stateLabel }}</small><RoomIcon class="tool-timeline-chevron" name="down" /></template>
     <ol>
       <li v-for="(item, index) in items" :key="item.id" :data-status="item.status">
-        <span class="tool-timeline-node" aria-hidden="true">{{ index + 1 }}</span>
+        <span class="tool-timeline-node" aria-hidden="true">{{ Number(index) + 1 }}</span>
         <div><div class="tool-timeline-heading"><strong>{{ Object.hasOwn(names, item.name) ? names[item.name] : '工具调用' }}</strong><span>{{ Object.hasOwn(statuses, item.status) ? statuses[item.status] : '已记录' }}</span></div><p v-if="item.summary">{{ item.summary }}</p></div>
       </li>
     </ol>
-  </details>
+  </SoftDisclosure>
 </template>
 <script setup>
 import { computed } from 'vue'
 import RoomIcon from './RoomIcon.vue'
-const props = defineProps({ items: { type: Array, default: () => [] } })
+import SoftDisclosure from './SoftDisclosure.vue'
+const props = defineProps({ items: { type: /** @type {import('vue').PropType<import('../../types/ui').ToolItem[]>} */ (Array), default: () => [] } })
 defineEmits(['resize'])
 const names = { query_diary: '查日记', write_diary: '写日记', update_character: '更新角色', query_reminders: '查提醒', manage_reminder: '管理提醒' }
 const statuses = { running: '进行中', staged: '待保存', completed: '完成', failed: '失败', not_applied: '未保存', interrupted: '已中断' }

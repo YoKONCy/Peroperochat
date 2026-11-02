@@ -6,7 +6,7 @@ use sha2::{Digest, Sha256};
 use tauri::{AppHandle, Manager};
 use crate::{local::types::*, mode::{Coordinator, Token}};
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all="camelCase", deny_unknown_fields)]
 pub struct TrustedCertificate { pub origin:String, pub fingerprint:String, pub der:Vec<u8> }
 #[derive(Clone, Debug, Serialize)]
@@ -146,21 +146,24 @@ pub async fn remote_trust_certificate(app:AppHandle,profile_id:String,fingerprin
     {let _gate=mode.gate(Some(&mode_token),false)?;}
     let client=super::transport::client_for(&profile.endpoint,certificate.as_ref())?;
     let secret=super::vault::load(&app,profile.credential_key())?;
-    let identity=super::transport::probe_with(&client,&profile.endpoint,&secret).await?;
-    if identity.server_id!=profile.server_id {return Err(ChatError::new("REMOTE_IDENTITY_CHANGED","这个地址的 infOS 已更换，请重新添加连接"));}
+    let verified=super::identity::verify(&client,&profile,&secret).await?;
+    profile=super::identity::persist(mode.path(),&mode_token,&verified)?;
     let _switch=mode.switch_lock.lock().await;
     {let _gate=mode.gate(Some(&mode_token),false)?;}
     let current=super::profiles::get(&mode,&profile_id)?;
-    if current.credential_id!=profile.credential_id || current.certificate.as_ref().map(|pin|&pin.fingerprint)!=profile.certificate.as_ref().map(|pin|&pin.fingerprint) {return Err(ChatError::new("REMOTE_CONFLICT","连接刚刚有变化，请重新核对证书"));}
+    if current!=profile {return Err(ChatError::new("REMOTE_CONFLICT","连接刚刚有变化，请重新核对证书"));}
     let active=mode_token.target==(Target::Remote {profile_id:profile_id.clone()});
     if active {
         let state=mode.begin_switch(mode_token.target.clone())?;let _=app.emit("mode-event",state);super::stop_all(&app);
         if let Err(error)=super::background::suspend_async(app.clone()).await {if let Ok(state)=mode.fail() {let _=app.emit("mode-event",state);}return Err(error);}
     }
-    profile.certificate=certificate;
+    let expected=profile.clone();profile.certificate=certificate;
     let saved=(||->ChatResult<()> {
-        let conn=crate::mode::open_existing(mode.path())?;
-        conn.execute("UPDATE remote_profiles SET value=?1 WHERE id=?2",rusqlite::params![serde_json::to_string(&profile).map_err(|_|invalid())?,profile_id])?;
+        let mut conn=crate::mode::open_existing(mode.path())?;
+        let tx=conn.transaction_with_behavior(rusqlite::TransactionBehavior::Immediate)?;
+        if super::profiles::read_in(&tx,&profile_id)?!=expected {return Err(ChatError::new("REMOTE_CONFLICT","连接刚刚有变化，请重新核对证书"));}
+        tx.execute("UPDATE remote_profiles SET value=?1 WHERE id=?2",rusqlite::params![serde_json::to_string(&profile).map_err(|_|invalid())?,profile_id])?;
+        tx.commit()?;
         Ok(())
     })();
     if active {

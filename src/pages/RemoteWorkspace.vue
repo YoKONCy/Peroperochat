@@ -1,5 +1,5 @@
 <template>
-  <main class="remote-workspace remote-themed" data-ui="soft" :class="{ 'is-chat-room': tab === 'chat' }" :data-background="background.active ? 'active' : undefined" :data-keyboard-open="keyboardOpen" :data-remote-theme="theme.mode" :data-decoration="theme.decoration" :data-bubble="theme.bubble" :data-reduce-motion="theme.reduceMotion" :style="[viewportStyle, theme.style]" :inert="drawer || detail || resource ? true : undefined">
+  <main class="remote-workspace remote-themed" data-ui="soft" :class="{ 'is-chat-room': tab === 'chat' || tab === 'conversations' && conversationHub?.roomId }" :data-background="background.active ? 'active' : undefined" :data-keyboard-open="keyboardOpen" :data-remote-theme="theme.mode" :data-decoration="theme.decoration" :data-bubble="theme.bubble" :data-reduce-motion="theme.reduceMotion" :style="[viewportStyle, theme.style]" :inert="drawer || detail || resource ? true : undefined">
     <AppBackgroundLayer :background="background" />
     <header v-if="tab === 'chat'" class="chat-room-header">
       <button type="button" class="chat-header-back" aria-label="返回上一页" @click="returnFromChat"><RoomIcon name="back" /></button>
@@ -7,20 +7,19 @@
       <div class="chat-header-heading"><button type="button" class="chat-header-name" aria-label="选择角色与会话" @click="showThreads"><span>{{ agent?.name || '选择会话' }}</span><RoomIcon v-if="theme.decoration !== 'none'" name="bow" /></button><button type="button" class="chat-header-topic" @click="showThreads"><i :data-online="online" /><span>{{ selection?.title || '选一段对话，接着聊' }}</span><RoomIcon name="down" /></button></div>
       <button type="button" class="chat-header-more" aria-label="当前会话操作" @click="drawer = 'actions'"><RoomIcon name="more" /></button>
     </header>
-    <header v-else-if="!['home', 'conversations'].includes(tab)" class="remote-header phase-global-header">
-      <button class="remote-avatar-button" :aria-label="`${agent?.name || '角色'}资料`" @click="drawer = 'character'"><RemoteAvatar :id="agent?.id" :label="agent?.name" /><span class="remote-presence" :class="{ online }" /></button>
-      <div class="remote-heading"><button class="remote-server" @click="drawer = 'connections'">infOS<span>{{ profile?.displayName || t('远程连接') }}</span><RoomIcon name="down" /></button></div>
+    <header v-else-if="!['home', 'conversations'].includes(tab)" class="remote-header phase-global-header renewal-connection-bar">
+      <button v-if="tab === 'inbox'" class="room-icon-button" :aria-label="t('返回')" @click="changeTab('home')"><RoomIcon name="back" /></button>
+      <button class="renewal-connection-label" @click="drawer = 'connections'"><i :data-online="online" /><span>{{ profile?.displayName || 'infOS' }}</span><small v-if="!online">{{ t('暂时离线') }}</small><RoomIcon name="down" /></button>
       <button class="room-icon-button remote-inbox-button" :aria-label="`通知与待处理事项${inboxCount ? `，${inboxCount} 项` : ''}`" @click="changeTab('inbox')"><RoomIcon name="bell" /><i v-if="inboxCount">{{ inboxCount > 99 ? '99+' : inboxCount }}</i></button>
-      <button class="room-icon-button" aria-label="切换空间与连接" @click="drawer = 'connections'"><RoomIcon name="connection" /></button>
     </header>
-    <RemoteFeedback :message="!online || !remoteState.ready ? connectionLabel : ''" :tone="needsConnectionSettings ? 'warning' : 'info'" :action-label="needsConnectionSettings ? '连接设置' : !reconnecting && !remoteState.initializing ? '重试' : undefined" @action="needsConnectionSettings ? drawer = 'connections' : reconnect()" />
+    <RemoteFeedback :message="!online || !remoteState.ready ? connectionLabel : ''" :tone="needsConnectionSettings ? 'warning' : 'info'" :action-label="needsConnectionSettings ? '连接设置' : !reconnecting && !remoteState.initializing ? '重试' : undefined" @action="() => { if (needsConnectionSettings) drawer = 'connections'; else reconnect() }" />
     <RemoteFeedback v-if="!drawer && !detail && !resource" :message="error" @dismiss="error = ''" />
     <RemoteFeedback :message="recoveryError" :action-label="t('重试')" @action="loadDraftRecoveries" />
     <RemoteFeedback :message="storageError" action-label="重试" @action="retryPersist" />
 
     <div class="remote-page-stage" :data-direction="navDirection" :aria-busy="navigationPending">
     <Transition name="workspace-page" @before-leave="deactivatePage" @before-enter="activatePage"><section v-show="tab === 'home'" class="workspace-page" data-page="home" :inert="tab !== 'home' ? true : undefined">
-    <RemoteHome v-if="visitedPages.includes('home')" :agent="agent" :state="characterState" :profile="profile" :selection="selection" :image="cg" :show-cg="display.showCg" :decoration="theme.decoration" :inbox-count="inboxCount" @art="drawer = 'art'" @connections="drawer = 'connections'" @appearance="drawer = 'appearance'" @resume="changeTab('chat')" @threads="showThreads" @tasks="changeTab('tasks')" @library="changeTab('library')" @inbox="changeTab('inbox')" @detail="detail = $event" />
+    <RemoteHome v-if="visitedPages.includes('home')" :agent="agent" :state="characterState" :profile="profile" :selection="selection" :image="cg" :show-cg="display.showCg" :decoration="theme.decoration" :inbox-count="inboxCount" @art="drawer = 'art'" @connections="drawer = 'connections'" @appearance="drawer = 'appearance'" @resume="changeTab('chat')" @threads="showThreads" @tasks="changeTab('tasks')" @library="openLibrary" @memories="openLibrary('memories')" @groups="openGroups" @inbox="changeTab('inbox')" @detail="detail = $event" />
     </section></Transition>
     <Transition name="workspace-page" @before-leave="deactivatePage" @before-enter="activatePage"><section v-show="tab === 'chat'" class="remote-conversation workspace-page" data-page="chat" :inert="tab !== 'chat' ? true : undefined">
       <div v-if="selection && isCached && !online" class="remote-cache-note">离线中，先看看上次的对话。</div>
@@ -64,12 +63,12 @@
     </section></Transition>
 
     <Transition name="workspace-page" @before-leave="deactivatePage" @before-enter="activatePage" @after-enter="restorePagePosition"><section v-if="visitedPages.includes('conversations')" v-show="tab === 'conversations'" class="remote-section-body workspace-page phase-conversation-page" data-page="conversations" :inert="tab !== 'conversations' ? true : undefined"><RemoteConversationHub ref="conversationHub" :active="tab === 'conversations'" :agent-id="selection?.agentId || remoteState.activeAgentId" @single="prepareSingleList" @create="createConversation" @pending="showManagementPending" @resource="openResource"><template #single><button v-if="recoveredDrafts.length" class="room-secondary-button" @click="recoveryPreview = null; recoveryNotice = ''; drawer = 'draft-recoveries'"><RoomIcon name="edit" />{{ t('保留的草稿') }} · {{ recoveredDrafts.length }}</button><label v-if="remoteState.agents.length > 8" class="phase-search"><RoomIcon name="search" /><input v-model="agentSearch" :placeholder="t('查找角色')" :aria-label="t('查找角色')" /></label><div class="phase-agent-picker"><button v-for="item in visibleAgents" :key="item.id" :class="{ selected: pickerAgent === item.id }" :aria-pressed="pickerAgent === item.id" @click="pickerAgent = item.id; threadPage = 1; loadThreads()"><RemoteAvatar :id="item.id" :label="item.name" fit="contain" /><span class="phase-agent-name">{{ item.name }}</span></button></div><div class="remote-list-toolbar"><button class="room-text-button" :disabled="!online || creating || !pickerAgent" @click="createConversation"><RoomIcon name="plus" />{{ t('新建会话') }}</button><button class="room-icon-button" :disabled="threadLoading" :aria-label="t('刷新')" @click="loadThreads"><RoomIcon name="refresh" /></button></div><RemoteFeedback :message="threadError" /><p v-if="threadLoading && !threads.length" class="phase-empty">{{ t('正在读取…') }}</p><p v-else-if="!threads.length" class="phase-empty">{{ t('这里还没有消息') }}</p><RemoteThreadList :threads="threads" :first-page="threadPage === 1" :agents="remoteState.agents" :agent-id="pickerAgent" :selected-id="selection?.threadId" :online="online" :disabled="mutating || navigationPending" @open="selectConversation({ threadId: $event.id, agentId: $event.agentId || pickerAgent, title: $event.title || t('新的对话') })" @manage="openThreadActions" /><div v-if="threadPage > 1 || moreThreads" class="remote-pagination"><button :disabled="threadLoading || threadPage === 1" @click="threadPage--; loadThreads()">{{ t('上一页') }}</button><span>{{ threadPage }}</span><button :disabled="threadLoading || !moreThreads" @click="threadPage++; loadThreads()">{{ t('下一页') }}</button></div></template></RemoteConversationHub></section></Transition>
-<Transition name="workspace-page" @before-leave="deactivatePage" @before-enter="activatePage" @after-enter="restorePagePosition">    <div v-if="tab === 'manage'" class="remote-section-body workspace-page" data-page="manage"><RemoteManager ref="manager" :key="`${selection?.agentId || remoteState.activeAgentId}:${selection?.threadId}`" :agent-id="selection?.agentId || remoteState.activeAgentId" :thread-id="selection?.threadId" :initial-section="managementSection" @section-change="managementSection = $event" @ready="restoreManagementPosition" @pending="showManagementPending" @resource="openResource" @thread="fromReference" @context="useWorkbenchContext" @tasks="changeTab('tasks')" @appearance="drawer = 'appearance'" /></div></Transition>
-    <Transition v-for="pageId in ['tasks', 'library', 'inbox']" :key="pageId" name="workspace-page" @before-leave="deactivatePage" @before-enter="activatePage"><section v-if="visitedPages.includes(pageId)" v-show="tab === pageId" class="remote-section-body workspace-page" :data-page="pageId" :inert="tab !== pageId ? true : undefined"><RemoteTaskHub v-if="pageId === 'tasks'" :ref="setTaskHub" :active="tab === 'tasks' && !detail && !drawer && !resource" :agent-id="selection?.agentId || remoteState.activeAgentId" :thread-id="selection?.threadId" @manage="openManagement" @detail="detail = $event" @thread="fromReference" @pending="taskPending" @create-task="drawer = 'dispatch'" /><RemoteCollection v-else :active="tab === pageId" :kind="pageId" :agent-id="selection?.agentId || remoteState.activeAgentId" :thread-id="selection?.threadId" @manage="openManagement" @resource="openResource" @detail="detail = $event" @thread="fromReference" @pending="pending = $event; drawer = 'pending'" @create-task="drawer = 'dispatch'" /></section></Transition>
+<Transition name="workspace-page" @before-leave="deactivatePage" @before-enter="activatePage" @after-enter="restorePagePosition">    <div v-if="tab === 'manage'" class="remote-section-body workspace-page" data-page="manage"><RemoteManager ref="manager" :key="`${selection?.agentId || remoteState.activeAgentId}:${selection?.threadId}`" :agent-id="selection?.agentId || remoteState.activeAgentId" :thread-id="selection?.threadId" :initial-section="managementSection" :initial-category="managementCategory" @category-change="managementCategory = $event" @connections="drawer = 'connections'" @tools="openToolSettings" @section-change="managementSection = $event" @ready="restoreManagementPosition" @pending="showManagementPending" @resource="openResource" @thread="fromReference" @context="useWorkbenchContext" @tasks="changeTab('tasks')" @appearance="drawer = 'appearance'" /></div></Transition>
+    <Transition v-for="pageId in ['tasks', 'library', 'inbox']" :key="pageId" name="workspace-page" @before-leave="deactivatePage" @before-enter="activatePage"><section v-if="visitedPages.includes(pageId)" v-show="tab === pageId" class="remote-section-body workspace-page" :data-page="pageId" :inert="tab !== pageId ? true : undefined"><RemoteTaskHub v-if="pageId === 'tasks'" :ref="setTaskHub" :active="tab === 'tasks' && !detail && !drawer && !resource" :agent-id="selection?.agentId || remoteState.activeAgentId" :thread-id="selection?.threadId" @manage="openManagement" @detail="detail = $event" @thread="fromReference" @pending="taskPending" @create-task="drawer = 'dispatch'" /><RemoteCollection v-else :initial-source="pageId === 'library' ? librarySource : 'files'" @source-change="pageId === 'library' && (librarySource = $event)" :active="tab === pageId" :kind="pageId" :agent-id="selection?.agentId || remoteState.activeAgentId" :thread-id="selection?.threadId" @manage="openManagement" @resource="openResource" @detail="detail = $event" @thread="fromReference" @pending="pending = $event; drawer = 'pending'" @create-task="drawer = 'dispatch'" /></section></Transition>
     </div>
-    <nav v-if="!keyboardOpen" class="remote-navigation" aria-label="远程客户端导航"><button v-for="item in tabs" :key="item.id" :disabled="navigationPending" :aria-current="(tab === item.id || item.id === 'chat' && tab === 'conversations') ? 'page' : undefined" :class="{ selected: tab === item.id || item.id === 'chat' && tab === 'conversations' }" @click="item.id === 'chat' ? showThreads() : changeTab(item.id)"><RoomIcon v-if="tab === item.id && theme.decoration !== 'none'" class="remote-nav-ornament" :name="theme.decoration" artwork /><span><RoomIcon :name="item.icon" /></span>{{ t(item.label) }}</button></nav>
+    <nav v-if="!keyboardOpen && tab !== 'chat' && !(tab === 'conversations' && conversationHub?.roomId)" class="remote-navigation" aria-label="远程客户端导航"><button v-for="item in tabs" :key="item.id" :disabled="navigationPending" :aria-current="(tab === item.id || item.id === 'chat' && tab === 'conversations') ? 'page' : undefined" :class="{ selected: tab === item.id || item.id === 'chat' && tab === 'conversations' }" @click="item.id === 'chat' ? showThreads() : changeTab(item.id)"><RoomIcon v-if="tab === item.id && theme.decoration !== 'none'" class="remote-nav-ornament" :name="theme.decoration" artwork /><span><RoomIcon :name="item.icon" /></span>{{ t(item.label) }}</button></nav>
 
-    <RoomDrawer v-if="drawer === 'appearance'" title="显示偏好" subtitle="主题、配色与本机角色外观" :tone="tone" @close="drawer = null"><RemoteAppearance :display="display" :character="appearance" :agent="agent" :ready="themeReady" :saving="themeSaving" :save-error="themeError" :save-character="saveCharacter" @change="changeDisplay" @save="persistTheme" /></RoomDrawer>
+    <RoomDrawer v-if="drawer === 'appearance'" variant="page" title="显示偏好" subtitle="主题、配色与本机角色外观" :tone="tone" @close="drawer = null"><RemoteAppearance :display="display" :character="appearance" :agent="agent" :ready="themeReady" :saving="themeSaving" :save-error="themeError" :save-character="saveCharacter" @change="changeDisplay" @save="persistTheme" /></RoomDrawer>
     <RoomDrawer v-if="drawer === 'draft-recoveries'" :title="recoveryPreview?.title || t('保留的草稿')" :tone="tone" :busy="recoveryBusy" @close="drawer = null; recoveryPreview = null; recoveryNotice = ''; error = ''">
       <RemoteFeedback :message="error" /><RemoteFeedback :message="recoveryNotice" tone="success" />
       <template v-if="!recoveryPreview"><p class="remote-help">{{ t('原会话已不可用，未发送的内容留在这里。') }}</p><div class="remote-record-list"><button v-for="item in recoveredDrafts" :key="JSON.stringify([item.agentId, item.threadId])" class="remote-record" :disabled="recoveryBusy" @click="openRecoveredDraft(item)"><RoomIcon name="edit" /><span><strong>{{ item.title || t('保留的草稿') }}</strong><small>{{ remoteState.agents.find(agent => agent.id === item.agentId)?.name || t('角色') }}</small></span><RoomIcon name="next" /></button></div><p v-if="!recoveredDrafts.length" class="room-empty">{{ t('没有保留的草稿') }}</p></template>
@@ -177,6 +176,8 @@ import { resolveRemoteResource } from '../services/remoteResources'
 const token = currentToken()
 useRemoteLocaleSync()
 const conversationHub = ref(null), taskHub = ref(null), detailPanel = ref(null)
+const librarySource = ref('files')
+const managementCategory = ref(null)
 const managementSection = ref(null), messageAction = ref(null), manager = ref(null)
 const imageMode = ref('auto')
 const inputCapabilities = ref(null), composerTools = ref(null), controlsBusy = ref(false)
@@ -591,29 +592,37 @@ async function changeTab(value, { fromHistory = false, replace = false } = {}) {
     if (intent !== navigationVersion || disposed) return false
     const order = ['home', 'conversations', 'chat', 'tasks', 'library', 'manage', 'inbox']
     navDirection.value = order.indexOf(value) < order.indexOf(previous) ? 'backward' : 'forward'
-    if (oldPage?.contains(document.activeElement)) document.activeElement.blur?.()
+    if (oldPage?.contains(document.activeElement)) blurActiveElement()
     tab.value = value
     if (value === 'chat') { await restoreScroll(reading); guard(request); if (online.value) refreshConversation() }
     return true
   } catch (failure) { if (!disposed && failure.code !== 'UI_CANCELLED') error.value = failure.message; return false }
   finally { navigationPending.value = false }
 }
-function deactivatePage(element) { element.inert = true; if (element.contains(document.activeElement)) document.activeElement.blur?.() }
+function blurActiveElement() { if (document.activeElement instanceof HTMLElement) document.activeElement.blur() }
+function deactivatePage(element) { element.inert = true; if (element.contains(document.activeElement)) blurActiveElement() }
 function activatePage(element) { element.inert = false }
 function restoreManagementPosition() { const element = document.querySelector('.workspace-page[data-page="manage"]'); if (element && tab.value === 'manage') restorePagePosition(element) }
 function restorePagePosition(element) { element.scrollTop = pagePositions.get(element.dataset.page) || 0 }
 function returnFromChat() {
   const previous = router.options.history.state.back
-  if (previous && new URL(previous, location.href).searchParams.get('workspace') === chatReturnPage.value) router.back()
+  if (typeof previous === 'string' && previous && new URL(previous, location.href).searchParams.get('workspace') === chatReturnPage.value) router.back()
   else changeTab(chatReturnPage.value || 'home', { replace: true })
 }
 function workspaceKeydown(event) {
   if (event.key !== 'Escape' || event.defaultPrevented || drawer.value || detail.value || resource.value) return
-  if (keyboardOpen.value) document.activeElement?.blur?.()
+  if (keyboardOpen.value) blurActiveElement()
   else if (tab.value === 'chat') returnFromChat()
   else if (tab.value === 'conversations' && conversationHub.value?.roomId) conversationHub.value.back()
-  else if (tab.value === 'manage' && managementSection.value) manager.value?.back?.()
+  else if (tab.value === 'manage' && manager.value?.hasSubpage) manager.value?.back?.()
   else if (tab.value !== 'home') changeTab('home')
+}
+async function openGroups() { if (await changeTab('conversations')) { await nextTick(); await conversationHub.value?.showGroups?.() } }
+async function openLibrary(source = 'files') { if (await changeTab('library')) librarySource.value = ['files', 'memories', 'documents'].includes(source) ? source : 'files' }
+async function openToolSettings() {
+  if (selection.value) { drawer.value = 'thread-settings'; return }
+  try { await showThreads(); await nextTick(); if (!disposed && tab.value === 'conversations') error.value = t('先选择会话，再调整它的工具权限。', [], 'renewal') }
+  catch (failure) { if (!disposed) error.value = failure.message }
 }
 async function openManagement(section = null) {
   try {
@@ -893,7 +902,7 @@ onMounted(async () => {
       return false
     }
     if (tab.value === 'conversations' && conversationHub.value?.roomId) { await conversationHub.value.back(); return false }
-    if (tab.value === 'manage' && managementSection.value) { manager.value?.back?.(); return false }
+    if (tab.value === 'manage' && manager.value?.hasSubpage) { manager.value?.back?.(); return false }
     try { await preparePageLeave(); await persistCurrent(); guard(); return true }
     catch (failure) { if (!disposed && failure.code !== 'UI_CANCELLED') error.value = failure.message; return false }
   })

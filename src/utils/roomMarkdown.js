@@ -3,10 +3,10 @@ import { expressionExtensions } from './parenthetical'
 import DOMPurify from 'dompurify'
 import { visibleMessage } from './messageContent'
 
-const parser = new Marked({ gfm: true, breaks: true, extensions: expressionExtensions })
+const parser = new Marked({ gfm: true, async: false, breaks: true, extensions: expressionExtensions })
 
 export function roomMarkdown(content) {
-  const html = DOMPurify.sanitize(parser.parse(visibleMessage(content)), { USE_PROFILES: { html: true } })
+  const html = DOMPurify.sanitize(parser.parse(visibleMessage(content), { async: false }), { USE_PROFILES: { html: true } })
   const fragment = document.createElement('template')
   fragment.innerHTML = html
   for (const link of fragment.content.querySelectorAll('a')) {

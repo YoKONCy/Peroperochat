@@ -1,0 +1,191 @@
+/* 设计稿的共同尺度：轻阴影、连续圆角与清楚的阅读层级。 */
+:is(.companion-surface.companion-surface, .remote-themed.remote-themed)[data-ui='soft'] {
+  --ui-depth: 0px; --ui-depth-control: 0px; --ui-depth-small: 0px; --ui-press-travel: 1px;
+  --ui-shadow: 0 3px 14px color-mix(in srgb, var(--ui-shadow-ink) 4%, transparent);
+  --ui-floating-shadow: 0 8px 28px color-mix(in srgb, var(--ui-shadow-ink) 10%, transparent);
+  --ui-press-shadow: 0 2px 6px color-mix(in srgb, var(--ui-accent) 15%, transparent);
+  --renewal-caption: max(11px, calc(var(--ui-text) - 3px));
+  --renewal-detail: max(12px, calc(var(--ui-text) - 2px));
+}
+.remote-themed.remote-themed[data-ui='soft'][data-remote-theme='dark'] {
+  --ui-shadow: 0 3px 14px rgb(0 0 0 / 12%);
+  --ui-floating-shadow: 0 8px 28px rgb(0 0 0 / 28%);
+}
+:is(.companion-surface.companion-surface, .remote-themed.remote-themed)[data-ui='soft'] :is(.room-primary-button, .room-secondary-button, .remote-action, .chromatic-action) { border-radius: 12px; }
+.remote-themed.remote-themed[data-ui='soft'] :is(.phase-card, .remote-manager-record, .remote-record, .remote-resume-card, .remote-home-task, .remote-home-file, .phase-room-tile, .task-center-card, .phase-destinations, .phase-profile-hero, .phase-metric-grid > div, .phase-destination-button, .model-editor-section) { border-radius: 18px; }
+.remote-themed.remote-themed[data-ui='soft'] :is(.phase-tile-icon, .phase-destinations > button > .phase-tile-icon, .phase-card > h3 > svg, .remote-task-icon) { border-radius: 11px; transform: none; box-shadow: none; }
+.remote-themed.remote-themed[data-ui='soft'] :is(.remote-section-heading, .remote-manager-heading, .phase-hub-heading) { margin-bottom: 18px; gap: 10px; }
+.remote-themed.remote-themed[data-ui='soft'] :is(.remote-section-heading, .remote-manager-heading, .phase-hub-heading) h1 { font-size: calc(var(--ui-text) + 8px); letter-spacing: -.035em; line-height: 1.4; }
+.remote-themed.remote-themed[data-ui='soft'] :is(.remote-section-heading, .remote-manager-heading, .phase-hub-heading) > span > small { color: var(--ui-muted); font-size: var(--renewal-caption); }
+.remote-workspace.remote-themed[data-ui='soft'] .renewal-connection-bar { min-height: 44px; padding: calc(5px + env(safe-area-inset-top)) 16px 3px; }
+.renewal-connection-label { display: flex; align-items: center; gap: 7px; min-width: 0; min-height: 38px; margin-right: auto; padding: 0 3px; border: 0; background: transparent; color: var(--ui-muted); font: inherit; font-size: var(--ui-caption); }
+.renewal-connection-label > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.renewal-connection-label > svg { width: 12px; height: 12px; flex: none; }
+.renewal-connection-label > small { white-space: nowrap; font-size: inherit; }
+.renewal-connection-label > i, .renewal-profile-strip > i { width: 6px; height: 6px; border-radius: 50%; background: var(--ui-amber); flex: none; }
+.renewal-connection-label > i[data-online='true'], .renewal-profile-strip > i[data-online='true'] { background: var(--ui-mint); }
+.remote-workspace.remote-themed[data-ui='soft'] .remote-navigation { padding: 6px 8px calc(8px + env(safe-area-inset-bottom)); border-radius: 22px 22px 0 0; box-shadow: 0 -3px 20px color-mix(in srgb, var(--ui-ink) 4%, transparent); }
+.remote-workspace.remote-themed[data-ui='soft'] .remote-navigation button { gap: 4px; min-height: 51px; font-weight: 500; }
+.remote-workspace.remote-themed[data-ui='soft'] .remote-navigation button > span { width: 49px; height: 32px; border-radius: 18px; transition: background 180ms, color 180ms, transform 180ms; }
+.remote-workspace.remote-themed[data-ui='soft'] .remote-navigation button.selected > span { background: var(--ui-soft); color: var(--ui-accent); border-color: transparent; box-shadow: none; transform: none; }
+.remote-workspace.remote-themed[data-ui='soft'] .remote-navigation button.selected > span > svg { transform: none; }
+.remote-workspace.remote-themed[data-ui='soft'] .remote-nav-ornament { display: none; }
+
+/* 首页保留角色形象，把继续会话与常用目的地放在拇指可达的位置。 */
+.remote-themed.remote-themed[data-ui='soft'] .remote-resume-card { min-height: 112px; padding: 19px 54px 18px 19px; background: linear-gradient(120deg, var(--ui-soft), var(--ui-paper)); }
+.remote-themed.remote-themed[data-ui='soft'] .remote-resume-card h2 { margin: 10px 0 0; font-size: calc(var(--ui-text) + 3px); line-height: 1.55; }
+.remote-themed.remote-themed[data-ui='soft'] .remote-resume-art { display: none; }
+.renewal-home-shortcuts { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 9px; margin: 12px 0 24px; }
+.renewal-home-shortcuts > button { display: flex; align-items: center; justify-content: center; gap: 7px; min-width: 0; min-height: 59px; padding: 10px 6px; border: 1px solid var(--ui-line); border-radius: 15px; background: var(--ui-paper); color: var(--ui-ink); font: inherit; font-size: var(--renewal-caption); }
+.renewal-home-shortcuts svg { width: 19px; height: 19px; flex: none; color: var(--ui-tone); }
+.renewal-profile-strip { display: flex; align-items: center; gap: 12px; padding: 16px; margin-bottom: 17px; border: 1px solid var(--ui-line); border-radius: 18px; background: var(--ui-paper); }
+.renewal-profile-strip > .character-avatar { width: 43px; height: 43px; border-radius: 50%; flex: none; }
+.renewal-profile-strip > span { display: grid; gap: 6px; min-width: 0; flex: 1; }
+.renewal-profile-strip strong { color: var(--ui-ink); font-size: var(--ui-text); overflow-wrap: anywhere; }
+.renewal-profile-strip small { color: var(--ui-muted); font-size: var(--renewal-caption); line-height: 1.6; }
+.renewal-management-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin-top: 17px; }
+.renewal-management-grid > button { position: relative; display: flex; flex-direction: column; align-items: flex-start; gap: 9px; min-width: 0; padding: 19px 15px 18px; min-height: 154px; border: 1px solid var(--ui-tone-edge); border-radius: 20px; text-align: left; background: linear-gradient(135deg, var(--ui-paper) 40%, var(--ui-tone-soft)); color: var(--ui-ink); font: inherit; box-shadow: var(--ui-shadow); }
+.renewal-category-symbol { display: grid; place-items: center; width: 37px; height: 37px; border-radius: 12px; margin-bottom: 5px; background: var(--ui-tone-soft); color: var(--ui-tone); }
+.renewal-category-symbol svg { width: 22px; height: 22px; }
+.renewal-management-grid strong { font-size: var(--ui-text); font-weight: 650; }
+.renewal-management-grid small { font-size: var(--renewal-caption); line-height: 1.7; color: var(--ui-muted); }
+.renewal-category-next { position: absolute; right: 16px; top: 28px; width: 13px; height: 13px; color: var(--ui-tone); opacity: .65; }
+.renewal-management-group { margin-top: 17px; }
+.renewal-category-enter-active { transition: opacity 160ms, transform 200ms var(--ui-ease); }
+.renewal-category-leave-active { transition: opacity 100ms; pointer-events: none; }
+.renewal-category-enter-from { opacity: 0; transform: translateY(6px); }
+.renewal-category-leave-to { opacity: 0; }
+.remote-themed.remote-themed[data-ui='soft'] .renewal-management-group .phase-destinations { border-radius: 18px; }
+.remote-themed.remote-themed[data-ui='soft'] .renewal-management-group .phase-destinations > button { min-height: 77px; }
+.remote-themed.remote-themed[data-ui='soft'] .renewal-management-group .phase-tile-icon { background: var(--ui-tone-soft); border-color: var(--ui-tone-edge); color: var(--ui-tone); }
+.renewal-background-entry { display: flex; align-items: center; gap: 12px; width: 100%; padding: 17px 14px; margin: 18px 0; border: 1px solid var(--ui-blue-edge); border-radius: 17px; background: linear-gradient(120deg, var(--ui-blue-soft), var(--ui-paper)); color: var(--ui-ink); text-align: left; font: inherit; }
+.renewal-background-entry > svg:first-child { width: 30px; height: 30px; color: var(--ui-blue); }
+.renewal-background-entry > span { flex: 1; display: grid; gap: 7px; }
+.renewal-background-entry strong { font-size: var(--ui-text); }
+.renewal-background-entry small { color: var(--ui-muted); font-size: var(--renewal-caption); }
+.renewal-background-entry > svg:last-child { width: 15px; height: 15px; color: var(--ui-muted); }
+
+/* 会话内容与过程记录使用独立的密度；正文不跟随工具区域缩小。 */
+.remote-themed.remote-themed[data-ui='soft'] .chat-room-header { border-radius: 0; box-shadow: 0 1px 0 var(--ui-line); padding-bottom: 12px; }
+.remote-themed.remote-themed[data-ui='soft'] .chat-turn:not(.is-user) > .remote-surface > .remote-rich-text { border-radius: 18px; box-shadow: none; padding: 16px; }
+.remote-themed.remote-themed[data-ui='soft'] .chat-turn.is-user > .remote-surface { border-radius: 18px; box-shadow: none; }
+.remote-themed.remote-themed[data-ui='soft'] .chat-turn.is-user > .remote-surface::after { display: none; }
+.remote-themed.remote-themed[data-ui='soft'] .chat-turn:not(.is-user) > .remote-surface > .remote-rich-text::after { display: none; }
+.remote-themed.remote-themed[data-ui='soft'] .chat-speaker { margin-bottom: 8px; }
+.remote-themed.remote-themed[data-ui='soft'] .chat-composer { border-radius: 22px; background: var(--ui-paper); box-shadow: var(--ui-floating-shadow); }
+.remote-themed.remote-themed[data-ui='soft'] .chat-composer::before { display: none; }
+.remote-themed.remote-themed[data-ui='soft'] .chat-composer-config { min-height: 36px; padding-block: 0; }
+.remote-themed.remote-themed[data-ui='soft'] .chat-send { border-radius: 12px; box-shadow: none; }
+.remote-themed.remote-themed[data-ui='soft'] .chat-queue-chip { border-radius: 13px; box-shadow: none; font-size: var(--renewal-caption); }
+.chat-tool-group { min-width: 0; margin-block: 9px; }
+:is(.companion-surface.companion-surface, .remote-themed.remote-themed)[data-ui='soft'] :is(.expression-reasoning, .chat-tool-disclosure, .tool-timeline) { margin: 9px 0; border: 1px solid var(--ui-violet-edge); border-radius: 13px; background: var(--ui-violet-soft); box-shadow: none; overflow: hidden; }
+:is(.companion-surface.companion-surface, .remote-themed.remote-themed)[data-ui='soft'] .expression-reasoning[data-effort] { border-color: var(--ui-violet-edge); background: var(--ui-violet-soft); box-shadow: none; }
+:is(.companion-surface.companion-surface, .remote-themed.remote-themed)[data-ui='soft'] :is(.chat-tool-disclosure, .tool-timeline) { border-color: var(--ui-mint-edge); background: var(--ui-mint-soft); }
+:is(.companion-surface.companion-surface, .remote-themed.remote-themed)[data-ui='soft'] :is(.expression-reasoning, .chat-tool-disclosure, .tool-timeline) > summary { display: flex; align-items: center; flex-wrap: nowrap; gap: 7px; min-height: 38px; padding: 7px 10px; color: var(--ui-violet); font-size: var(--renewal-caption); line-height: 1.5; border: 0; background: transparent; }
+:is(.companion-surface.companion-surface, .remote-themed.remote-themed)[data-ui='soft'] :is(.chat-tool-disclosure, .tool-timeline) > summary { color: var(--ui-mint); }
+:is(.companion-surface.companion-surface, .remote-themed.remote-themed)[data-ui='soft'] :is(.expression-reasoning, .chat-tool-disclosure) > summary strong { color: inherit; font-size: inherit; font-weight: 550; min-width: 0; }
+:is(.companion-surface.companion-surface, .remote-themed.remote-themed)[data-ui='soft'] .expression-thought-symbol { width: 19px; height: 19px; padding: 0; border: 0; background: transparent; box-shadow: none; transform: none; flex: none; }
+:is(.companion-surface.companion-surface, .remote-themed.remote-themed)[data-ui='soft'] .expression-thought-symbol > .reasoning-icon { width: 19px; height: 19px; transform: none; }
+:is(.companion-surface.companion-surface, .remote-themed.remote-themed)[data-ui='soft'] .expression-effort-label { padding: 0; border: 0; border-radius: 0; background: transparent; color: var(--ui-muted); font-size: var(--renewal-caption); font-weight: 400; }
+.chat-reasoning-meta { display: flex; align-items: center; gap: 6px; margin-left: auto; color: var(--ui-muted); white-space: nowrap; }
+.chat-reasoning-meta small { font-size: var(--renewal-caption); }
+.chat-tool-disclosure > summary > svg:first-child { width: 16px; height: 16px; flex: none; }
+.chat-tool-disclosure > summary > span { margin-left: auto; color: var(--ui-muted); font-size: var(--renewal-caption); }
+.chat-tool-disclosure > summary > small { color: var(--ui-mint); font-size: var(--renewal-caption); white-space: nowrap; }
+.chat-tool-disclosure[data-state='failed'] > summary > span { color: var(--danger); }
+.chat-tool-disclosure[data-state='running'] > summary > svg:first-child { animation: renewal-breathe 1.8s ease-in-out infinite; }
+.chat-tool-steps { padding: 0 9px 7px; }
+.remote-themed.remote-themed[data-ui='soft'] .remote-tool-trace { margin: 0; border: 0; border-radius: 9px; background: transparent; box-shadow: none; }
+.remote-themed.remote-themed[data-ui='soft'] .remote-tool-trace > summary { display: flex; gap: 6px; min-height: 38px; padding: 6px 3px; border: 0; border-top: 1px solid color-mix(in srgb, var(--ui-mint) 15%, transparent); border-radius: 0; background: transparent; }
+.remote-themed.remote-themed[data-ui='soft'] .remote-tool-trace:is([data-state='calling'], [data-state='assembling'], [data-state='failed']) > summary { background: transparent; border-right: 0; }
+.remote-themed.remote-themed[data-ui='soft'] .remote-tool-glyph { width: 21px; height: 24px; padding: 0; flex: none; border: 0; border-radius: 7px; background: transparent; transform: none; box-shadow: none; }
+.remote-themed.remote-themed[data-ui='soft'] .remote-tool-glyph::after { display: none; }
+.remote-themed.remote-themed[data-ui='soft'] .remote-tool-glyph > svg { width: 16px; height: 16px; transform: none; }
+.remote-themed.remote-themed[data-ui='soft'] .remote-tool-heading { display: block; flex: 1; min-width: 0; padding: 0; }
+.remote-themed.remote-themed[data-ui='soft'] .remote-tool-heading strong { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: color-mix(in srgb, var(--ui-mint) 60%, var(--ui-ink)); font-size: var(--renewal-caption); font-weight: 500; }
+.remote-themed.remote-themed[data-ui='soft'] .remote-tool-meta { display: flex; flex-direction: row; align-items: center; gap: 5px; font-size: var(--renewal-caption); }
+.remote-tool-count { font-size: 10px; color: var(--ui-muted); font-variant-numeric: tabular-nums; }
+.remote-themed.remote-themed[data-ui='soft'] .remote-tool-meta > span { display: flex; }
+.remote-themed.remote-themed[data-ui='soft'] .remote-tool-meta > span > svg { width: 14px; height: 14px; padding: 1px; background: transparent; }
+.remote-themed.remote-themed[data-ui='soft'] .remote-tool-body { margin: 0 0 8px 10px; padding: 3px 0 3px 11px; border: 0; border-left: 1px solid var(--ui-mint-edge); color: var(--ui-muted); font-size: var(--renewal-caption); }
+.remote-tool-target { margin: 5px 0 8px; color: var(--ui-muted); font: inherit; overflow-wrap: anywhere; }
+.remote-themed.remote-themed[data-ui='soft'] .remote-nit-children { padding: 5px 0 0; border: 0; border-radius: 0; background: transparent; }
+.remote-themed.remote-themed[data-ui='soft'] .remote-trace-text pre { max-height: 220px; padding: 10px; border: 1px solid var(--ui-line); border-radius: 9px; background: color-mix(in srgb, var(--ui-mint-soft) 40%, var(--ui-paper)); color: color-mix(in srgb, var(--ui-ink) 72%, var(--ui-muted)); font: var(--renewal-caption)/1.75 ui-monospace, SFMono-Regular, Consolas, monospace; overflow: auto; overscroll-behavior: contain; }
+.remote-themed.remote-themed[data-ui='soft'] .remote-trace-section { margin-block: 9px; }
+.remote-themed.remote-themed[data-ui='soft'] .remote-trace-section h4 { font-size: var(--renewal-caption); margin-bottom: 6px; }
+.remote-themed.remote-themed[data-ui='soft'] .remote-trace-identity { font-size: 10px; opacity: .8; }
+:is(.companion-surface.companion-surface, .remote-themed.remote-themed)[data-ui='soft'] :is(.remote-reasoning-content, .expression-reasoning-body) { max-height: 250px; overflow: auto; overscroll-behavior: contain; margin: 0 10px 10px; padding: 10px 12px; border-radius: 9px; border: 1px solid color-mix(in srgb, var(--ui-violet) 13%, transparent); background: color-mix(in srgb, var(--ui-violet-soft) 36%, var(--ui-paper)); color: color-mix(in srgb, var(--ui-ink) 72%, var(--ui-violet)); font-size: var(--renewal-detail); line-height: 1.75; }
+.remote-themed.remote-themed[data-ui='soft'] .remote-reasoning-content :is(.remote-rich-text, .remote-rich-block) { --rich-font-size: var(--renewal-detail); --rich-text-color: color-mix(in srgb, var(--ui-ink) 72%, var(--ui-violet)); --rich-heading: var(--ui-violet); }
+:is(.companion-surface.companion-surface, .remote-themed.remote-themed)[data-ui='soft'] :is(.remote-reasoning-content, .expression-reasoning-body) .markdown-body { font-size: var(--renewal-detail); color: inherit; line-height: 1.75; }
+:is(.companion-surface.companion-surface, .remote-themed.remote-themed)[data-ui='soft'] :is(.remote-trace-chevron, .soft-fold-chevron, .tool-timeline-chevron) { width: 12px; height: 12px; flex: none; transition: transform 200ms var(--ui-ease); }
+.soft-disclosure[data-expanded='true'] > summary > :is(.remote-trace-chevron, .soft-fold-chevron, .tool-timeline-chevron) { transform: rotate(180deg); }
+.soft-disclosure[data-expanded='false'] > summary > :is(.remote-trace-chevron, .soft-fold-chevron, .tool-timeline-chevron) { transform: none; }
+:is(.companion-surface.companion-surface, .remote-themed.remote-themed)[data-ui='soft'] .soft-disclosure[open] > .soft-disclosure-body { animation: none; }
+
+/* 富文本保留现有安全解析、复制、换行与放大操作。 */
+.remote-themed.remote-themed[data-ui='soft'] .remote-rich-text { --rich-font-size: var(--ui-body); }
+:is(.companion-surface.companion-surface, .remote-themed.remote-themed)[data-ui='soft'] .markdown-body h2 { border: 0; border-radius: 0; padding: 0; background: transparent; font-size: 1.18em; line-height: 1.6; }
+:is(.companion-surface.companion-surface, .remote-themed.remote-themed)[data-ui='soft'] .markdown-body blockquote { margin: 12px 0; padding: 10px 13px; border: 0; border-left: 3px solid var(--ui-blue-edge); border-radius: 0 10px 10px 0; background: var(--ui-blue-soft); color: color-mix(in srgb, var(--ui-ink) 78%, var(--ui-muted)); box-shadow: none; }
+:is(.companion-surface.companion-surface, .remote-themed.remote-themed)[data-ui='soft'] .markdown-body blockquote::before { display: none; }
+:is(.companion-surface.companion-surface, .remote-themed.remote-themed)[data-ui='soft'] .markdown-body li { margin-block: .35em; padding-left: .15em; }
+:is(.companion-surface.companion-surface, .remote-themed.remote-themed)[data-ui='soft'] .markdown-body li::marker { color: var(--ui-accent); font-weight: 600; }
+.remote-themed.remote-themed[data-ui='soft'] .remote-rich-panel { border: 1px solid var(--ui-line); border-radius: 13px; box-shadow: none; overflow: hidden; background: var(--ui-inset); }
+.remote-themed.remote-themed[data-ui='soft'] .remote-rich-panel > header { min-height: 37px; padding: 4px 10px; background: var(--ui-soft); border-bottom: 1px solid var(--ui-line); }
+.remote-themed.remote-themed[data-ui='soft'] .remote-rich-caption { font-size: var(--renewal-caption); }
+.remote-themed.remote-themed[data-ui='soft'] .remote-rich-caption > i { background: transparent; border: 0; padding: 0; border-radius: 0; box-shadow: none; }
+.remote-themed.remote-themed[data-ui='soft'] .remote-rich-code { padding: 13px; font-size: max(12px, calc(var(--ui-text) - 1px)); line-height: 1.75; background: var(--ui-inset); }
+.remote-themed.remote-themed[data-ui='soft'] .markdown-body table { border-radius: 10px; font-size: .92em; }
+.remote-themed.remote-themed[data-ui='soft'] .markdown-body th { background: var(--ui-soft); padding: 9px 12px; }
+.remote-themed.remote-themed[data-ui='soft'] .markdown-body td { padding: 9px 12px; }
+.remote-themed.remote-themed[data-ui='soft'] .markdown-body tbody tr:nth-child(even) { background: color-mix(in srgb, var(--ui-soft) 40%, var(--ui-paper)); }
+.remote-themed.remote-themed[data-ui='soft'] .remote-file-card { border-radius: 16px; box-shadow: none; }
+.remote-themed.remote-themed[data-ui='soft'] .remote-file-card::after { display: none; }
+
+/* 页面使用全高容器，轻量确认继续使用底部浮层。 */
+.room-drawer-overlay.companion-surface[data-ui='soft'].is-detail-page { padding: 0; background: var(--ui-page); }
+.room-drawer-overlay.companion-surface[data-ui='soft'].is-detail-page .room-drawer-panel { width: min(100%, 760px); height: 100%; max-height: 100%; border: 0; border-radius: 0; box-shadow: none; background: var(--ui-page); }
+.room-drawer-overlay.companion-surface[data-ui='soft'].is-detail-page .room-drawer-header { gap: 9px; padding: calc(8px + env(safe-area-inset-top)) 16px 10px; background: var(--ui-paper); border-bottom: 1px solid var(--ui-line); }
+.room-drawer-overlay.companion-surface[data-ui='soft'].is-detail-page .room-drawer-header h2 { font-size: calc(var(--ui-text) + 3px); margin: 0; }
+.room-drawer-overlay.companion-surface[data-ui='soft'].is-detail-page .drawer-page-back { width: 39px; height: 39px; border: 0; border-radius: 12px; background: transparent; box-shadow: none; }
+.room-drawer-overlay.companion-surface[data-ui='soft'].is-detail-page .room-drawer-panel::before { display: none; }
+.renewal-leave-actions { display: flex; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
+.renewal-leave-actions > button { min-height: 42px; font-size: var(--ui-label); padding: 8px 12px; }
+.renewal-connection-guide { display: grid; gap: 11px; margin: 18px 0 24px; padding: 16px; border: 1px solid var(--ui-blue-edge); border-radius: 17px; background: var(--ui-blue-soft); }
+.renewal-connection-guide h3 { margin: 0 0 3px; font-size: var(--ui-text); color: var(--ui-ink); }
+.renewal-connection-guide ol { display: grid; gap: 12px; list-style: none; margin: 0; padding: 0; }
+.renewal-connection-guide li { display: flex; align-items: baseline; gap: 10px; font-size: var(--ui-label); line-height: 1.7; color: var(--ui-muted); }
+.renewal-connection-guide b { display: grid; place-items: center; width: 22px; height: 22px; flex: none; border-radius: 50%; background: var(--ui-paper); color: var(--ui-blue); font-size: 11px; }
+
+/* 阴影与圆角裁切分层，避免毛玻璃子层在预览上沿露出矩形尖角。 */
+:is(.companion-surface.companion-surface, .remote-themed.remote-themed)[data-ui='soft'] .background-editor { border-radius: 18px; }
+.is-detail-page .background-editor { padding: 0; margin: 0; border: 0; background: transparent; box-shadow: none; }
+.background-page-editor .background-editor-heading { display: none; }
+.background-preview-wrap { border-radius: 22px; overflow: visible; box-shadow: var(--ui-shadow); }
+.background-preview { border-radius: 21px 21px 0 0; }
+.background-preview-clip { position: relative; isolation: isolate; width: 100%; height: 100%; border-radius: inherit; overflow: hidden; clip-path: inset(0 round 21px 21px 0 0); }
+.background-preview-controls { border-radius: 0 0 21px 21px; overflow: hidden; }
+.background-gallery { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; margin: 18px 0 10px; }
+.background-gallery > button { min-width: 0; padding: 0; border: 0; background: transparent; color: var(--ui-muted); font: inherit; font-size: var(--ui-caption); line-height: 1.6; }
+.background-gallery img { display: block; width: 100%; aspect-ratio: 1.4; object-fit: cover; border: 1px solid var(--ui-line); border-radius: 13px; margin-bottom: 7px; }
+.background-gallery > button:focus-visible { outline: 2px solid var(--ui-accent); outline-offset: 4px; border-radius: 13px; }
+.background-enable > span > small { display: block; margin-top: 5px; font-size: var(--renewal-caption); line-height: 1.7; color: var(--ui-muted); }
+.background-presets > button { border-radius: 13px; }
+.background-editor-footer { position: sticky; bottom: -20px; z-index: 2; padding: 12px 0; background: var(--ui-paper); box-shadow: 0 -6px 18px color-mix(in srgb, var(--ui-ink) 3%, transparent); }
+.remote-themed.remote-themed[data-ui='soft'][data-background='active'] :is(.renewal-profile-strip, .renewal-home-shortcuts > button, .renewal-management-grid > button, .task-center-card) { background: var(--bg-panel-fill); }
+.remote-themed.remote-themed[data-ui='soft'][data-background='active'] :is(.chat-composer, .phase-group-composer) { background: var(--bg-reading-fill); }
+.remote-themed.remote-themed[data-ui='soft'][data-background='active'] :is(.remote-navigation, .chat-room-header, .renewal-connection-bar) { background: var(--bg-shell-fill); }
+
+/* 触控反馈只移动一个像素；减少动效同时关闭呼吸和折叠过渡。 */
+:is(.renewal-management-grid, .renewal-home-shortcuts, .background-gallery) > button, .renewal-background-entry { transition: transform 180ms var(--ui-ease), border-color 180ms, box-shadow 180ms; }
+:is(.renewal-management-grid, .renewal-home-shortcuts, .background-gallery) > button:active:not(:disabled), .renewal-background-entry:active:not(:disabled) { transform: translateY(1px) scale(.985); }
+.soft-disclosure > summary { transition: background-color 160ms; }
+@media (hover: hover) { :is(.renewal-management-grid, .renewal-home-shortcuts) > button:hover { border-color: var(--ui-tone); box-shadow: var(--ui-shadow); } .soft-disclosure > summary:hover { background-color: color-mix(in srgb, var(--ui-paper) 25%, transparent); } }
+@keyframes renewal-breathe { 50% { opacity: .4; } }
+@media (max-width: 360px) { .renewal-home-shortcuts > button { flex-direction: column; gap: 5px; } .renewal-management-grid { gap: 9px; } .renewal-management-grid > button { padding: 15px 12px; } .chat-tool-disclosure > summary > span { font-size: 10px; } }
+@media (min-width: 760px) { .renewal-management-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } .background-gallery img { max-height: 150px; } }
+[data-reduce-motion='true'] :is(.renewal-management-grid > button, .renewal-home-shortcuts > button, .background-gallery > button, .renewal-background-entry, .soft-disclosure > summary, .remote-trace-chevron, .soft-fold-chevron) { transition: none; }
+[data-reduce-motion='true'] .chat-tool-disclosure > summary > svg { animation: none; }
+@media (prefers-reduced-motion: reduce) { :is(.renewal-management-grid > button, .renewal-home-shortcuts > button, .background-gallery > button, .renewal-background-entry, .soft-disclosure > summary, .remote-trace-chevron, .soft-fold-chevron) { transition: none; } .chat-tool-disclosure > summary > svg { animation: none; } }
+@media (prefers-reduced-transparency: reduce) {
+  :is(.companion-surface.companion-surface, .remote-themed.remote-themed)[data-ui='soft'][data-background='active'] { --bg-panel-fill: var(--ui-paper) !important; --bg-reading-fill: var(--ui-paper) !important; --bg-shell-fill: var(--ui-raised) !important; --bg-field-fill: var(--ui-inset) !important; --bg-raised-fill: var(--ui-raised) !important; --bg-material-blur: 0px !important; }
+}

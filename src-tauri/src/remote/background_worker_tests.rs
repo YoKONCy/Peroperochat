@@ -4,19 +4,38 @@ use tokio::io::{AsyncReadExt,AsyncWriteExt};
 
 #[tokio::test]
 async fn native_receiver_replays_notifications_without_claiming_input_or_read_ack() {
+    receiver_reconnects(false).await;
+}
+#[tokio::test]
+async fn native_receiver_recovers_after_docker_recreation_with_original_device() {
+    receiver_reconnects(true).await;
+}
+async fn receiver_reconnects(recreated:bool) {
     let listener=tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();let address=listener.local_addr().unwrap();
     let root=std::env::temp_dir().join(format!("ppc-notifier-wire-{}",uuid::Uuid::new_v4())).join("data");
     let mode=crate::mode::Coordinator::initialize(root.join("control/runtime.sqlite")).unwrap();let profile=uuid::Uuid::new_v4().to_string();
-    crate::mode::open_existing(mode.path()).unwrap().execute("INSERT INTO remote_profiles VALUES(?1,?2)",rusqlite::params![profile,json!({"id":profile,"serverId":"server","endpoint":format!("http://{address}/infos"),"displayName":"测试","appVersion":"1"}).to_string()]).unwrap();
-    mode.begin_switch(crate::mode::Target::Remote {profile_id:profile}).unwrap();mode.activate().unwrap();let token=mode.token().unwrap();
+    let device_id=uuid::Uuid::new_v4().to_string();
+    let device=if recreated {json!({"id":device_id,"expiresAt":chrono::Utc::now().timestamp_millis()+86_400_000,"admin":false})} else {Value::Null};
+    crate::mode::open_existing(mode.path()).unwrap().execute("INSERT INTO remote_profiles VALUES(?1,?2)",rusqlite::params![profile,json!({"id":profile,"serverId":"server","endpoint":format!("http://{address}/infos"),"displayName":"测试","appVersion":"1","device":device}).to_string()]).unwrap();
+    mode.begin_switch(crate::mode::Target::Remote {profile_id:profile.clone()}).unwrap();mode.activate().unwrap();let token=mode.token().unwrap();
     store::execute(&root,"configure",&json!({"modeToken":token,"enabled":true})).unwrap();
     store::connection(&root,&token).unwrap().execute("INSERT INTO preferences VALUES('principal','custom-role')",[]).unwrap();
+    let expected_server=if recreated {"server-after-recreation"} else {"server"};
     let server=tokio::spawn(async move {
         let (mut http,_)=listener.accept().await.unwrap();let mut bytes=Vec::new();
         loop {let byte=http.read_u8().await.unwrap();bytes.push(byte);assert!(bytes.len()<4096);if bytes.ends_with(b"\r\n\r\n") {break;}}
         let request=String::from_utf8(bytes).unwrap().to_lowercase();assert!(request.starts_with("get /infos/api/distributed/identity "));assert!(request.contains("authorization: bearer test-secret"));
-        let body=json!({"code":"OK","data":{"serverId":"server","displayName":"测试","appVersion":"1"}}).to_string();
+        let identity=json!({"code":"OK","data":{"serverId":expected_server,"displayName":"测试","appVersion":"1"}});
+        let body=identity.to_string();
         http.write_all(format!("HTTP/1.1 200 OK\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",body.len()).as_bytes()).await.unwrap();drop(http);
+        if recreated {
+            for (path,body) in [("client-access/status",json!({"code":"OK","data":{"authenticated":true,"admin":false,"deviceId":device_id}})),("distributed/identity",identity)] {
+                let (mut http,_)=listener.accept().await.unwrap();let mut bytes=Vec::new();
+                while !bytes.ends_with(b"\r\n\r\n") {bytes.push(http.read_u8().await.unwrap());assert!(bytes.len()<4096);}
+                let request=String::from_utf8(bytes).unwrap().to_lowercase();assert!(request.starts_with(&format!("get /infos/api/{path} ")));assert!(request.contains("authorization: bearer test-secret"));
+                let body=body.to_string();http.write_all(format!("HTTP/1.1 200 OK\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",body.len()).as_bytes()).await.unwrap();
+            }
+        }
         let (tcp,_)=listener.accept().await.unwrap();
         let mut socket=tokio_tungstenite::accept_hdr_async(tcp,|request:&tokio_tungstenite::tungstenite::handshake::server::Request,response| {
             assert_eq!(request.uri().path(),"/infos/ws/gateway");assert_eq!(request.headers()["Authorization"],"Bearer test-secret");Ok(response)
@@ -36,4 +55,5 @@ async fn native_receiver_replays_notifications_without_claiming_input_or_read_ac
         assert_eq!(notice["principalId"],"custom-role");assert_eq!(notice["modeToken"],json!(token));count+=1;delivered.store(true,Ordering::SeqCst);Ok(true)
     })).await.unwrap();
     assert_eq!(result.unwrap_err().code,"MODE_INACTIVE");assert_eq!(count,1);server.await.unwrap();
+    assert_eq!(super::super::profiles::get(&mode,&profile).unwrap().server_id,expected_server);
 }

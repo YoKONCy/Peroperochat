@@ -38,7 +38,7 @@ import { t, remoteChoiceLabel, remoteNumber, remoteDate } from '../../i18n/remot
 const props = defineProps({ kind: String })
 defineEmits(['thread'])
 const { read, run, guard, busy, writing, error } = useRemoteManagement()
-const data = ref(null), jobs = ref([]), jobsLoaded = ref(false), jobsError = ref(''), period = ref('7d'), filterOpen = ref(false), filters = ref({}), filterDraft = ref({}), options = ref({}), optionsBusy = ref(false)
+const data = ref(null), jobs = ref([]), jobsLoaded = ref(false), jobsError = ref(''), period = ref('7d'), filterOpen = ref(false), filters = ref(/** @type {import('../../types/ui').DataRecord} */ ({})), filterDraft = ref(/** @type {import('../../types/ui').DataRecord} */ ({})), options = ref(/** @type {import('../../types/ui').DataRecord} */ ({})), optionsBusy = ref(false)
 let optionsVersion = 0
 defineExpose({ busy, writing })
 function agentName(id) { return remoteState.agents.find(item => item.id === id)?.name || id || '—' }

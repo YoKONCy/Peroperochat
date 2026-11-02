@@ -226,7 +226,7 @@ const props = defineProps({
     default: false
   },
   templates: {
-    type: Array,
+    type: /** @type {import('vue').PropType<import('../../types/ui').NamedRecord[]>} */ (Array),
     default: () => []
   }
 })
@@ -343,7 +343,7 @@ function handleAvatarUpload(e) {
   
   const reader = new FileReader()
   reader.onload = (ev) => {
-    formData.avatar = ev.target.result
+    if (typeof ev.target.result === 'string') formData.avatar = ev.target.result
   }
   reader.readAsDataURL(file)
   

@@ -75,7 +75,7 @@ const props = defineProps({
     default: ''
   },
   roleList: {
-    type: Array,
+    type: /** @type {import('vue').PropType<import('../../types/ui').NamedRecord[]>} */ (Array),
     default: () => []
   }
 })

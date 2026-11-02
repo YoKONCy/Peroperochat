@@ -46,9 +46,9 @@ export const remoteClient = {
   regenerationRecovery: (threadId, token) => scoped('remote_regeneration_recovery', { threadId }, token),
   discardRegeneration: (id, token) => scoped('remote_discard_regeneration', { id }, token),
   confirmRewind: (input, token) => scoped('remote_confirm_rewind', { ...input, requestId: crypto.randomUUID() }, token),
-  manage: (request, { requestId = crypto.randomUUID(), token } = {}) => scoped('remote_manage', { request, requestId }, token),
-  manageUpload: (kind, id, file, { fields = {}, requestId = crypto.randomUUID(), token } = {}) => scoped('remote_manage_upload', { kind, id, file, fields, requestId }, token),
-  tts: async (input, { requestId = crypto.randomUUID(), token } = {}) => {
+  manage: (request, { requestId = crypto.randomUUID(), token = undefined } = {}) => scoped('remote_manage', { request, requestId }, token),
+  manageUpload: (kind, id, file, { fields = {}, requestId = crypto.randomUUID(), token = undefined } = {}) => scoped('remote_manage_upload', { kind, id, file, fields, requestId }, token),
+  tts: async (input, { requestId = crypto.randomUUID(), token = undefined } = {}) => {
     const packet = await scoped('remote_voice_tts', { input, requestId }, token)
     const bytes = new Uint8Array(packet)
     const size = bytes.length >= 6 ? bytes[4] * 256 + bytes[5] : 0
@@ -60,8 +60,8 @@ export const remoteClient = {
   cancelTts: (requestId, token) => scoped('remote_cancel_tts', { requestId }, token),
   exportText: (name, content, token) => scoped('remote_export_text', { name, content }, token),
   query: (query, { cachedOnly = false, token = currentToken() } = {}) => reads.read(query, { cachedOnly, token }),
-  action: (action, { requestId = crypto.randomUUID(), token } = {}) => scoped('remote_action', { action, requestId }, token),
-  chat: (input, { requestId = crypto.randomUUID(), token } = {}) => scoped('remote_chat', { request: { ...input, requestId } }, token),
+  action: (action, { requestId = crypto.randomUUID(), token = undefined } = {}) => scoped('remote_action', { action, requestId }, token),
+  chat: (input, { requestId = crypto.randomUUID(), token = undefined } = {}) => scoped('remote_chat', { request: { ...input, requestId } }, token),
   connect: (principalId, token, force = false) => scoped('remote_connect', { principalId, force }, token),
   sessionStatus: token => scoped('remote_session_status', {}, token),
   logoutDevice: token => scoped('remote_logout_device', {}, token),
@@ -72,14 +72,14 @@ export const remoteClient = {
   backgroundSettings: (kind, token) => scoped('remote_background_settings', { kind }, token),
   consumeNotificationOpen: token => scoped('remote_consume_notification_open', {}, token),
   subscribe: (subscription, token) => scoped('remote_subscribe', { subscription }, token),
-  submitInput: (input, { requestId = crypto.randomUUID(), token } = {}) => scoped('remote_surface_input', { input, requestId }, token),
+  submitInput: (input, { requestId = crypto.randomUUID(), token = undefined } = {}) => scoped('remote_surface_input', { input, requestId }, token),
   pendingRequests: token => scoped('remote_pending_requests', {}, token),
   reviewRequest: (requestId, fingerprint, note, token) => scoped('remote_review_request', { requestId, fingerprint, note }, token),
   reconcileRequest: (requestId, token) => scoped('remote_reconcile_request', { requestId }, token),
   uiRead: (scope, token) => scoped('remote_ui_read', { scope }, token),
   uiWrite: (scope, value, token) => scoped('remote_ui_write', { scope, value }, token),
-  upload: (threadId, file, { requestId = crypto.randomUUID(), token } = {}) => scoped('remote_upload', { threadId, file, requestId }, token),
-  resource: (resource, { range = null, cachedOnly = false, token } = {}) => scoped('remote_resource', { resource, range, cachedOnly }, token),
+  upload: (threadId, file, { requestId = crypto.randomUUID(), token = undefined } = {}) => scoped('remote_upload', { threadId, file, requestId }, token),
+  resource: (resource, { range = null, cachedOnly = false, token = undefined } = {}) => scoped('remote_resource', { resource, range, cachedOnly }, token),
   resourceInfo: (resource, token, { cachedOnly = false } = {}) => scoped('remote_resource_info', { resource, cachedOnly }, token),
   resolveResource: (context, source, token, { cachedOnly = false } = {}) => scoped('remote_resolve_resource', { agentId: context.agentId, threadId: context.threadId, taskId: context.taskId || null, source, cachedOnly }, token),
   htmlPreview: (resource, token) => scoped('remote_html_preview', { resource }, token),

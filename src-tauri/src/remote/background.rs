@@ -31,6 +31,11 @@ async fn native(app:AppHandle,command:&'static str,args:Value)->ChatResult<Value
 }
 pub async fn suspend_async(app:AppHandle)->ChatResult<()> {native(app,"stop",json!({})).await?;Ok(())}
 pub async fn resume_async(app:AppHandle) {if let Err(error)=native(app,"synchronize",json!({})).await {eprintln!("远程后台接收等待恢复：{}",error.message);}}
+pub(super) async fn identity_recovered(app:&AppHandle,token:&Token) {
+    if let Ok(root)=app.path().app_data_dir() {
+        if super::background_store::identity_recovered(&root.join("data"),token).unwrap_or(false) {resume_async(app.clone()).await;}
+    }
+}
 pub fn reauthorized(app:&AppHandle)->ChatResult<()> {
     let token=app.state::<crate::mode::Coordinator>().token()?;
     execute(app,"reauthorized",&json!({"modeToken":token}))?;Ok(())

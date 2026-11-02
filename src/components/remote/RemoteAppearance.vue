@@ -3,7 +3,7 @@
     <nav class="phase-tabs"><button :class="{ selected: panel === 'appearance' }" :aria-pressed="panel === 'appearance'" @click="panel = 'appearance'"><RemoteIcon name="palette" />{{ t('本机外观') }}</button><button :class="{ selected: panel === 'language' }" :aria-pressed="panel === 'language'" @click="panel = 'language'"><RemoteIcon name="language" />{{ t('界面语言') }}</button></nav>
     <RemoteLanguageSetting v-if="panel === 'language'" />
     <div v-show="panel === 'appearance'">
-    <BackgroundEditor :agent="agent" :palette="display.palette" />
+    <button type="button" class="renewal-background-entry" @click="backgroundOpen = true"><RemoteIcon name="image" /><span><strong>{{ tr('背景与玻璃') }}</strong><small>{{ tr('把喜欢的风景留在身后') }}</small></span><RemoteIcon name="next" /></button>
     <RemoteFeedback :message="error" /><RemoteFeedback :message="saveError" :action-label="t('重试')" @action="$emit('save')" />
     <fieldset :disabled="!ready || saving || importing"><legend>{{ t('界面主题') }}</legend><div class="remote-theme-options"><button v-for="item in themes" :key="item.id" :class="{ selected: display.theme === item.id }" @click="change('theme', item.id)"><RemoteIcon :name="item.icon" /><span>{{ t(item.name) }}</span></button></div></fieldset>
     <fieldset :disabled="!ready || saving || importing"><legend>{{ t('配色包') }}<button class="room-text-button" @click="change('palette', 'standard')">{{ t('使用标准配色') }}</button></legend><div class="remote-palette-grid"><button v-for="palette in remotePalettes" :key="palette.id" :aria-pressed="display.palette === palette.id" :class="{ selected: display.palette === palette.id }" @click="change('palette', palette.id)"><span class="remote-palette-sample"><i :style="{ background: palette.light[1], color: palette.light[0] }" /><i :style="{ background: palette.dark[1], color: palette.dark[0] }" /></span><strong>{{ t(palette.name) }}</strong></button></div></fieldset>
@@ -15,10 +15,11 @@
       <details class="phase-fold"><summary><RemoteIcon name="palette" />{{ t('角色样式包') }}<RemoteIcon name="down" /></summary><p class="remote-help">{{ t('选择你制作的样式包，调整配色与装饰。') }}</p><div class="remote-actions"><button class="room-secondary-button" :disabled="importing" @click="styleInput.click()"><RemoteIcon name="palette" />{{ t('导入样式包') }}</button><button class="room-text-button" :disabled="importing" @click="example">{{ t('导出制作模板') }}</button><input ref="styleInput" type="file" accept="application/json,.json" hidden @change="importStyle" /></div><div v-if="character.style" class="remote-preference-row"><span><strong>{{ character.style.name }}</strong><small>{{ t('未覆盖的部分沿用标准主题') }}</small></span><RoomSwitch :model-value="display.roleStyle" :label="t('启用角色样式包')" :disabled="saving" @update:model-value="change('roleStyle', $event)" /></div><button v-if="character.style" class="room-text-button" :disabled="importing" @click="updateCharacter({ ...character, style: null })">{{ t('移除本机样式包') }}</button></details>
     </template><p v-if="saving || importing" class="remote-help" role="status">{{ t('正在保存显示偏好…') }}</p></div>
   </section>
+  <BackgroundSettingsPage v-if="backgroundOpen" :agent="agent" :palette="display.palette" @close="backgroundOpen = false" />
 </template>
 <script setup>
 import RemoteFeedback from './RemoteFeedback.vue'
-import BackgroundEditor from '../companion/BackgroundEditor.vue'
+import BackgroundSettingsPage from '../companion/BackgroundSettingsPage.vue'
 import RoomSwitch from '../companion/RoomSwitch.vue'
 import { computed, ref, onBeforeUnmount, watch } from 'vue'
 import RemoteLanguageSetting from './RemoteLanguageSetting.vue'
@@ -28,6 +29,7 @@ import RemoteAvatar from './RemoteAvatar.vue'
 import { remotePalettes, characterCg } from '../../services/remoteTheme'
 const props = defineProps({ display: Object, character: Object, agent: Object, ready: Boolean, saving: Boolean, saveError: String, saveCharacter: { type: Function, required: true } })
 const emit = defineEmits(['change', 'save'])
+const tr = key => t(key, [], 'renewal'), backgroundOpen = ref(false)
 const panel = ref('appearance'), fontPreview = ref(props.display.fontSize || 14)
 watch(() => props.display.fontSize, value => { fontPreview.value = value || 14 })
 const cgInput = ref(null), styleInput = ref(null), importing = ref(false), error = ref('')

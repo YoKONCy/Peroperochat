@@ -1,5 +1,5 @@
 <template>
-  <RoomDrawer title="会话设置" subtitle="仅作用于当前会话" :busy="busy || modelBusy" :before-close="beforeClose" @close="emit('close')">
+  <RoomDrawer title="会话设置" variant="page" subtitle="仅作用于当前会话" :busy="busy || modelBusy" :before-close="beforeClose" @close="emit('close')">
     <RemoteFeedback :message="error" /><RemoteFeedback :message="notice" tone="success" /><RemoteAction v-if="unresolved" icon="alert" tone="danger" @click="$emit('pending')">操作结果待核对</RemoteAction>
     <RemoteModelControls :thread-id="threadId" :disabled="busy" @changed="$emit('updated')" @busy="modelBusy = $event" @pending="$emit('pending')" />
     <nav class="remote-subnav" aria-label="会话设置分类"><button v-for="item in panels" :key="item.id" :class="{ selected: panel === item.id }" @click="panel = item.id"><RemoteIcon :name="item.icon" />{{ item.label }}</button></nav>
@@ -64,7 +64,7 @@ async function action(input) { try { guard(); const value = await performRemote(
 async function toggleTool(name, enabled) {
   const tool = settings.value?.tools?.find(item => item.name === name)
   if (!tool || busy.value || unresolved.value || !online.value || !toolListState(tool, new Set(disabledTools.value)).toggleable) return
-  const focused = document.activeElement?.closest('[data-tool-name]')?.dataset.toolName === name
+  const focused = document.activeElement?.closest('[data-tool-name]')?.getAttribute('data-tool-name') === name
   disabledTools.value = enabled ? disabledTools.value.filter(item => item !== name) : [...new Set([...disabledTools.value, name])]
   await nextTick()
   if (focused) toolForm.value?.querySelector(`[data-tool-name="${CSS.escape(name)}"] input`)?.focus({ preventScroll: true })

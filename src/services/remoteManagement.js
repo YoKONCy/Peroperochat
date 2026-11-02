@@ -11,6 +11,7 @@ export const arrayDefaults = {
   blocks: { id: '', name: '', kind: 'template', role: 'system', enabled: true, template: '' },
   items: { key: '', value: '' },
 }
+/** @returns {import('../types/ui').FormField} */
 export const field = (key, type = 'text', extra = {}) => ({ key, label: fieldLabels[key], type, ...extra })
 export function cloneData(value) { return JSON.parse(JSON.stringify(value)) }
 export function isSecretField(key) { return /(?:api.?key|(?:access|refresh|auth|bearer)?token|secret|authorization|password|contentBase64|private.?key)$/i.test(key) }
@@ -19,12 +20,14 @@ export function inferFields(value = {}) {
 }
 const f = field
 const choice = (key, choices, extra = {}) => f(key, 'text', { choices, ...extra })
+/** @returns {import('../types/ui').ManagementCommand} */
 const cmd = (label, op, fields = [], defaults = {}, extra = {}) => ({ label, op, fields, defaults, ...extra })
 export const providerFields = [f('name', 'text', { required: true }), f('brand'), choice('protocol', ['openai', 'anthropic', 'gemini']), f('apiBase'), choice('authMode', ['api_key', 'none']), f('apiKey', 'secret')]
 export const modelFields = [f('name', 'text', { required: true }), f('provider'), f('modelId', 'text', { required: true }), f('providerConnectionId', 'text', { nullable: true }), f('connectionOverride', 'boolean'), choice('connectionProtocol', ['openai', 'anthropic', 'gemini'], { nullable: true }), choice('connectionAuthMode', ['api_key', 'none']), f('apiBase'), f('apiKey', 'secret'), choice('wireApi', ['chat_completions', 'responses']), choice('reasoningDialect', ['auto', 'openai', 'deepseek', 'openrouter', 'generic']), choice('reasoningEffort', ['off', 'low', 'medium', 'high', 'xhigh', 'max'], { nullable: true }), f('temperature', 'number', { nullable: true }), f('topP', 'number', { nullable: true }), f('maxTokens', 'number', { nullable: true }), f('contextWindowTokens', 'number', { nullable: true }), f('maxReActTurns', 'number', { nullable: true }), f('stream', 'boolean'), f('returnNativeReasoning', 'boolean'), f('enableVision', 'boolean'), f('enableAudioInput', 'boolean'), f('providerType')]
 const agentFields = [f('name', 'text', { required: true }), f('description', 'long'), f('ownerAppellation'), f('publicProfile', 'object', { dictionary: false, fields: ['gender', 'identity', 'appearance', 'personality'].map(key => f(key, 'long', { rows: 2 })) }), f('systemPrompt', 'long', { rows: 10 }), f('channelPatches', 'object'), f('waifuTexts', 'object')]
 const mcpFields = [f('name', 'text', { required: true }), choice('type', ['stdio', 'sse']), f('command'), f('args', 'array'), f('env', 'object'), f('url'), f('enabled', 'boolean')]
 const memoryFilters = [f('query'), choice('statuses', ['', 'active', 'archived']), choice('modes', ['', 'active', 'background']), choice('sort', ['eventAt', 'createdAt', 'importance']), choice('order', ['desc', 'asc']), f('importanceMin', 'number', { nullable: true }), f('importanceMax', 'number', { nullable: true }), ...['channels', 'tones', 'participants', 'places', 'objects', 'topics', 'eventAtFrom', 'eventAtTo', 'createdAtFrom', 'createdAtTo'].map(key => f(key, 'text', { help: key.endsWith('From') || key.endsWith('To') ? 'ISO 时间或日期前缀' : '多个条件以英文逗号分隔' }))]
+/** @type {import('../types/ui').ManagementSection[]} */
 export const managementSections = [
   { id: 'workbench', label: '工作区与终端', group: '工作台', icon: 'files', special: true, description: '文件编辑、搜索与远程终端' },
   { id: 'agents', label: '角色管理', group: '配置', icon: 'profile', read: 'agents.list', detail: 'agents.get', fields: agentFields, save: 'agents.save', create: cmd('创建角色', 'agents.create', [f('id', 'text', { required: true }), ...agentFields.slice(0, 3), f('systemPrompt', 'long')], { id: '', name: '', description: '', ownerAppellation: '', systemPrompt: '' }), actions: [cmd('启用角色', 'agents.enable'), cmd('停用角色', 'agents.disable', [], {}, { confirm: true }), cmd('角色能力', 'agents.save_capabilities', null, {}, { load: 'agents.capabilities', pick: 'channels' }), cmd('全局陪伴开关', 'agents.save_companion', [f('enabled', 'boolean')], { enabled: true }, { load: 'agents.companion', help: '此兼容入口修改 infOS 的全局陪伴策略，并非此角色独立的开关。', confirm: true }), cmd('导出角色包', 'agents.export', [], {}, { read: true, download: true }), cmd('删除角色', 'agents.delete', [], {}, { confirm: true })], top: [cmd('重新加载角色', 'agents.reload')] },
@@ -61,6 +64,11 @@ export async function downloadData(data, name = 'infos-export.json') {
   if (/iPad|iPhone|iPod/.test(navigator.userAgent) && navigator.canShare?.({ files: [file] })) { try { await navigator.share({ files: [file] }); return } catch (error) { if (error.name === 'AbortError') return; throw error } }
   return (await remoteClient.exportText(name, content)).data
 }
+/**
+ * @param {(operation: string, input: import('../types/ui').DataRecord) => Promise<import('../types/ui').DataRecord>} read
+ * @param {string} id
+ * @param {{ onProgress?: (received: number, total: number) => void; cancelled?: () => boolean }} [options]
+ */
 export async function exportRemoteThread(read, id, { onProgress = () => {}, cancelled = () => false } = {}) {
   let thread = null, total = null, bytes = 0
   const messages = [], ids = new Set(), encoder = new TextEncoder()

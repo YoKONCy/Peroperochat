@@ -30,7 +30,7 @@ let decision = null, timer = null, disposed = false
 const agents = computed(() => remoteState.agents.filter(item => !item.isUser && item.isEnabled !== false))
 const repeatOptions = computed(() => [{ value: '', label: t('仅这一次') }, { value: '60', label: t('每小时') }, { value: '1440', label: t('每天') }, { value: '10080', label: t('每周') }, { value: 'custom', label: t('其他间隔') }])
 const week = computed(() => { const date = new Date(day.value + 'T12:00:00'); date.setDate(date.getDate() - (date.getDay() + 6) % 7); return Array.from({ length: 7 }, (_, index) => { const item = new Date(date); item.setDate(item.getDate() + index); return { key: stamp(item), date: item.getDate(), weekday: item.toLocaleDateString(remoteLocale.value, { weekday: 'narrow' }) } }) })
-const visibleItems = computed(() => items.value.filter(item => allDays.value || stamp(item.time) === day.value).sort((a, b) => new Date(a.time) - new Date(b.time)))
+const visibleItems = computed(() => items.value.filter(item => allDays.value || stamp(item.time) === day.value).sort((a, b) => new Date(a.time).getTime() - new Date(b.time).getTime()))
 const hasChanges = computed(() => !!form.value && JSON.stringify(form.value) !== baseline.value)
 watch(day, value => { if (!stamp(value)) day.value = stamp(new Date()) })
 function stamp(value) { const date = new Date(value); return Number.isFinite(date.getTime()) ? `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}` : '' }

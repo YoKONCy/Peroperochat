@@ -187,7 +187,7 @@ async function copyMessage(message) {
     let copied = false
     try { document.body.appendChild(area); area.select(); copied = document.execCommand('copy') }
     catch { copied = false }
-    finally { area.remove(); previous?.focus({ preventScroll: true }) }
+    finally { area.remove(); if (previous instanceof HTMLElement) previous.focus({ preventScroll: true }) }
     if (!copied) { ElMessage.error('复制失败，请长按选择文字'); return }
   }
   if (!disposed) ElMessage.success('已复制')

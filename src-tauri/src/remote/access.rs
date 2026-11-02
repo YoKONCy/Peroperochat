@@ -7,7 +7,7 @@ use super::transport;
 #[derive(Clone, Copy, Default, Deserialize)]
 #[serde(rename_all="snake_case")]
 pub enum Method { Pair, Login, #[default] Bearer }
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all="camelCase",deny_unknown_fields)]
 pub struct Device {pub id:String,pub expires_at:i64,pub admin:bool}
 pub struct Credential {pub secret:String,pub device:Option<Device>}

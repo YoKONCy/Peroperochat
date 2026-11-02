@@ -3,7 +3,7 @@ use serde::{Deserialize,Serialize};
 use tauri::{AppHandle,Emitter,Manager};
 use crate::{mode::{Coordinator,Target,Token},local::types::*};
 
-#[derive(Clone,Debug,Serialize,Deserialize)]
+#[derive(Clone,Debug,PartialEq,Eq,Serialize,Deserialize)]
 #[serde(rename_all="camelCase",deny_unknown_fields)]
 pub struct Profile {
     pub id:String,pub server_id:String,pub endpoint:String,pub display_name:String,pub app_version:String,
@@ -62,8 +62,10 @@ pub fn normalize_endpoint(raw:&str,allow_insecure:bool)->ChatResult<String> {
     Ok(url.to_string().trim_end_matches('/').to_owned())
 }
 pub fn get(mode:&Coordinator,id:&str)->ChatResult<Profile> {
+    read_in(&crate::mode::open_existing(mode.path())?,id)
+}
+pub(super) fn read_in(conn:&rusqlite::Connection,id:&str)->ChatResult<Profile> {
     if uuid::Uuid::parse_str(id).is_err() {return Err(ChatError::new("PROFILE_NOT_FOUND","远程连接配置不存在"));}
-    let conn=crate::mode::open_existing(mode.path())?;
     let raw:Option<String>=conn.query_row("SELECT value FROM remote_profiles WHERE id=?1",[id],|r|r.get(0)).optional()?;
     serde_json::from_str(&raw.ok_or_else(||ChatError::new("PROFILE_NOT_FOUND","远程连接配置不存在"))?)
         .map_err(|_|ChatError::new("INVALID_PROFILE","远程连接配置损坏"))
@@ -84,12 +86,17 @@ pub async fn remote_save_profile(app:AppHandle,input:ProfileInput,mode_token:Tok
     let certificate=super::certificates::prepare(&endpoint,previous.as_ref().and_then(|profile|profile.certificate.as_ref()),input.certificate_fingerprint.as_deref()).await?;
     {let _gate=mode.gate(Some(&mode_token),false)?;}
     let client=super::transport::client_for(&endpoint,certificate.as_ref())?;
-    // 兑换完成后核对稳定实例身份；同一地址换了实例也不能复用旧数据分区。
+    // 新配对不能证明原分区归属；容器身份变化时仍用原设备凭据核对连续性。
     let code=if matches!(input.method,super::access::Method::Bearer) {&input.token} else {&input.code};
     let credential=super::access::exchange(&client,&endpoint,input.method,code,&input.name,input.remember).await?;
     let result=async {
         let identity=super::transport::probe_with(&client,&endpoint,&credential.secret).await?;
-        if previous.as_ref().is_some_and(|profile|profile.server_id!=identity.server_id) {return Err(ChatError::new("REMOTE_IDENTITY_CHANGED","地址对应的 infOS 实例已改变，不能复用原连接的数据分区"));}
+        let previous=if let Some(old)=previous.as_ref().filter(|profile|profile.server_id!=identity.server_id) {
+            let old_secret=super::vault::load(&app,old.credential_key())?;
+            let verified=super::identity::verify(&client,old,&old_secret).await?;
+            if verified.server_id()!=identity.server_id {return Err(ChatError::new("REMOTE_CONFLICT","infOS 正在重启，请稍后重试连接"));}
+            Some(super::identity::persist(mode.path(),&mode_token,&verified)?)
+        } else {previous.clone()};
         let profile=Profile {id:previous.as_ref().map(|profile|profile.id.clone()).unwrap_or_else(||uuid::Uuid::new_v4().to_string()),
             server_id:identity.server_id,endpoint:endpoint.clone(),display_name:identity.display_name,app_version:identity.app_version,
             credential_id:Some(uuid::Uuid::new_v4().to_string()),device:credential.device.clone(),certificate,
@@ -99,7 +106,7 @@ pub async fn remote_save_profile(app:AppHandle,input:ProfileInput,mode_token:Tok
         let mut conn=crate::mode::open_existing(mode.path())?;
         if let Some(old)=&previous {
             let current=get(&mode,&old.id)?;
-            if current.credential_id!=old.credential_id {return Err(ChatError::new("REMOTE_CREDENTIAL_CHANGED","连接授权已被另一操作更新，请重新打开连接面板"));}
+            if current!=*old {return Err(ChatError::new("REMOTE_CREDENTIAL_CHANGED","连接已被另一操作更新，请重新打开连接面板"));}
         } else {
             let count:u32=conn.query_row("SELECT COUNT(*) FROM remote_profiles",[],|r|r.get(0))?;
             if count>=20 {return Err(ChatError::new("PROFILE_LIMIT","最多保存 20 个连接，请先删除不用的配置"));}
@@ -115,6 +122,9 @@ pub async fn remote_save_profile(app:AppHandle,input:ProfileInput,mode_token:Tok
         }
         let saved=(||->ChatResult<()> {
             let tx=conn.transaction_with_behavior(rusqlite::TransactionBehavior::Immediate)?;
+            if let Some(old)=&previous {
+                if read_in(&tx,&old.id)?!=*old {return Err(ChatError::new("REMOTE_CREDENTIAL_CHANGED","连接已被另一操作更新，请重新打开连接面板"));}
+            }
             tx.execute("INSERT INTO remote_profiles(id,value) VALUES(?1,?2) ON CONFLICT(id) DO UPDATE SET value=excluded.value",rusqlite::params![profile.id,serde_json::to_string(&profile).map_err(|_|super::inactive())?])?;
             tx.commit()?;Ok(())
         })();

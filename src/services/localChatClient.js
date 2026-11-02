@@ -19,7 +19,7 @@ export function createLocalChatClient({ invoke, listen, uuid = () => crypto.rand
       catch (error) { throw normalizeError(error) }
     },
 
-    async turn(input, { signal, onEvent, command = 'local_chat' } = {}) {
+    async turn(input, { signal = undefined, onEvent = undefined, command = 'local_chat' } = {}) {
       const request = { ...input, requestId: input.requestId || uuid() }
       let active = true
       let cancellationError = null

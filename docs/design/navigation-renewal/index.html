@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="color-scheme" content="light dark">
+  <title>PeroperoChat · 轻轻有序 / 完整交互设计稿</title>
+  <link rel="stylesheet" href="design.css">
+  <link rel="stylesheet" href="materials.css">
+  <link rel="stylesheet" href="chat-flow.css">
+  <script src="../anime-ui-directions/icons.js" defer></script>
+  <script src="../chromatic-ui/palette.js" defer></script>
+  <script src="ui.js" defer></script>
+  <script src="screens.js" defer></script>
+  <script src="settings.js" defer></script>
+  <script src="guidance.js" defer></script>
+  <script src="materials.js" defer></script>
+  <script src="chat-flow.js" defer></script>
+  <script src="design.js" defer></script>
+</head>
+<body>
+  <header class="studio-bar">
+    <a class="studio-brand" href="#home"><span data-symbol="bow"></span><span>PeroperoChat<small>轻轻有序 · 全流程交互设计</small></span></a>
+    <div class="studio-controls"><button id="view-toggle" class="studio-btn"><span data-symbol="grid"></span><span>页面总览</span></button><button class="studio-btn" data-action="show-materials" title="调整背景、透明度与毛玻璃"><span data-symbol="image"></span><span>背景与玻璃</span></button><button id="theme-toggle" class="studio-btn" aria-label="切换深浅色"><span data-symbol="moon"></span><span>暗色</span></button><button id="motion-toggle" class="studio-btn" aria-pressed="false"><span data-symbol="spark"></span><span>减少动态</span></button></div>
+  </header>
+  <div class="studio-layout">
+    <aside class="index-panel"><div class="index-heading"><span class="overline">DESIGN STUDY / 07</span><h1>更好找，<br>也更想待。</h1><p>有层次的导航，有温度的日常。</p></div><div id="palette-picker" class="palette-picker" aria-label="配色包"></div><div class="palette-caption" id="palette-caption"></div><nav id="page-index" aria-label="设计页面目录"></nav><p class="prototype-note">独立设计稿 · 全部为演示数据<br>不会连接 infOS 或修改应用配置</p></aside>
+    <main id="stage" class="stage">
+      <div class="preview-heading"><span id="route-label">首页</span><span>390 × 844 · 可点击体验</span></div>
+      <div class="device-wrap"><div id="device" class="device" aria-label="移动端交互预览"><div id="app" class="app"></div><div id="overlay-root"></div><div id="toast" class="toast" role="status" aria-live="polite"></div></div></div>
+      <div class="preview-foot"><span class="keyboard-key">Esc</span> 关闭面板 <span class="separator">·</span> 点击页面中的入口，体验完整流程</div>
+    </main>
+    <aside id="notes" class="notes-panel"></aside>
+    <section id="overview" class="overview" hidden aria-label="全部页面设计总览"></section>
+  </div>
+</body>
+</html>

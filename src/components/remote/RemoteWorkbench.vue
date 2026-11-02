@@ -46,7 +46,7 @@ import RoomDrawer from '../companion/RoomDrawer.vue'
 const props = defineProps({ agentId: String, threadId: String })
 const emit = defineEmits(['pending', 'resource', 'context'])
 const { read, write, run, guard, busy, error, unresolved } = useRemoteManagement()
-const view = ref('files'), path = ref('.'), tree = ref(null), file = ref(null), content = ref(''), original = ref(''), entry = ref(null), operation = ref(null), form = ref({}), notice = ref(''), discard = ref(null), searchResult = ref(null)
+const view = ref('files'), path = ref('.'), tree = ref(null), file = ref(null), content = ref(''), original = ref(''), entry = ref(null), operation = ref(null), form = ref(/** @type {import('../../types/ui').DataRecord} */ ({})), notice = ref(''), discard = ref(null), searchResult = ref(null)
 const terminals = ref(null), terminal = ref(null), terminalInput = ref(''), output = ref(''), outputElement = ref(null)
 const fileFilter = ref(''), nodeLimit = ref(80)
 const filteredNodes = computed(() => (tree.value?.nodes || []).filter(node => node.name.toLowerCase().includes(fileFilter.value.trim().toLowerCase())).sort((a, b) => Number(b.type === 'directory') - Number(a.type === 'directory') || a.name.localeCompare(b.name, 'zh-CN', { numeric: true })))

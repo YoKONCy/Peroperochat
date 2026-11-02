@@ -46,7 +46,7 @@ import RemoteModelNumber from './RemoteModelNumber.vue'
 import { resolveModelBrand, resolveProviderBrand } from '../../utils/modelBrands'
 import { t, remoteChoiceLabel } from '../../i18n/remote'
 
-const props = defineProps({ modelValue: { type: Object, required: true }, fields: { type: Array, default: () => [] }, recordId: [String, Number], disabled: Boolean })
+const props = defineProps({ modelValue: { type: Object, required: true }, fields: { type: /** @type {import('vue').PropType<import('../../types/ui').FormField[]>} */ (Array), default: () => [] }, recordId: [String, Number], disabled: Boolean })
 const emit = defineEmits(['update:modelValue'])
 const tab = ref(props.recordId ? 'response' : 'main'), panelId = `model-panel-${useId()}`
 const editorRoot = ref(null)
@@ -55,7 +55,7 @@ const brand = computed(() => resolveModelBrand(props.modelValue.modelId) || reso
 const sharedConnection = computed(() => !!props.modelValue.providerConnectionId && !props.modelValue.connectionOverride)
 const connectionName = computed(() => {
   const id = props.modelValue.providerConnectionId
-  if (sharedConnection.value) return props.fields.find(field => field.key === 'providerConnectionId')?.choices?.find(choice => String(choice.value) === String(id))?.label || t('已保存的连接')
+  if (sharedConnection.value) return props.fields.find(field => field.key === 'providerConnectionId')?.choices?.filter(choice => typeof choice !== 'string').find(choice => String(choice.value) === String(id))?.label || t('已保存的连接')
   if (props.modelValue.apiBase) { try { return new URL(props.modelValue.apiBase).host || t('自定义连接') } catch { return t('自定义连接') } }
   return props.modelValue.provider || t('选择服务商连接')
 })

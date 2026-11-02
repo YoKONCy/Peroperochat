@@ -24,12 +24,13 @@ pub struct Material {
     opacity: f64, blur: f64, brightness: f64, saturation: f64, contrast: f64,
     overlay_opacity: f64, surface_opacity: f64, surface_blur: f64,
     position_x: f64, position_y: f64, fit: String,
+    auto_overlay: bool, reduced_transparency: bool,
 }
 impl Default for Material {
     fn default() -> Self {
         Self { opacity: 0.95, blur: 0.0, brightness: 1.0, saturation: 1.0, contrast: 1.0,
             overlay_opacity: 0.18, surface_opacity: 0.8, surface_blur: 12.0,
-            position_x: 50.0, position_y: 50.0, fit: "cover".into() }
+            position_x: 50.0, position_y: 50.0, fit: "cover".into(), auto_overlay: false, reduced_transparency: false }
     }
 }
 impl Material {
@@ -133,4 +134,42 @@ pub async fn appearance_background_save(app: AppHandle, token: Token, input: Sav
         tx.commit()?;
         Ok(result)
     })).await.map_err(|_| ChatError::new("STORAGE_ERROR", "背景设置暂时无法保存"))?
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn legacy_material_keeps_manual_values() {
+        let legacy = json!({"enabled":true,"light":{"overlayOpacity":0.37,"surfaceOpacity":0.72},"dark":{"brightness":0.8}});
+        let settings: Settings = serde_json::from_value(legacy).unwrap();
+        assert!(!settings.light.auto_overlay);
+        assert!(!settings.light.reduced_transparency);
+        assert_eq!(settings.light.overlay_opacity, 0.37);
+        assert_eq!(settings.light.surface_opacity, 0.72);
+        assert_eq!(settings.dark.brightness, 0.8);
+        assert!(settings.light.validate().is_ok());
+        assert!(settings.dark.validate().is_ok());
+    }
+
+    #[test]
+    fn material_preferences_survive_storage_per_scheme() {
+        let conn = Connection::open_in_memory().unwrap();
+        conn.execute_batch("CREATE TABLE backgrounds(scope TEXT PRIMARY KEY,revision INTEGER NOT NULL,settings TEXT NOT NULL,mime TEXT,image BLOB);").unwrap();
+        let mut settings = Settings::default();
+        settings.enabled = true;
+        settings.light.auto_overlay = true;
+        settings.dark.reduced_transparency = true;
+        let raw = serde_json::to_string(&settings).unwrap();
+        conn.execute("INSERT INTO backgrounds VALUES('app',7,?1,'image/png',X'010203')", [raw]).unwrap();
+        let stored = metadata(&conn, &Scope::App).unwrap();
+        assert_eq!(stored["revision"], 7);
+        assert_eq!(stored["hasImage"], true);
+        assert_eq!(stored["settingsRecovered"], false);
+        assert_eq!(stored["settings"]["light"]["autoOverlay"], true);
+        assert_eq!(stored["settings"]["light"]["reducedTransparency"], false);
+        assert_eq!(stored["settings"]["dark"]["autoOverlay"], false);
+        assert_eq!(stored["settings"]["dark"]["reducedTransparency"], true);
+    }
 }

@@ -26,8 +26,8 @@ async fn session(root:&Path,token:&Token,secret:&str,show:&mut impl FnMut(&Value
     let profile=store::runnable(root,token)?;
     store::state(root,token,"connecting","")?;
     let client=transport::client_for(&profile.endpoint,profile.certificate.as_ref())?;
-    let identity=transport::probe_with(&client,&profile.endpoint,secret).await?;
-    if identity.server_id!=profile.server_id {return Err(ChatError::new("REMOTE_IDENTITY_CHANGED","服务地址对应的 infOS 实例已改变"));}
+    let verified=super::identity::verify(&client,&profile,secret).await?;
+    let profile=super::identity::persist(&root.join("control/runtime.sqlite"),token,&verified)?;
     let conn=store::connection(root,token)?;
     let mut principal=store::principal(&conn)?;drop(conn);
     if principal.is_none() {

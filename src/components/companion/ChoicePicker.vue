@@ -4,7 +4,7 @@
   </button>
   <RoomDrawer v-if="open" :title="label" :tone="tone" @close="open = false">
     <input v-if="options.length > 8" v-model="search" class="control-input choice-search" type="search" placeholder="搜索选项" :aria-label="`搜索${label}`" />
-    <div class="choice-options"><button v-for="option in filtered" :key="option.value" type="button" :aria-pressed="modelValue === option.value" :class="{ selected: modelValue === option.value }" @click="choose(option.value)"><slot name="option-leading" :option="option" /><span class="choice-option-label"><strong>{{ option.label }}</strong><small v-if="option.description">{{ option.description }}</small></span><RoomIcon v-if="modelValue === option.value" class="choice-check" name="check" /></button></div>
+    <div class="choice-options"><button v-for="option in filtered" :key="String(option.value)" type="button" :aria-pressed="modelValue === option.value" :class="{ selected: modelValue === option.value }" @click="choose(option.value)"><slot name="option-leading" :option="option" /><span class="choice-option-label"><strong>{{ option.label }}</strong><small v-if="option.description">{{ option.description }}</small></span><RoomIcon v-if="modelValue === option.value" class="choice-check" name="check" /></button></div>
     <p v-if="!filtered.length" class="room-empty">没有匹配选项</p>
   </RoomDrawer>
 </template>
@@ -14,7 +14,7 @@ import { computed, ref, watch } from 'vue'
 import { activeAgentId } from '../../stores/agents'
 import RoomDrawer from './RoomDrawer.vue'
 import RoomIcon from './RoomIcon.vue'
-const props = defineProps({ modelValue: { type: String, default: '' }, label: { type: String, required: true }, displayLabel: { type: String, default: '' }, placeholder: { type: String, default: '请选择' }, options: { type: Array, required: true }, disabled: Boolean })
+const props = defineProps({ modelValue: { type: String, default: '' }, label: { type: String, required: true }, displayLabel: { type: String, default: '' }, placeholder: { type: String, default: '请选择' }, options: { type: /** @type {import('vue').PropType<import('../../types/ui').ChoiceOption[]>} */ (Array), required: true }, disabled: Boolean })
 const emit = defineEmits(['update:modelValue', 'change'])
 const open = ref(false)
 const search = ref('')

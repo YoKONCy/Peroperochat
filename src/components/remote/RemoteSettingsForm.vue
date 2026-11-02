@@ -40,14 +40,14 @@ import RemoteModelEditor from './RemoteModelEditor.vue'
 import RemoteFormSections from './RemoteFormSections.vue'
 import { remoteState } from '../../stores/remote'
 import { t } from '../../i18n/remote'
-const props = defineProps({ modelValue: Object, fields: { type: Array, default: () => [] }, kind: String, recordId: [String, Number], connectionDirty: Boolean, disabled: Boolean })
+const props = defineProps({ modelValue: Object, fields: { type: /** @type {import('vue').PropType<import('../../types/ui').FormField[]>} */ (Array), default: () => [] }, kind: String, recordId: [String, Number], connectionDirty: Boolean, disabled: Boolean })
 const emit = defineEmits(['update:modelValue', 'appearance', 'avatar'])
 const tab = ref('main')
 watch(() => [props.kind, props.recordId], () => { tab.value = 'main' })
 function update(value) { emit('update:modelValue', value) }
 function set(key, value) { update({ ...props.modelValue, [key]: value }) }
 function pick(keys) { return props.fields.filter(field => keys.includes(field.key)) }
-const currentModel = computed(() => props.fields.find(field => field.key === 'model.main')?.choices?.find(option => String(option.value) === String(props.modelValue?.['model.main']))?.label)
+const currentModel = computed(() => props.fields.find(field => field.key === 'model.main')?.choices?.filter(choice => typeof choice !== 'string').find(option => String(option.value) === String(props.modelValue?.['model.main']))?.label)
 const agentFields = computed(() => props.fields.filter(field => field.key.startsWith('model.agent.')))
 function agentName(key) { return remoteState.agents.find(agent => `model.agent.${agent.id}` === key)?.name || key.slice('model.agent.'.length) }
 const modes = [

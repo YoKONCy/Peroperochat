@@ -15,7 +15,9 @@ function mix(first, second, ratio) {
   return '#' + a.map((value, index) => Math.round(value * ratio + b[index] * (1 - ratio)).toString(16).padStart(2, '0')).join('')
 }
 export function uiPaletteVariables(accent, mode = 'light', paletteTint) {
-  const dark = mode === 'dark', base = { ...colors[dark ? 'dark' : 'light'] }
+  const dark = mode === 'dark'
+  /** @type {Record<string, string>} */
+  const base = { ...colors[dark ? 'dark' : 'light'] }
   // 页面、内嵌区、卡片与浮层分别定色，不再让全部暗色配色共用紫灰底。
   if (dark) {
     const night = paletteTint || mix(accent, '#10131b', .16)

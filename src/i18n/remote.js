@@ -22,7 +22,7 @@ export function t(source, parameters = [], scope = 'workspace') {
   source = String(source ?? '')
   void catalogVersion.value
   const language = catalogs[remoteLocale.value] || {}
-  const text = language[scope]?.[source] ?? ['workspace', 'feedback', 'settings', 'stronghold', 'usage', 'common', 'navigation'].map(name => language[name]?.[source]).find(value => value !== undefined) ?? source
+  const text = language[scope]?.[source] ?? ['workspace', 'feedback', 'settings', 'stronghold', 'usage', 'common', 'navigation', 'renewal'].map(name => language[name]?.[source]).find(value => value !== undefined) ?? source
   return text.replace(/\{(\d+)\}/g, (token, index) => parameters[Number(index)] == null ? token : String(parameters[Number(index)]))
 }
 const choices = {

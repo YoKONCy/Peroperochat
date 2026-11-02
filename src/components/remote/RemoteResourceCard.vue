@@ -16,7 +16,7 @@
     </button>
     <div class="remote-file-card-meta"><RemoteFileCover :name="name" /><button type="button" :title="name" @click="open"><strong>{{ name }}</strong><small>{{ remoteFileLabel(kind) }}<template v-if="info"> · {{ formatFileSize(info.size) }}</template><template v-if="pageCount"> · {{ pageCount }} 页</template></small></button><button type="button" class="remote-file-open" :aria-label="`展开 ${name}`" @click="open"><RemoteIcon name="expand" /></button></div>
     <p v-if="value?.caption" class="remote-file-card-caption">{{ value.caption }}</p>
-    <p v-if="failure || playbackFailed" class="remote-file-card-error" role="status"><RemoteIcon name="alert" />{{ failure || '设备暂不支持此媒体格式，可展开后保存原件' }}<button v-if="failure" type="button" :disabled="loading" @click="load">重试</button></p>
+    <p v-if="failure || playbackFailed" class="remote-file-card-error" role="status"><RemoteIcon name="alert" />{{ failure || '设备暂不支持此媒体格式，可展开后保存原件' }}<button v-if="failure" type="button" :disabled="loading" @click="load()">重试</button></p>
   </article>
 </template>
 <script setup>
@@ -34,8 +34,8 @@ const props = defineProps({ value: [Object, String], context: Object })
 const emit = defineEmits(['open', 'resize'])
 const root = ref(null), player = ref(null), resolved = ref(null), info = ref(null), preview = ref(null), loading = ref(false), failure = ref(''), playbackFailed = ref(false), pdfReady = ref(false), pageCount = ref(0)
 const inView = ref(false), hidden = ref(document.hidden)
-const name = computed(() => info.value?.name || resolved.value?.name || props.value?.name || (typeof props.value === 'string' ? props.value.split('/').pop() : props.value?.source?.split('/').pop()) || '会话文件')
-const kind = computed(() => preview.value?.kind || documentKind(name.value, info.value?.mimeType || props.value?.mimeType || ''))
+const name = computed(() => info.value?.name || resolved.value?.name || (typeof props.value === 'object' && props.value?.name) || (typeof props.value === 'string' ? props.value.split('/').pop() : props.value?.source?.split('/').pop()) || '会话文件')
+const kind = computed(() => preview.value?.kind || documentKind(name.value, info.value?.mimeType || (typeof props.value === 'object' && props.value?.mimeType) || ''))
 const snippet = computed(() => (preview.value?.sections?.[0]?.text || preview.value?.text || '').slice(0, 700))
 const webPreview = computed(() => preview.value?.text && ['html', 'svg'].includes(kind.value) && !preview.value.notice ? embeddedRemoteDocument(preview.value.text, channel) : '')
 const token = currentToken(), channel = crypto.randomUUID()

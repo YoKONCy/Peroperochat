@@ -43,7 +43,7 @@ const emit = defineEmits(['close', 'updated'])
 const keyword = ref(''), editing = ref(null), busy = ref(false), actionError = ref(''), permission = ref(false), requesting = ref(false)
 const { entries, total, now, loading, error, reload } = useReminders(computed(() => props.agent.id), keyword)
 const form = reactive({ task: '', time: '', recur: 'none', until: '' })
-const runtime = ref({ background: false })
+const runtime = ref(/** @type {{ background: boolean; exact?: boolean; syncError?: string }} */ ({ background: false }))
 const runtimeReady = ref(false), runtimeError = ref('')
 const scheduleLabels = { exact: '已登记准时提醒', inexact: '已登记非精确提醒', pending: '等待系统登记', cancelled: '系统登记已取消', blocked: '等待通知授权', failed: '系统登记失败' }
 const recurrences = [{ value: 'none', label: '仅一次' }, { value: 'daily', label: '每天' }, { value: 'weekly', label: '每周' }]

@@ -78,7 +78,7 @@ export function prepareRemoteFile(resource, info, options = {}) {
     options.signal?.addEventListener('abort', job.abort, { once: true }); previewJobs.push(job); pumpPreviews()
   })
 }
-async function prepareFile(resource, info, { compact = false, signal } = {}) {
+async function prepareFile(resource, info, { compact = false, signal = undefined } = {}) {
   const kind = documentKind(info.name || resource.name, info.mimeType.split(';')[0].toLowerCase()), result = { kind, info, text: null, media: null, sections: [], archive: null, notice: '' }
   if (info.size === 0) return { ...result, notice: '这是一个空文件' }
   if (kind === 'pdf') return result

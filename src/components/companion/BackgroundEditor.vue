@@ -10,17 +10,22 @@
     <fieldset :disabled="busy || loading || !original || scope.kind === 'character' && draft.inherit">
       <div class="background-preview-wrap">
         <div class="background-preview companion-surface remote-themed" data-ui="soft" :data-remote-theme="previewScheme" :data-background="previewActive ? 'active' : undefined" :style="previewStyle" @pointerdown="startDrag" @pointermove="moveDrag" @pointerup="endDrag" @pointercancel="endDrag" @lostpointercapture="drag = null">
+          <div class="background-preview-clip">
           <div v-if="previewImage" class="background-preview-image" aria-hidden="true"><img :src="previewImage" alt="" /><i /></div>
           <div class="background-preview-ui"><header><span>{{ agent?.name || 'PeroperoChat' }}</span><RoomIcon name="bow" /></header><template v-if="previewPage === 'chat'"><div class="preview-message-user">{{ tr('今天也想慢慢来。') }}</div><div class="preview-message-assistant"><strong>{{ agent?.name || 'PeroperoChat' }}</strong><p>{{ tr('好呀，把时间留给喜欢的事。') }}</p></div><div class="preview-input"><RoomIcon name="plus" /><span>{{ tr('说说你的想法…') }}</span><RoomIcon name="send" /></div></template><template v-else><div class="preview-card-grid"><div data-ui-tone="rose"><RoomIcon name="profile" /><strong>{{ tr('角色') }}</strong></div><div data-ui-tone="blue"><RoomIcon name="model" /><strong>{{ tr('模型') }}</strong></div></div><div class="preview-management-row"><RoomIcon name="palette" /><span>{{ tr('显示与主题') }}</span><RoomIcon name="arrow" /></div></template></div>
+          </div>
         </div>
         <div class="background-preview-controls"><div><button type="button" :aria-pressed="previewPage === 'chat'" @click="previewPage = 'chat'">{{ tr('聊天') }}</button><button type="button" :aria-pressed="previewPage === 'manage'" @click="previewPage = 'manage'">{{ tr('管理') }}</button></div><div v-if="background.expectedMode === 'remote'"><button type="button" :aria-pressed="previewScheme === 'light'" :aria-label="tr('浅色')" @click="previewScheme = 'light'"><RoomIcon name="sun" /></button><button type="button" :aria-pressed="previewScheme === 'dark'" :aria-label="tr('暗色')" @click="previewScheme = 'dark'"><RoomIcon name="moon" /></button></div></div>
       </div>
       <div class="background-image-actions"><button type="button" class="room-secondary-button" @click="fileInput?.click()"><RoomIcon name="image" />{{ tr(previewImage ? '更换图片' : '选择背景图片') }}</button><button v-if="previewImage" type="button" class="room-text-button" @click="removeImage">{{ tr('移除图片') }}</button><input ref="fileInput" type="file" accept="image/png,image/jpeg,image/webp" hidden @change="importImage" /></div>
+      <div class="background-gallery" :aria-label="tr('背景图片')"><button v-for="scene in scenes" :key="scene.image" type="button" @click="selectScene(scene)"><img :src="scene.image" alt="" loading="lazy" /><span>{{ tr(scene.label) }}</span></button></div>
       <p v-if="previewImage" class="background-small-note">{{ tr('拖动预览调整图片位置。') }}</p>
       <p v-if="original?.imageError" class="background-small-note">{{ tr('原背景暂时无法显示，可以重新选图。') }}</p>
       <div class="background-enable"><span>{{ tr('启用背景与材质') }}</span><RoomSwitch v-model="draft.enabled" :label="tr('启用背景与材质')" /></div>
+      <div class="background-enable"><span>{{ tr('自动调整遮罩') }}<small>{{ tr('随浅色、暗色与背景明暗调整') }}</small></span><RoomSwitch v-model="material.autoOverlay" :label="tr('自动调整遮罩')" /></div>
+      <div class="background-enable"><span>{{ tr('减少透明效果') }}<small>{{ tr('使用实色面板，保留背景图片') }}</small></span><RoomSwitch v-model="material.reducedTransparency" :label="tr('减少透明效果')" /></div>
       <div class="background-presets" role="group" :aria-label="tr('快捷效果')"><button v-for="preset in backgroundPresets" :key="preset.id" type="button" :class="{ selected: isPreset(preset) }" @click="applyPreset(preset)"><RoomIcon :name="preset.id === 'clear' ? 'image' : preset.id === 'balanced' ? 'palette' : 'diary'" /><strong>{{ tr(preset.label) }}</strong></button></div>
-      <div class="background-sliders"><label v-for="item in commonControls" :key="item.key"><span>{{ tr(item.label) }}<output>{{ formatValue(item) }}</output></span><input :value="item.key === 'surfaceOpacity' ? 1 - material[item.key] : material[item.key]" type="range" :min="item.min" :max="item.max" :step="item.step" :aria-label="tr(item.label)" @input="material[item.key] = item.key === 'surfaceOpacity' ? 1 - Number($event.target.value) : Number($event.target.value); draft.enabled = true" /></label></div>
+      <div class="background-sliders"><label v-for="item in commonControls" :key="item.key"><span>{{ tr(item.label) }}<output>{{ formatValue(item) }}</output></span><input :value="item.key === 'surfaceOpacity' ? 1 - material[item.key] : material[item.key]" :disabled="material.reducedTransparency && item.key === 'surfaceOpacity'" type="range" :min="item.min" :max="item.max" :step="item.step" :aria-label="tr(item.label)" @input="material[item.key] = item.key === 'surfaceOpacity' ? 1 - Number(inputValue($event)) : Number(inputValue($event)); draft.enabled = true" /></label></div>
       <details class="background-more"><summary><RoomIcon name="settings" />{{ tr('更多调整') }}<RoomIcon name="down" /></summary><div class="background-fit" role="group" :aria-label="tr('图片显示方式')"><button type="button" :aria-pressed="material.fit === 'cover'" @click="material.fit = 'cover'; draft.enabled = true">{{ tr('填满背景') }}</button><button type="button" :aria-pressed="material.fit === 'contain'" @click="material.fit = 'contain'; draft.enabled = true">{{ tr('完整显示') }}</button></div><div class="background-sliders"><label v-for="item in advancedControls" :key="item.key"><span>{{ tr(item.label) }}<output>{{ formatValue(item) }}</output></span><input v-model.number="material[item.key]" type="range" :min="item.min" :max="item.max" :step="item.step" :aria-label="tr(item.label)" @input="draft.enabled = true" /></label></div></details>
     </fieldset>
     <div class="background-editor-footer"><button type="button" class="room-text-button" :disabled="busy || loading || !original" @click="reset">{{ tr('恢复默认') }}</button><span /><button type="button" class="room-secondary-button" :disabled="!dirty || busy" @click="cancel">{{ tr('取消') }}</button><button type="button" class="room-primary-button" :disabled="!dirty || busy || loading" @click="save">{{ tr(busy ? '正在保存…' : '保存背景') }}</button></div>
@@ -28,6 +33,7 @@
   </section>
 </template>
 <script setup>
+import { inputValue } from '../../utils/domEvents'
 import { computed, inject, onBeforeUnmount, onMounted, reactive, ref, shallowRef, watch } from 'vue'
 import { APP_BACKGROUND, backgroundPresets, backgroundVariables, defaultBackgroundSettings } from '../../services/appBackground'
 import { uiPaletteVariables } from '../../utils/uiPalette'
@@ -41,7 +47,7 @@ import FeedbackMessage from '../FeedbackMessage.vue'
 const props = defineProps({ agent: Object, palette: { type: String, default: 'standard' }, roomImage: String })
 const background = inject(APP_BACKGROUND, null)
 const tr = (key, values) => t(key, values, 'background')
-const scope = ref({ kind: 'app' }), original = ref(null), globalOriginal = ref(null), draft = reactive(defaultBackgroundSettings())
+const scope = ref(/** @type {import('../../types/ui').BackgroundScope} */ ({ kind: 'app' })), original = ref(null), globalOriginal = ref(null), draft = reactive(defaultBackgroundSettings())
 const loading = ref(true), busy = ref(false), error = ref(''), fileInput = ref(null), pendingImage = shallowRef(null), removed = ref(false), temporaryUrl = ref(''), switchTo = ref(null)
 const previewScheme = ref(background?.scheme === 'dark' ? 'dark' : 'light'), previewPage = ref('chat')
 let disposed = false, request = 0, drag = null
@@ -58,10 +64,24 @@ const previewStyle = computed(() => {
     const local = displayPreferences.value.palette
     accent = (appearancePalettes[local === 'auto' ? props.agent?.id === 'nana' ? 'violet' : 'sky' : local] || appearancePalettes.sky).accent
   }
-  return { ...uiPaletteVariables(accent, previewScheme.value, tint), '--accent': accent, '--room-accent': accent, '--accent-secondary': secondary, ...backgroundVariables(previewSettings.value[previewScheme.value]) }
+  return { ...uiPaletteVariables(accent, previewScheme.value, tint), '--accent': accent, '--room-accent': accent, '--accent-secondary': secondary, ...backgroundVariables(previewSettings.value[previewScheme.value], previewScheme.value) }
 })
 const commonControls = [{ key:'brightness',label:'背景明暗',min:.6,max:1.4,step:.02 },{ key:'blur',label:'背景模糊',min:0,max:24,step:1 },{ key:'surfaceOpacity',label:'界面通透度',min:0,max:.45,step:.01 }]
-const advancedControls = [{key:'opacity',label:'图片显现',min:0,max:1,step:.01},{key:'saturation',label:'饱和度',min:0,max:1.6,step:.02},{key:'contrast',label:'对比度',min:.6,max:1.4,step:.02},{key:'overlayOpacity',label:'背景遮罩',min:0,max:.85,step:.01},{key:'surfaceBlur',label:'玻璃模糊',min:0,max:20,step:1},{key:'positionX',label:'水平位置',min:0,max:100,step:1},{key:'positionY',label:'垂直位置',min:0,max:100,step:1}]
+const advancedControls = computed(() => [{key:'opacity',label:'图片显现',min:0,max:1,step:.01},{key:'saturation',label:'饱和度',min:0,max:1.6,step:.02},{key:'contrast',label:'对比度',min:.6,max:1.4,step:.02},{key:'overlayOpacity',label:'背景遮罩',min:0,max:.85,step:.01},{key:'surfaceBlur',label:'玻璃模糊',min:0,max:20,step:1},{key:'positionX',label:'水平位置',min:0,max:100,step:1},{key:'positionY',label:'垂直位置',min:0,max:100,step:1}].filter(item => !(material.value.autoOverlay && item.key === 'overlayOpacity') && !(material.value.reducedTransparency && item.key === 'surfaceBlur')))
+const scenes = [{ label: '晴日房间', image: '/companion/sunlit-room.png' }, { label: '落日余温', image: '/companion/pero-twilight-room.png' }, { label: '月色小屋', image: '/companion/moonlit-room.png' }]
+async function selectScene(scene) {
+  if (busy.value) return
+  busy.value = true; error.value = ''; const version = request
+  try {
+    const response = await fetch(scene.image)
+    if (!response.ok) throw new Error('图片无法打开，请换一张试试')
+    const blob = await response.blob()
+    if (disposed || version !== request) return
+    busy.value = false
+    await importImage({ target: { files: [new File([blob], scene.label, { type: 'image/png' })], value: '' } })
+  } catch (failure) { if (!disposed && version === request) error.value = tr(failure.message) }
+  finally { if (!disposed) busy.value = false }
+}
 function formatValue(item) { const value = material.value[item.key]; return item.key === 'surfaceOpacity' ? `${Math.round((1 - value) * 100)}%` : item.key.toLowerCase().includes('blur') ? `${value} px` : item.key.startsWith('position') ? `${value}%` : `${Math.round(value * 100)}%` }
 function clearTemporary() { if (temporaryUrl.value) URL.revokeObjectURL(temporaryUrl.value); temporaryUrl.value = ''; pendingImage.value = null }
 function cancel() { if (original.value) Object.assign(draft, JSON.parse(JSON.stringify(original.value.settings))); clearTemporary(); removed.value = !!original.value?.settingsRecovered && original.value.hasImage; error.value = '' }
@@ -90,7 +110,7 @@ async function changeScope(kind) {
   original.value = null; clearTemporary(); removed.value = false; await load()
 }
 function applyPreset(preset) { const values = Object.fromEntries(Object.entries(preset).filter(([key]) => !['id', 'label'].includes(key))); Object.assign(material.value, values, { brightness: 1, saturation: 1, contrast: 1 }); draft.enabled = true }
-function isPreset(preset) { return draft.enabled && ['opacity','blur','overlayOpacity','surfaceOpacity','surfaceBlur'].every(key => Math.abs(material.value[key] - preset[key]) < .001) }
+function isPreset(preset) { return draft.enabled && material.value.autoOverlay === preset.autoOverlay && material.value.reducedTransparency === preset.reducedTransparency && ['opacity','blur','overlayOpacity','surfaceOpacity','surfaceBlur'].every(key => Math.abs(material.value[key] - preset[key]) < .001) }
 function removeImage() { clearTemporary(); removed.value = !!original.value?.hasImage }
 async function importImage(event) {
   const file = event.target.files?.[0]; event.target.value = ''; if (!file || busy.value) return
@@ -125,4 +145,5 @@ function endDrag(event) { if (drag?.id === event.pointerId) { drag = null; if (e
 watch(() => [props.agent?.id, busy.value], () => { if (!busy.value && scope.value.kind === 'character' && scope.value.agentId !== props.agent?.id) { request++; scope.value = {kind:'app'}; original.value = null; clearTemporary(); load() } })
 onMounted(load)
 onBeforeUnmount(() => { disposed = true; request++; clearTemporary() })
+defineExpose({ dirty, busy, save, cancel })
 </script>

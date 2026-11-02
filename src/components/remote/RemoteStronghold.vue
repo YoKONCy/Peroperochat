@@ -55,7 +55,7 @@ import { t, remoteDate } from '../../i18n/remote'
 const props = defineProps({ agentId: String, active: { type: Boolean, default: true } })
 const emit = defineEmits(['pending', 'resource', 'room-change'])
 const { token, read, write, run, guard, busy, writing, error, unresolved } = useRemoteManagement()
-const rooms = ref([]), facilities = ref([]), current = ref(null), projection = ref(null), facilityId = ref(''), search = ref(''), message = ref(''), mention = ref(''), operation = ref(null), form = ref({}), baseline = ref('{}'), deleting = ref(''), discardOperation = ref(false), loadingRoom = ref(false), notice = ref(''), storageError = ref(''), history = ref(null), composer = ref(null), atEnd = ref(true), round = ref(null)
+const rooms = ref([]), facilities = ref([]), current = ref(null), projection = ref(null), facilityId = ref(''), search = ref(''), message = ref(''), mention = ref(''), operation = ref(null), form = ref(/** @type {import('../../types/ui').DataRecord} */ ({})), baseline = ref('{}'), deleting = ref(''), discardOperation = ref(false), loadingRoom = ref(false), notice = ref(''), storageError = ref(''), history = ref(null), composer = ref(null), atEnd = ref(true), round = ref(null)
 let disposed = false, timer = null, saveTimer = null, reading = false, roomVersion = 0, projectionRequest = 0, draftRequestId = null, stopEvents = null, frame = null, events = [], decide = null, refreshing = false
 const online = computed(() => remoteState.connection === 'online')
 const selectedFacility = computed(() => facilities.value.find(item => String(item.id) === facilityId.value))

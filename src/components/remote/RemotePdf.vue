@@ -77,8 +77,9 @@ onMounted(async () => {
     class LocalBinaryData {
       async fetch({ filename }) {
         const path = Object.keys(assets).find(key => key.endsWith(`/${filename}`))
-        if (!path) throw new Error('缺少 PDF 字体或解码资源')
-        const response = await fetch(assets[path]); if (!response.ok) throw new Error('PDF 资源读取失败')
+        const url = path && assets[path]
+        if (typeof url !== 'string') throw new Error('缺少 PDF 字体或解码资源')
+        const response = await fetch(url); if (!response.ok) throw new Error('PDF 资源读取失败')
         return new Uint8Array(await response.arrayBuffer())
       }
     }
@@ -105,7 +106,7 @@ onMounted(async () => {
     task = engine.getDocument(input)
     task.onPassword = (callback, reason) => { updatePassword = callback; passwordWrong.value = reason === 2; unlock.value = true; busy.value = false }
     pdf = await task.promise
-    if (disposed) { await pdf.destroy(); return }
+    if (disposed) { await task.destroy(); return }
     pages.value = pdf.numPages; emit('ready', pdf.numPages); await draw()
     if (disposed) return
     observer = new ResizeObserver(() => { clearTimeout(timer); timer = setTimeout(draw, 180) }); observer.observe(viewport.value)

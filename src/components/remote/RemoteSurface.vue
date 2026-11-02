@@ -1,8 +1,8 @@
 <template>
   <section class="remote-surface" :aria-label="label">
-    <template v-for="(node, index) in nodes" :key="`${surface.generation}:${node.nodeId}`">
+    <template v-for="node in displayNodes" :key="`${surface.generation}:${node.nodeId}`">
       <RemoteRichText v-if="node.kind === 'markdown'" :source="node.props.source || ''" :node-id="node.nodeId" :streaming="isStreaming(node)" :suspended="disabled || !!surface.suspended" :interrupted="surface.state === 'failed'" :context="context" @resource="$emit('resource', $event)" @resize="$emit('resize')" />
-      <div v-else-if="isTool(node)" class="chat-trace-run" :class="{ 'is-first': !isTool(nodes[index - 1]), 'is-last': !isTool(nodes[index + 1]) }"><header v-if="!isTool(nodes[index - 1])" class="chat-trace-heading"><RoomIcon name="route" /><span>执行轨迹</span><small>点击查看详情</small></header><RemoteToolTrace :node="node" :thread-id="surface.threadId" @resize="$emit('resize')" /><RemoteResourceCard v-for="file in toolFiles(node)" :key="file.id" :value="file" :context="context" @open="$emit('resource', $event)" @resize="$emit('resize')" /></div>
+      <div v-else-if="node.kind === 'tool-group'" class="chat-tool-group"><SoftDisclosure class="chat-tool-disclosure" :data-state="groupState(node)" @resize="$emit('resize')"><template #summary><RoomIcon name="route" /><strong>{{ tr('工具记录') }}</strong><span>{{ tr(groupLabel(node)) }}</span><small>{{ tr('{0} 项', [node.items.length]) }}</small><RoomIcon class="remote-trace-chevron" name="down" /></template><div class="chat-tool-steps"><RemoteToolTrace v-for="item in node.items" :key="item.nodeId" :node="item" :thread-id="surface.threadId" @resize="$emit('resize')" /></div></SoftDisclosure><RemoteResourceCard v-for="file in groupFiles(node)" :key="file.id" :value="file" :context="context" @open="$emit('resource', $event)" @resize="$emit('resize')" /></div>
       <RemoteReasoning v-else-if="['native-reasoning', 'thinking'].includes(node.kind)" :node="node" :active="surface.state === 'open' && !disabled && !surface.suspended" :context="context" @resource="$emit('resource', $event)" @resize="$emit('resize')" />
       <details v-else-if="node.kind === 'model-retry'" class="remote-model-retry" :data-state="node.props.state"><summary><RoomIcon name="refresh" /><strong>{{ retryStatus(node.props.state) }}</strong><span v-if="Number.isSafeInteger(node.props.attempt)">已重试 {{ node.props.attempt }} 次<span v-if="Number.isSafeInteger(node.props.maxRetries)"> / 最多 {{ node.props.maxRetries }} 次</span></span></summary><p>{{ node.props.reason || '上游模型请求发生重试。' }}</p><p v-if="node.props.partialResponse" class="remote-help">上次请求已返回部分内容，请结合后续记录查看。</p></details>
       <RemoteRichBlock v-else-if="['code', 'math', 'mermaid'].includes(node.kind)" :block="{ kind: node.kind === 'math' ? 'formula' : node.kind === 'mermaid' ? 'diagram' : 'code', source: node.props.source || node.props.code || '', language: node.props.language || 'text' }" :context="context" @resource="$emit('resource', $event)" @resize="$emit('resize')" />
@@ -13,7 +13,7 @@
       <form v-else-if="node.kind === 'input'" class="remote-input-card" @submit.prevent="answer(node)">
         <span class="remote-eyebrow">等待你的回复</span><h3>{{ node.props.title }}</h3>
         <template v-if="node.props.inputKind !== 'background_task'">
-          <fieldset v-for="question in questions(node)" :key="question.id" :disabled="disabled || busy || preview"><legend>{{ question.question }}</legend><p v-if="question.context" class="remote-help">{{ question.context }}</p><label v-for="option in question.options" :key="option.id" class="remote-option"><input :type="question.multiple ? 'checkbox' : 'radio'" :name="`${node.nodeId}:${question.id}`" :checked="selected(node, question, option.id)" @change="choose(node, question, option.id, $event.target.checked)" /><span>{{ option.label }}<small v-if="option.description">{{ option.description }}</small></span></label><textarea v-if="question.allowFreeText !== false" :value="messages[`${node.nodeId}:${question.id}`] || ''" @input="messages[`${node.nodeId}:${question.id}`] = $event.target.value" placeholder="也可以写下你的想法…" maxlength="16000" rows="2" /></fieldset>
+          <fieldset v-for="question in questions(node)" :key="question.id" :disabled="disabled || busy || preview"><legend>{{ question.question }}</legend><p v-if="question.context" class="remote-help">{{ question.context }}</p><label v-for="option in question.options" :key="option.id" class="remote-option"><input :type="question.multiple ? 'checkbox' : 'radio'" :name="`${node.nodeId}:${question.id}`" :checked="selected(node, question, option.id)" @change="choose(node, question, option.id, inputChecked($event))" /><span>{{ option.label }}<small v-if="option.description">{{ option.description }}</small></span></label><textarea v-if="question.allowFreeText !== false" :value="messages[`${node.nodeId}:${question.id}`] || ''" @input="messages[`${node.nodeId}:${question.id}`] = inputValue($event)" placeholder="也可以写下你的想法…" maxlength="16000" rows="2" /></fieldset>
           <button class="room-primary-button" type="submit" :disabled="disabled || busy || preview">提交回复</button>
         </template>
         <template v-else><p>{{ node.props.question }}</p><textarea v-model="taskMessage" :disabled="disabled || busy || preview" placeholder="补充说明（可选）" maxlength="2000" /><div class="remote-actions"><button type="button" :disabled="disabled || busy || preview" @click="taskAnswer(node, 'deny_once')">拒绝</button><button type="button" class="room-primary-button" :disabled="disabled || busy || preview" @click="taskAnswer(node, 'allow_once')">确认并继续</button></div></template>
@@ -30,6 +30,7 @@
   </section>
 </template>
 <script setup>
+import { inputValue, inputChecked } from '../../utils/domEvents'
 import RemoteFeedback from './RemoteFeedback.vue'
 import { computed, reactive, ref } from 'vue'
 import RoomIcon from './RemoteIcon.vue'
@@ -37,6 +38,8 @@ import RemoteResourceCard from './RemoteResourceCard.vue'
 import RemoteRichText from './RemoteRichText.vue'
 import RemoteRichBlock from './RemoteRichBlock.vue'
 import RemoteToolTrace from './RemoteToolTrace.vue'
+import SoftDisclosure from '../companion/SoftDisclosure.vue'
+import { t } from '../../i18n/remote'
 import RemoteReasoning from './RemoteReasoning.vue'
 import RemoteRunStatus from './RemoteRunStatus.vue'
 import { traceRows } from '../../utils/remoteTrace'
@@ -51,6 +54,33 @@ const emit = defineEmits(['resource', 'updated', 'resize'])
 const busy = ref(false), error = ref(''), messages = reactive({}), selections = reactive({}), taskMessage = ref('')
 const preview = computed(() => props.surface.surfaceId.startsWith('conversation:'))
 const nodes = computed(() => traceRows(props.surface.nodes))
+const tr = (text, values) => t(text, values, 'renewal')
+// 只合并相邻工具的展示，保留思考、正文、审批与文件的原始顺序。
+const displayNodes = computed(() => {
+  const rows = []
+  for (const node of nodes.value) {
+    if (!isTool(node)) { rows.push(node); continue }
+    const last = rows.at(-1)
+    if (last?.kind === 'tool-group') last.items.push(node)
+    else rows.push({ kind: 'tool-group', nodeId: `tools:${node.nodeId}`, items: [node] })
+  }
+  return rows
+})
+function groupState(group) {
+  const pending = [...group.items], visited = new Set()
+  let running = false
+  while (pending.length && visited.size < 256) {
+    const item = pending.shift()
+    if (visited.has(item.nodeId)) continue
+    visited.add(item.nodeId)
+    if (item.resultNode?.props.isError || item.props.isError || item.props.state === 'failed') return 'failed'
+    if (!item.resultNode && ['assembling', 'calling'].includes(item.props.state)) running = true
+    pending.push(...(item.children || []))
+  }
+  return running && props.surface.state === 'open' && !props.surface.suspended && !props.disabled ? 'running' : 'recorded'
+}
+const groupLabel = group => groupState(group) === 'failed' ? '有未完成' : groupState(group) === 'running' ? '正在执行' : '查看过程'
+function groupFiles(group) { const files = new Map(); for (const item of group.items) for (const file of toolFiles(item)) files.set(file.id, file); return [...files.values()] }
 const context = computed(() => ({ agentId: props.surface.principalId, threadId: props.surface.threadId, taskId: props.surface.taskId }))
 const isStreaming = node => props.surface.state === 'open' && node.props.phase !== 'committed' && node.lifecycle !== 'disposed'
 const attachment = node => node.props.origin || node.props.resource ? node.props.resource || node.props : { kind: 'attachment', id: node.props.id, name: node.props.name, mimeType: node.props.mimeType, size: node.props.sizeBytes, caption: node.props.caption }

@@ -4,6 +4,7 @@ pub mod certificates;
 mod access;
 pub mod vault;
 mod transport;
+mod identity;
 mod cache;
 mod operations;
 pub mod management;
@@ -120,8 +121,9 @@ async fn session(app:&AppHandle,token:&Token)->ChatResult<Session> {
         } else {error}
     })?;
     let client=transport::client_for(&profile.endpoint,profile.certificate.as_ref())?;
-    let identity=transport::probe_with(&client,&profile.endpoint,&secret).await.map_err(|error| {notify_error(app,token,&error);error})?;
-    if identity.server_id!=profile.server_id {return Err(ChatError::new("REMOTE_IDENTITY_CHANGED","此地址对应的 infOS 实例已改变，请另存连接；旧缓存不会复用"));}
+    let verified=identity::verify(&client,&profile,&secret).await.map_err(|error| {notify_error(app,token,&error);error})?;
+    let profile=identity::persist(app.state::<Coordinator>().path(),token,&verified)?;
+    if verified.recovered() {background::identity_recovered(app,token).await;}
     validate_token(app,token)?;
     Ok(Session {app:app.clone(),token:token.clone(),profile,secret,client})
 }

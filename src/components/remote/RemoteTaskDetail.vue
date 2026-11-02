@@ -68,7 +68,7 @@ const childrenQuery = computed(() => ({ kind: 'tasks', agentId: task.value?.agen
 const childData = computed(() => remoteViews.get(JSON.stringify(childrenQuery.value))?.data)
 const children = computed(() => childData.value?.items || []), childMore = computed(() => childPage.value * 30 < (childData.value?.total || 0))
 const deliveryLabels = { pending: '待投递', sending: '发送中', sent: '已送达', uncertain: '送达待确认', failed: '投递失败', superseded: '已失效' }
-const confirmation = ref(null), editing = ref(false), draft = ref({}), discard = ref(false)
+const confirmation = ref(null), editing = ref(false), draft = ref(/** @type {import('../../types/ui').DataRecord} */ ({})), discard = ref(false)
 let draftRevision = null, baseline = '', decision = null, disposed = false, timer = null, discardTarget = 'editor'
 const dirty = computed(() => editing.value && JSON.stringify(draft.value) !== baseline)
 const budgetFields = [{ key: 'maxSegments', label: '执行段上限', max: 1000 }, { key: 'maxLlmCalls', label: '模型调用上限', max: 10000 }, { key: 'maxToolCalls', label: '工具调用上限', max: 50000 }]
@@ -98,7 +98,7 @@ async function control(action, extra = {}, revision = action === 'update' ? draf
     if (current.revision !== revision || current.agentId !== task.value.agentId) throw new Error(tr('任务已更新，请查看最新状态后再操作。'))
     if (action === 'resume' && current.lifecycle?.pendingEffect && !confirmed.value) throw new Error(tr('请先核对上一次动作的结果。'))
     const body = { agentId: current.agentId, taskId: current.id, expectedRevision: revision, action, ...extra }
-    if (action === 'resume') body.confirmUncertain = confirmed.value
+    if (action === 'resume') Object.assign(body, { confirmUncertain: confirmed.value })
     if (action === 'update') {
       if (!draft.value.instruction?.trim() || draft.value.instruction.length > 4000 || draft.value.successCriteria.length > 2000 || budgetFields.some(item => !Number.isInteger(draft.value[item.key]) || draft.value[item.key] < 1 || draft.value[item.key] > item.max)) throw new Error(tr('请检查填写的内容'))
       Object.assign(body, { instruction: draft.value.instruction, successCriteria: draft.value.successCriteria, recovery: draft.value.readOnly ? 'read_only' : 'confirm', ...Object.fromEntries(budgetFields.map(item => [item.key, draft.value[item.key]])), ...(draft.value.deadline ? { deadline: new Date(draft.value.deadline).toISOString() } : {}) })
@@ -110,7 +110,7 @@ async function control(action, extra = {}, revision = action === 'update' ? draf
 }
 async function direct(action, revision = task.value?.revision) {
   if (blocked.value || task.value?.category === 'resident') return
-  let result = null, completed = false
+  let result = /** @type {import('../../types/ui').DataRecord} */ ({}), completed = false
   await run(async () => {
     const current = await read('tasks.get', { id: props.taskId }); guard()
     if (current.revision !== revision || !finishedTaskStatuses.includes(current.status) || action === 'delete' && !taskPermissions(current).delete || action === 'retry' && !taskPermissions(current).retry) throw new Error(tr('任务已更新，请查看最新状态后再操作。'))

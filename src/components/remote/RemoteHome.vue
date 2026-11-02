@@ -8,7 +8,8 @@
     </div>
     <div class="remote-home-content">
       <ModeSwitchEntry remote class="remote-home-mode-entry" @open="$emit('connections')" />
-      <button class="remote-resume-card" @click="$emit(selection ? 'resume' : 'threads')"><RemoteIcon class="remote-resume-art" name="landscape" artwork /><span class="remote-eyebrow"><RemoteIcon name="diamond" />{{ selection ? '继续上次会话' : '开始一段对话' }}</span><h2>{{ selection?.title || '选择你的伙伴' }}</h2><p>{{ selection ? '会话、任务和记忆，与你连接的 infOS 同步。' : '选择角色和会话，把熟悉的陪伴带在身边。' }}</p><span class="remote-resume-arrow"><RemoteIcon name="arrow" /></span></button>
+      <button class="remote-resume-card" @click="$emit(selection ? 'resume' : 'threads')"><RemoteIcon class="remote-resume-art" name="chat" /><span class="remote-eyebrow">{{ t(selection ? '继续上次会话' : '开始一段对话') }}</span><h2>{{ selection?.title || t('选择你的伙伴') }}</h2><span class="remote-resume-arrow"><RemoteIcon name="arrow" /></span></button>
+      <div class="renewal-home-shortcuts"><button type="button" data-ui-tone="rose" @click="$emit('groups')"><RemoteIcon name="people" /><span>{{ tr('一起聊') }}</span></button><button type="button" data-ui-tone="violet" @click="$emit('memories')"><RemoteIcon name="memory" /><span>{{ tr('记住的小事') }}</span></button><button type="button" data-ui-tone="blue" @click="$emit('library')"><RemoteIcon name="folder" /><span>{{ tr('找文件') }}</span></button></div>
       <RemoteFeedback :message="error" action-label="重试" @action="reload" /><button v-if="error" class="room-text-button" @click="reload">重新加载首页</button>
       <div class="remote-home-section-title"><h3><RemoteIcon name="diamond" />进行中的任务</h3><button class="room-text-button" @click="$emit('tasks')">查看全部<RemoteIcon name="arrow" /></button></div>
       <p v-if="loading && !tasks.length" class="remote-help">正在读取任务…</p><p v-else-if="!tasks.length" class="remote-help">{{ online ? '现在没有进行中的任务。' : '连上 infOS 后，就能看到任务进展。' }}</p>
@@ -23,6 +24,7 @@
 </template>
 <script setup>
 import RemoteFeedback from './RemoteFeedback.vue'
+import { t } from '../../i18n/remote'
 import { computed, ref, watch, onBeforeUnmount } from 'vue'
 import RemoteIcon from './RemoteIcon.vue'
 import ModeSwitchEntry from '../ModeSwitchEntry.vue'
@@ -33,7 +35,8 @@ import { currentToken, assertToken } from '../../stores/mode'
 import { activeTaskStatuses, newestTasks } from '../../utils/taskCenter'
 import { remoteItems, remoteStatus } from '../../utils/remoteMarkdown'
 const props = defineProps({ agent: Object, state: Object, profile: Object, selection: Object, image: String, showCg: Boolean, decoration: { type: String, default: 'ribbon' }, inboxCount: Number })
-defineEmits(['art', 'connections', 'appearance', 'resume', 'threads', 'tasks', 'library', 'inbox', 'detail'])
+defineEmits(['art', 'connections', 'appearance', 'resume', 'threads', 'groups', 'memories', 'tasks', 'library', 'inbox', 'detail'])
+const tr = key => t(key, [], 'renewal')
 const token = currentToken(), loading = ref(false), error = ref(''), queries = ref([]), imageFailed = ref(false)
 let disposed = false, version = 0
 const online = computed(() => remoteState.connection === 'online')
@@ -43,6 +46,7 @@ const tasks = computed(() => newestTasks(queries.value.filter(query => query.kin
 const files = computed(() => { const query = queries.value.find(query => query.kind === 'workspace_tree'), data = query && remoteViews.get(JSON.stringify(query))?.data; return remoteItems(data?.nodes || data).filter(file => file.type !== 'directory').slice(0, 3) })
 async function reload() {
   const request = ++version; loading.value = true; error.value = ''
+  /** @type {import('../../types/ui').DataRecord[]} */
   const next = activeTaskStatuses.map(status => ({ kind: 'tasks', category: 'agent_task', agentId: props.agent?.id || null, status, page: 1, pageSize: 3 }))
   if (props.selection) next.push({ kind: 'workspace_tree', agentId: props.selection.agentId, threadId: props.selection.threadId, path: '.' })
   queries.value = next

@@ -50,6 +50,11 @@ pub(super) fn state(root:&Path,token:&Token,state:&str,blocked:&str)->ChatResult
     let _gate=gate(root,Some(token))?;
     connection(root,token)?.execute("UPDATE notification_runtime SET state=?1,blocked=CASE WHEN ?2='' THEN blocked ELSE ?2 END,updated=?3 WHERE id=1",rusqlite::params![state,blocked,chrono::Utc::now().timestamp_millis()])?;Ok(())
 }
+pub(super) fn identity_recovered(root:&Path,token:&Token)->ChatResult<bool> {
+    let _gate=gate(root,Some(token))?;
+    // 只解除旧版留下的实例编号阻断；认证、证书和协议错误仍需各自处理。
+    Ok(connection(root,token)?.execute("UPDATE notification_runtime SET blocked='',state='stopped',updated=?1 WHERE id=1 AND blocked='REMOTE_IDENTITY_CHANGED'",[chrono::Utc::now().timestamp_millis()])?>0)
+}
 pub(super) fn capture(root:&Path,token:&Token,principal:&str,value:&Value)->ChatResult<()> {
     let _gate=gate(root,Some(token))?;
     if value["payload"]["action"]!="durable_notification" {return Ok(());}
@@ -137,6 +142,18 @@ mod tests {
         let mode=mode::Coordinator::initialize(root.join("control/runtime.sqlite")).unwrap();let id=uuid::Uuid::new_v4().to_string();
         mode::open_existing(mode.path()).unwrap().execute("INSERT INTO remote_profiles VALUES(?1,?2)",rusqlite::params![id,json!({"id":id,"serverId":"server","endpoint":"https://example.com","displayName":"测试","appVersion":"1"}).to_string()]).unwrap();
         mode.begin_switch(Target::Remote {profile_id:id}).unwrap();mode.activate().unwrap();let token=mode.token().unwrap();(root,mode,token)
+    }
+    #[test]
+    fn recovered_identity_only_clears_its_own_background_block() {
+        let (root,mode,token)=fixture();execute(&root,"configure",&json!({"modeToken":token,"enabled":true})).unwrap();
+        state(&root,&token,"blocked","REMOTE_IDENTITY_CHANGED").unwrap();
+        assert!(identity_recovered(&root,&token).unwrap());assert!(runnable(&root,&token).is_ok());
+        for code in ["REMOTE_AUTH_REQUIRED","REMOTE_CERTIFICATE_CHANGED","REMOTE_INCOMPATIBLE"] {
+            state(&root,&token,"blocked",code).unwrap();assert!(!identity_recovered(&root,&token).unwrap());
+            assert_eq!(execute(&root,"plan",&json!({})).unwrap()["blocked"],code);
+        }
+        mode.begin_switch(Target::Standalone).unwrap();mode.activate().unwrap();
+        assert!(identity_recovered(&root,&token).is_err());
     }
     #[test]
     fn background_is_opt_in_and_old_epoch_cannot_deliver_or_restart() {

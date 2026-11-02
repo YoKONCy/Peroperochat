@@ -5,24 +5,25 @@ import { normalizeError } from './localChatClient'
 
 export const APP_BACKGROUND = Symbol('本机背景与材质')
 export const backgroundPresets = [
-  { id: 'clear', label: '通透', opacity: .95, blur: 0, overlayOpacity: .08, surfaceOpacity: .68, surfaceBlur: 12 },
-  { id: 'balanced', label: '均衡', opacity: .95, blur: 0, overlayOpacity: .18, surfaceOpacity: .8, surfaceBlur: 12 },
-  { id: 'focus', label: '专注', opacity: .75, blur: 5, overlayOpacity: .38, surfaceOpacity: .94, surfaceBlur: 8 },
+  { id: 'clear', label: '通透', opacity: .95, blur: 0, overlayOpacity: .12, surfaceOpacity: .68, surfaceBlur: 10, autoOverlay: false, reducedTransparency: false },
+  { id: 'balanced', label: '轻玻璃', opacity: .95, blur: 2, overlayOpacity: .22, surfaceOpacity: .84, surfaceBlur: 12, autoOverlay: true, reducedTransparency: false },
+  { id: 'focus', label: '清晰', opacity: .8, blur: 5, overlayOpacity: .38, surfaceOpacity: .96, surfaceBlur: 6, autoOverlay: false, reducedTransparency: false },
 ]
 export function defaultBackgroundSettings(inherit = false) {
-  const material = { opacity: .95, blur: 0, brightness: 1, saturation: 1, contrast: 1, overlayOpacity: .18, surfaceOpacity: .8, surfaceBlur: 12, positionX: 50, positionY: 50, fit: 'cover' }
+  const material = { opacity: .95, blur: 0, brightness: 1, saturation: 1, contrast: 1, overlayOpacity: .18, surfaceOpacity: .8, surfaceBlur: 12, positionX: 50, positionY: 50, fit: 'cover', autoOverlay: false, reducedTransparency: false }
   return { inherit, enabled: false, light: { ...material }, dark: { ...material } }
 }
-export function backgroundVariables(material) {
-  const panel = material.surfaceOpacity, reader = Math.max(.9, panel)
+export function backgroundVariables(material, scheme = 'light') {
+  const panel = material.reducedTransparency ? 1 : material.surfaceOpacity, reader = Math.max(.94, panel)
+  const overlay = material.autoOverlay ? Math.min(.65, Math.max(.16, (scheme === 'dark' ? .38 : .22) + (material.brightness - 1) * .25)) : material.overlayOpacity
   const fill = (color, alpha) => `color-mix(in srgb, var(${color}) ${alpha * 100}%, transparent)`
   return {
     '--bg-image-opacity': String(material.opacity), '--bg-image-blur': `${material.blur}px`,
     '--bg-brightness': String(material.brightness), '--bg-saturation': String(material.saturation), '--bg-contrast': String(material.contrast),
-    '--bg-overlay': String(material.overlayOpacity), '--bg-position': `${material.positionX}% ${material.positionY}%`, '--bg-fit': material.fit,
-    '--bg-material-blur': `${material.surfaceBlur}px`, '--bg-panel-fill': fill('--ui-paper', panel),
-    '--bg-shell-fill': fill('--ui-raised', Math.max(.5, panel - .15)), '--bg-reading-fill': fill('--ui-paper', reader),
-    '--bg-field-fill': fill('--ui-inset', .35), '--bg-raised-fill': fill('--ui-raised', Math.max(.94, panel)),
+    '--bg-overlay': String(overlay), '--bg-position': `${material.positionX}% ${material.positionY}%`, '--bg-fit': material.fit,
+    '--bg-material-blur': `${material.reducedTransparency ? 0 : material.surfaceBlur}px`, '--bg-panel-fill': fill('--ui-paper', panel),
+    '--bg-shell-fill': fill('--ui-raised', Math.max(.9, panel)), '--bg-reading-fill': fill('--ui-paper', reader),
+    '--bg-field-fill': fill('--ui-inset', Math.max(.94, panel)), '--bg-raised-fill': fill('--ui-raised', Math.max(.97, panel)),
     '--bg-inset-reading-fill': fill('--ui-paper', Math.max(.12, (reader - panel) / Math.max(.01, 1 - panel))),
   }
 }
@@ -124,7 +125,7 @@ export function useAppBackground(agentId, scheme, expectedMode) {
     for (const [key, value] of records) if (value.url && value.url === failedUrl) { URL.revokeObjectURL(value.url); records.set(key, { ...value, url: '', imageError: true }) }
   }
   return reactive({ agentId, scheme, expectedMode, source, active, material, effective, roomReady, error,
-    style: computed(() => backgroundVariables(material.value)),
+    style: computed(() => backgroundVariables(material.value, unref(scheme))),
     characterImage: computed(() => { const role = record(characterScope.value); return role && !role.settings.inherit && role.settings.enabled ? role.url : '' }),
     load: reload, save, imageFailed,
   })

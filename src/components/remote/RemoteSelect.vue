@@ -7,7 +7,7 @@ import { ref, computed, watch } from 'vue'
 import RoomDrawer from '../companion/RoomDrawer.vue'
 import RemoteIcon from './RemoteIcon.vue'
 import { t } from '../../i18n/remote'
-const props = defineProps({ modelValue: { type: String, default: '' }, label: { type: String, default: '选择选项' }, placeholder: { type: String, default: '请选择' }, displayLabel: String, compact: Boolean, options: { type: Array, default: () => [] }, disabled: Boolean })
+const props = defineProps({ modelValue: { type: String, default: '' }, label: { type: String, default: '选择选项' }, placeholder: { type: String, default: '请选择' }, displayLabel: String, compact: Boolean, options: { type: /** @type {import('vue').PropType<import('../../types/ui').ChoiceOption[]>} */ (Array), default: () => [] }, disabled: Boolean })
 const emit = defineEmits(['update:modelValue'])
 const open = ref(false), search = ref('')
 const selected = computed(() => props.options.find(item => item.value === props.modelValue))

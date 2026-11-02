@@ -1,5 +1,5 @@
 // 只结束前端等待，不取消原生请求，更不重发写操作；后台回来时按实际经过时间核对超时。
-export function observeRemoteResult(operation, { signal, timeout = 75000, error = () => Object.assign(new Error('连接暂时没有回应，正在重新同步。'), { code: 'REMOTE_NETWORK' }) } = {}) {
+export function observeRemoteResult(operation, { signal = undefined, timeout = 75000, error = () => Object.assign(new Error('连接暂时没有回应，正在重新同步。'), { code: 'REMOTE_NETWORK' }) } = {}) {
   return new Promise((resolve, reject) => {
     const deadline = Date.now() + timeout
     let settled = false, timer

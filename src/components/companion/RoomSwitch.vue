@@ -1,10 +1,11 @@
 <template>
   <span class="room-switch">
-    <input type="checkbox" role="switch" :checked="modelValue" :disabled="disabled" :aria-label="label || undefined" @change="$emit('update:modelValue', $event.target.checked)" />
+    <input type="checkbox" role="switch" :checked="modelValue" :disabled="disabled" :aria-label="label || undefined" @change="$emit('update:modelValue', inputChecked($event))" />
     <span class="room-switch-track" aria-hidden="true" />
   </span>
 </template>
 <script setup>
+import { inputChecked } from '../../utils/domEvents'
 defineProps({ modelValue: Boolean, disabled: Boolean, label: { type: String, default: '' } })
 defineEmits(['update:modelValue'])
 </script>

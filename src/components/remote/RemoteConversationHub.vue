@@ -19,5 +19,5 @@ async function switchMode(value) { if (mode.value === value || switching.value) 
 async function prepareLeave() { await stronghold.value?.prepareLeave?.() }
 async function back() { if (roomId.value) await stronghold.value?.back?.(); else await switchMode('solo') }
 async function showList() { if (roomId.value) await stronghold.value?.back?.() }
-defineExpose({ prepareLeave, back, roomId, showList })
+defineExpose({ prepareLeave, back, roomId, showList, showGroups: () => switchMode('group') })
 </script>

@@ -108,7 +108,7 @@ const agent = computed(() => AGENTS[activeAgentId.value] || { id: activeAgentId.
 const tone = computed(() => activeAgentId.value === 'nana' ? 'nana' : 'pero')
 const drafts = reactive(new Map())
 const drawer = ref(null)
-const projection = ref({})
+const projection = ref(/** @type {import('../types/ui').DataRecord} */ ({}))
 // 房间快照只在切屏时刷新，聊天状态、换装和环境事件不能顺带切换时段。
 const roomScene = ref(null)
 const backgroundFailed = ref(false)
@@ -233,8 +233,8 @@ function onComposerFocus() { actionError.value = ''; jumpId.value = null; if (pa
 function openFullChat() { drawer.value = null; jumpId.value = null; panelMode.value = 'full' }
 function navigate(path) { drawer.value = null; chatPanel.value?.blur(); router.push(path) }
 function prepareRemoteSwitch() {
-  if (isLoading.value) throw new Error('当前角色正在回复，请结束这次回复后再切换运行模式')
-  if ([...drafts.values()].some(item => item.text.trim() || item.image)) throw new Error('房间中还有未发送的草稿，请先发送或清空草稿，再切换到 infOS 客户端')
+  if (isLoading.value) throw Object.assign(new Error('角色正在回复。请等待回复结束，或回到聊天中停止回复，再连接电脑。'), { code: 'LOCAL_REPLY_RUNNING' })
+  if ([...drafts.values()].some(item => item.text.trim() || item.image)) throw Object.assign(new Error('本机还有未发送的文字或图片。请先回到独立空间发送，或清空草稿，再连接电脑。'), { code: 'LOCAL_DRAFT_PENDING' })
 }
 function openImage(url) { if (url) { imagePreview.value = url; drawer.value = 'image' } }
 function onHomeKeydown(event) {
@@ -290,7 +290,7 @@ async function copy(message) {
     area.value = text; area.style.cssText = 'position:fixed;opacity:0;pointer-events:none;'
     document.body.appendChild(area); area.select()
     const copied = document.execCommand('copy')
-    area.remove(); previous?.focus({ preventScroll: true })
+    area.remove(); if (previous instanceof HTMLElement) previous.focus({ preventScroll: true })
     if (copied) ElMessage.success('已复制')
     else ElMessage.error('复制失败，请长按选择文字')
   }
@@ -323,7 +323,7 @@ watch(activeAgentId, id => {
 }, { immediate: true, flush: 'sync' })
 watch(drawer, value => { if (value) chatPanel.value?.blur() })
 onMounted(async () => {
-  if (['journal', 'reminders', 'appearance', 'remote'].includes(route.query.panel)) {
+  if (typeof route.query.panel === 'string' && ['journal', 'reminders', 'appearance', 'remote'].includes(route.query.panel)) {
     drawer.value = route.query.panel
     const query = { ...route.query }; delete query.panel
     router.replace({ path: '/', query })

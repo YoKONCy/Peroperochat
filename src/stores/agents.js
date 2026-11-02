@@ -64,7 +64,7 @@ export function setActiveAgentId(id) {
     announce()
     return true
   })
-  selections = selected.catch(() => {})
+  selections = selected.then(() => {}, () => {})
   return selected
 }
 

@@ -15,7 +15,7 @@ export function useRemoteManagement() {
     const result = await remoteClient.manage({ operation, id: id == null ? null : String(id), params, body }, { token })
     guard(); return result.data
   }
-  async function write(operation, { id = null, params = {}, body = null, requestId } = {}) {
+  async function write(operation, { id = null, params = {}, body = null, requestId = undefined } = {}) {
     guard()
     if (unresolved.value) throw new Error('上次操作结果待核对，请先在通知中完成核对后重新打开此页')
     writing.value = true

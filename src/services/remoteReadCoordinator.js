@@ -10,7 +10,7 @@ export function createRemoteReadCoordinator({ query, assertActive, pause = ms =>
       for (const entry of pending.values()) entry.controller.abort()
       pending.clear()
     },
-    async read(input, { cachedOnly = false, token } = {}) {
+    async read(input, { cachedOnly = false, token = undefined } = {}) {
       assertActive(token)
       const key = JSON.stringify([token, Object.fromEntries(Object.entries(input).sort(([a], [b]) => a.localeCompare(b))), cachedOnly])
       if (pending.has(key)) return pending.get(key).request

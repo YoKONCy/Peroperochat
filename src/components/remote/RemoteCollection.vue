@@ -37,10 +37,12 @@ import RemoteResourceCard from './RemoteResourceCard.vue'
 import { readRemote, remoteViews, remotePendingRequests, refreshRemotePendingRequests, remoteNotifications, remoteState, refreshRemoteNotifications, acknowledgeRemoteNotification } from '../../stores/remote'
 import { currentToken, assertToken, sameToken } from '../../stores/mode'
 import { remoteItems, remoteStatus } from '../../utils/remoteMarkdown'
-const props = defineProps({ kind: String, agentId: String, threadId: String, active: { type: Boolean, default: true } })
-const emit = defineEmits(['detail', 'thread', 'pending', 'create-task', 'resource', 'manage'])
+const props = defineProps({ kind: String, agentId: String, threadId: String, active: { type: Boolean, default: true }, initialSource: { type: String, default: 'files' } })
+const emit = defineEmits(['detail', 'thread', 'pending', 'create-task', 'resource', 'manage', 'source-change'])
 const token = currentToken()
-const page = ref(1), source = ref('files'), path = ref('.'), searchText = ref(''), keyword = ref(''), loading = ref(false), error = ref(''), queries = ref([]), taskStatus = ref(null)
+const page = ref(1), source = ref(props.initialSource), path = ref('.'), searchText = ref(''), keyword = ref(''), loading = ref(false), error = ref(''), queries = ref([]), taskStatus = ref(null)
+watch(() => props.initialSource, value => { if (['files', 'memories', 'documents'].includes(value)) source.value = value })
+watch(source, value => emit('source-change', value))
 const acknowledging = ref(false)
 const memoryStatus = ref('active')
 const memoryTabs = [{ status: 'active', label: '当前记忆', icon: 'memory' }, { status: 'archived', label: '已归档', icon: 'archive' }]
