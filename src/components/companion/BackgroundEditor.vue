@@ -3,6 +3,7 @@
     <header class="background-editor-heading"><RoomIcon name="image" /><div><h3>{{ tr('背景与材质') }}</h3><p>{{ tr('留一点风景，给喜欢的日常。') }}</p></div></header>
     <div class="background-scope" role="group" :aria-label="tr('设置范围')"><button type="button" :class="{ selected: scope.kind === 'app' }" :disabled="busy" @click="changeScope('app')">{{ tr('整个应用') }}</button><button v-if="agent?.id" type="button" :class="{ selected: scope.kind === 'character' }" :disabled="busy" @click="changeScope('character')">{{ tr('{0}的背景', [agent.name]) }}</button></div>
     <p class="background-scope-note">{{ tr(background.expectedMode === 'remote' ? '只保存在这台手机，不改变电脑上的外观。' : '默认房间继续跟随角色与时间，应用背景用于其他页面。') }}</p>
+    <div v-if="switchTo" class="background-switch-confirm" role="alert"><p>{{ tr('先保存或取消当前调整，再切换范围。') }}</p><button type="button" class="room-text-button" @click="cancel(); changeScope(switchTo)">{{ tr('放弃调整并切换') }}</button><button type="button" class="room-text-button" @click="switchTo = null">{{ tr('继续调整') }}</button></div>
     <FeedbackMessage :message="error" />
     <button v-if="error && !original" type="button" class="room-text-button" :disabled="loading || busy" @click="load">{{ tr('重试') }}</button>
     <p v-if="original?.settingsRecovered" class="background-small-note">{{ tr('已恢复默认预览，保存后即可重新使用。') }}</p>
@@ -29,7 +30,6 @@
       <details class="background-more"><summary><RoomIcon name="settings" />{{ tr('更多调整') }}<RoomIcon name="down" /></summary><div class="background-fit" role="group" :aria-label="tr('图片显示方式')"><button type="button" :aria-pressed="material.fit === 'cover'" @click="material.fit = 'cover'; draft.enabled = true">{{ tr('填满背景') }}</button><button type="button" :aria-pressed="material.fit === 'contain'" @click="material.fit = 'contain'; draft.enabled = true">{{ tr('完整显示') }}</button></div><div class="background-sliders"><label v-for="item in advancedControls" :key="item.key"><span>{{ tr(item.label) }}<output>{{ formatValue(item) }}</output></span><input v-model.number="material[item.key]" type="range" :min="item.min" :max="item.max" :step="item.step" :aria-label="tr(item.label)" @input="draft.enabled = true" /></label></div></details>
     </fieldset>
     <div class="background-editor-footer"><button type="button" class="room-text-button" :disabled="busy || loading || !original" @click="reset">{{ tr('恢复默认') }}</button><span /><button type="button" class="room-secondary-button" :disabled="!dirty || busy" @click="cancel">{{ tr('取消') }}</button><button type="button" class="room-primary-button" :disabled="!dirty || busy || loading" @click="save">{{ tr(busy ? '正在保存…' : '保存背景') }}</button></div>
-    <div v-if="switchTo" class="background-switch-confirm" role="alert"><p>{{ tr('先保存或取消当前调整，再切换范围。') }}</p><button type="button" class="room-text-button" @click="cancel(); changeScope(switchTo)">{{ tr('放弃调整并切换') }}</button><button type="button" class="room-text-button" @click="switchTo = null">{{ tr('继续调整') }}</button></div>
   </section>
 </template>
 <script setup>
@@ -52,7 +52,11 @@ const loading = ref(true), busy = ref(false), error = ref(''), fileInput = ref(n
 const previewScheme = ref(background?.scheme === 'dark' ? 'dark' : 'light'), previewPage = ref('chat')
 let disposed = false, request = 0, drag = null
 const material = computed(() => draft[previewScheme.value])
-const dirty = computed(() => !!original.value && (JSON.stringify(draft) !== JSON.stringify(original.value.settings) || !!pendingImage.value || removed.value || original.value.settingsRecovered))
+// 本地草稿按声明顺序排列键，Rust 侧 serde_json::Value 回来后是排序后的键；
+// 直接 JSON.stringify 比较会把值相同的情况判成改过（dirty 恒真），所以先规范化键顺序。
+const sortKeys = value => Array.isArray(value) ? value.map(sortKeys)
+  : value && typeof value === 'object' ? Object.fromEntries(Object.keys(value).sort().map(key => [key, sortKeys(value[key])])) : value
+const dirty = computed(() => !!original.value && (JSON.stringify(sortKeys(draft)) !== JSON.stringify(sortKeys(original.value.settings)) || !!pendingImage.value || removed.value || original.value.settingsRecovered))
 const previewSettings = computed(() => scope.value.kind === 'character' && draft.inherit ? globalOriginal.value?.settings || draft : draft)
 const previewImage = computed(() => (draft.inherit && scope.value.kind === 'character' ? globalOriginal.value?.url : temporaryUrl.value || (!removed.value ? original.value?.url : '') || (scope.value.kind === 'character' ? globalOriginal.value?.url : '')) || (background?.expectedMode === 'standalone' ? props.roomImage || '' : ''))
 const previewActive = computed(() => previewSettings.value.enabled && (!!previewImage.value || background?.expectedMode === 'standalone'))
