@@ -1,21 +1,22 @@
 <template>
-  <RoomDrawer :title="view === 'edit' ? '编辑消息' : plan ? '保存并重新生成' : previewData ? '确认回滚' : message ? '消息操作' : '回滚会话'" :busy="busy" :before-close="beforeClose" @close="emit('close')">
+  <RoomDrawer :title="view === 'edit' ? t('编辑消息') : plan ? t('保存并重新生成') : previewData ? t('确认回滚') : message ? t('消息操作') : t('回滚会话')" :busy="busy" :before-close="beforeClose" @close="emit('close')">
     <RemoteFeedback :message="error" /><RemoteFeedback :message="notice" tone="success" />
-    <button v-if="unresolved" class="room-text-button" @click="$emit('pending')">操作结果待核对，前往通知</button>
+    <button v-if="unresolved" class="room-text-button" @click="$emit('pending')">{{ t('操作结果待核对，前往通知') }}</button>
     <div v-if="message && view === 'menu'" class="remote-action-menu">
-      <button type="button" data-ui-tone="blue" @click="copy"><RemoteIcon name="copy" /><span><strong>复制正文</strong><small>复制这条消息的文字</small></span></button>
-      <button type="button" data-ui-tone="violet" :disabled="busy || blocked" @click="view = 'edit'"><RemoteIcon name="edit" /><span><strong>编辑消息</strong><small>仅保存，或保存后重新生成</small></span><RemoteIcon name="next" /></button>
-      <button type="button" data-ui-tone="amber" :disabled="busy || blocked || unresolved" @click="preview"><RemoteIcon name="refresh" /><span><strong>回滚到此处</strong><small>撤回本轮及后续对话，预览相关文件变更</small></span><RemoteIcon name="next" /></button>
+      <button type="button" data-ui-tone="blue" @click="copy"><RemoteIcon name="copy" /><span><strong>{{ t('复制正文') }}</strong><small>{{ t('复制这条消息的文字') }}</small></span></button>
+      <button v-if="canFork" type="button" :disabled="busy || blocked || unresolved" @click="run(fork)"><RemoteIcon name="route" /><span><strong>{{ tr('从这里分支') }}</strong><small>{{ tr('复制到这条消息为止的记录，继续另一段对话') }}</small></span><RemoteIcon name="next" /></button>
+      <button type="button" data-ui-tone="violet" :disabled="busy || blocked" @click="view = 'edit'"><RemoteIcon name="edit" /><span><strong>{{ t('编辑消息') }}</strong><small>{{ t('仅保存，或保存后重新生成') }}</small></span><RemoteIcon name="next" /></button>
+      <button type="button" data-ui-tone="amber" :disabled="busy || blocked || unresolved" @click="preview"><RemoteIcon name="refresh" /><span><strong>{{ t('回滚到此处') }}</strong><small>{{ t('撤回本轮及后续对话，预览相关文件变更') }}</small></span><RemoteIcon name="next" /></button>
     </div>
     <form v-if="view === 'edit'" @submit.prevent="saveOnly">
-      <label class="remote-field">消息正文<textarea v-model="content" rows="8" maxlength="131072" required :disabled="busy" /></label>
-      <p class="remote-help">仅保存会保留后续对话；重新生成会替换这之后的内容。</p>
-      <div class="remote-purpose-actions"><RemoteAction icon="back" :disabled="busy" @click="view = 'menu'">返回</RemoteAction><RemoteAction icon="check" type="submit" :disabled="busy || blocked || unresolved || !content.trim() || content === message.content">仅保存</RemoteAction><RemoteAction icon="refresh" tone="primary" :disabled="busy || blocked || unresolved || !content.trim()" @click="prepare">保存并重新生成</RemoteAction></div>
+      <label class="remote-field">{{ t('消息正文') }}<textarea v-model="content" rows="8" maxlength="131072" required :disabled="busy" /></label>
+      <p class="remote-help">{{ t('修改后的消息会先保存，再请求生成回复。') }}</p>
+      <div class="remote-purpose-actions"><RemoteAction icon="back" :disabled="busy" @click="view = 'menu'">{{ t('返回') }}</RemoteAction><RemoteAction icon="check" type="submit" :disabled="busy || blocked || unresolved || !content.trim() || content === message.content">{{ t('仅保存') }}</RemoteAction><RemoteAction icon="refresh" tone="primary" :disabled="busy || blocked || unresolved || !content.trim()" @click="prepare">{{ t('保存并重新生成') }}</RemoteAction></div>
     </form>
-    <RemoteAction v-if="!message && !previewData" icon="refresh" :disabled="busy || blocked" @click="preview">查看会话回滚范围</RemoteAction>
-    <template v-if="previewData"><RemoteRewindPreview :preview="previewData" :regenerating="!!plan" /><div class="remote-purpose-actions"><RemoteAction v-if="!plan" icon="back" :disabled="busy" @click="previewData = null; view = 'menu'">返回</RemoteAction><RemoteAction icon="refresh" :tone="plan ? 'primary' : 'danger'" :disabled="busy || blocked || unresolved" @click="confirm">{{ plan ? phase === 'rewound' ? '重试生成' : '回滚并重新生成' : '回滚并撤回' }}</RemoteAction></div></template>
-    <RemoteAction v-if="plan && !previewData" icon="refresh" :disabled="busy || unresolved" @click="confirm">重新读取回滚预览</RemoteAction>
-    <p v-if="discarding" class="remote-inline-confirm">有未保存的编辑，确认离开？<button @click="emit('close')">放弃编辑</button><button @click="discarding = false">继续编辑</button></p>
+    <RemoteAction v-if="!message && !previewData" icon="refresh" :disabled="busy || blocked" @click="preview">{{ t('查看会话回滚范围') }}</RemoteAction>
+    <template v-if="previewData"><RemoteRewindPreview :preview="previewData" :regenerating="!!plan" /><div class="remote-purpose-actions"><RemoteAction v-if="!plan" icon="back" :disabled="busy" @click="previewData = null; view = 'menu'">{{ t('返回') }}</RemoteAction><RemoteAction icon="refresh" :tone="plan ? 'primary' : 'danger'" :disabled="busy || blocked || unresolved" @click="confirm">{{ plan ? phase === 'rewound' ? t('重试生成') : t('回滚并重新生成') : t('回滚并撤回') }}</RemoteAction></div></template>
+    <RemoteAction v-if="plan && !previewData" icon="refresh" :busy="busy" :disabled="busy || unresolved" @click="confirm">{{ t('重试生成') }}</RemoteAction>
+    <p v-if="discarding" class="remote-inline-confirm">{{ t('有未保存的编辑，确认离开？') }}<button @click="emit('close')">{{ t('放弃编辑') }}</button><button @click="discarding = false">{{ t('继续编辑') }}</button></p>
   </RoomDrawer>
 </template>
 <script setup>
@@ -28,8 +29,10 @@ import RemoteRewindPreview from './RemoteRewindPreview.vue'
 import { useRemoteManagement } from '../../composables/useRemoteManagement'
 import { performRemote, refreshRemotePendingRequests } from '../../stores/remote'
 import { remoteClient } from '../../services/remote'
-const props = defineProps({ threadId: { type: String, required: true }, agentId: String, message: Object, blocked: Boolean })
-const emit = defineEmits(['close', 'updated', 'pending'])
+import { t } from '../../i18n/remote'
+const tr = (source, values = []) => t(source, values, 'alignment')
+const props = defineProps({ threadId: { type: String, required: true }, agentId: String, message: Object, blocked: Boolean, canFork: Boolean })
+const emit = defineEmits(['close', 'updated', 'pending', 'forked'])
 const { token, read, run, guard, busy, error, unresolved, fail } = useRemoteManagement()
 const content = ref(props.message?.content || ''), view = ref('menu'), previewData = ref(null), plan = ref(null), phase = ref(''), notice = ref(''), discarding = ref(false)
 async function action(value) { guard(); try { return await performRemote(value, { token }) } catch (failure) { fail(failure); throw failure } }
@@ -38,14 +41,24 @@ function target(kind) { const id = props.message ? Number(props.message.messageI
 async function preview() { await run(async () => { const input = target('rewind'); previewData.value = await read('thread.rewind_preview', { id: props.threadId, body: { wholeThread: input.wholeThread, ...(input.messageId ? { messageId: input.messageId } : {}) } }); view.value = 'review' }) }
 function changed(kind = 'edit') { emit('updated', { kind }); window.dispatchEvent(new CustomEvent('ppc:conversation-changed', { detail: { token, threadId: props.threadId } })) }
 async function saveOnly() { await run(async () => { const input = target('rewind'); await action({ kind: 'edit_message', threadId: props.threadId, id: String(input.messageId), content: content.value, expectedRevision: props.message.revision }); guard(); changed(); emit('close') }) }
+async function fork() {
+  const input = target('fork')
+  const value = await action({ kind: 'fork_thread', id: props.threadId, messageId: input.messageId })
+  guard()
+  if (!value?.thread?.id) throw new Error(tr('服务端未返回新会话身份'))
+  emit('forked', value.thread)
+}
 async function prepare() {
   await run(async () => {
     try {
+      notice.value = '正在保存并请求重新生成…'
       const input = target('rewind')
       const result = await remoteClient.prepareRegeneration({ threadId: props.threadId, agentId: props.agentId || '', messageId: input.messageId, content: content.value, revision: props.message.revision }, token)
-      guard(); plan.value = result.data.planId; phase.value = result.data.state; previewData.value = result.data.preview || null; view.value = 'review'; notice.value = result.data.message || '消息修订已保存，请确认重新生成范围。'; changed()
+      guard()
+      if (result.data.state === 'accepted') { changed('regenerate'); emit('close'); return }
+      plan.value = result.data.planId; phase.value = result.data.state; previewData.value = result.data.preview || null; view.value = 'review'; notice.value = result.data.message || '消息修订已保存，请确认重新生成范围。'; changed()
     } catch (failure) { fail(failure); throw failure }
-    finally { await refreshPending() }
+    finally { refreshPending() }
   })
 }
 async function confirm() {
@@ -54,11 +67,12 @@ async function confirm() {
       try {
         const { data } = await remoteClient.commitRegeneration(plan.value, token); guard()
         phase.value = data.state
+        if (['saved', 'unknown'].includes(data.state)) { notice.value = data.message; return }
         if (data.state === 'review') { previewData.value = data.preview; notice.value = '回滚清单已更新，请重新确认。'; return }
         if (data.state === 'rewound') { notice.value = data.message; changed('rewind'); return }
         plan.value = null; changed('rewind'); emit('close')
       } catch (failure) { fail(failure); throw failure }
-      finally { await refreshPending() }
+      finally { refreshPending() }
     } else {
       if (!previewData.value) throw new Error('请先读取回滚清单')
       try {
@@ -66,7 +80,7 @@ async function confirm() {
         guard(); if (data.state === 'review') { previewData.value = data.preview; notice.value = '回滚范围已变化，请重新确认。'; return }
         changed('rewind'); emit('close')
       } catch (failure) { fail(failure); throw failure }
-      finally { await refreshPending() }
+      finally { refreshPending() }
     }
   })
 }

@@ -57,7 +57,7 @@ struct Active { app:AppHandle, id:String, token:Token }
 impl Drop for Active {
     fn drop(&mut self) {if let Ok(mut entries)=self.app.state::<Calls>().0.lock() {if entries.get(&self.id).is_some_and(|entry|entry.token==self.token) {entries.remove(&self.id);}}}
 }
-#[tauri::command]
+#[tauri::command(async)]
 pub fn remote_cancel_tts(app:AppHandle,token:Token,request_id:String)->ChatResult<()> {signal(&app,&token,&request_id,false).map(|_|())}
 pub(super) async fn synthesize(app:AppHandle,token:Token,request_id:String,input:Input)->ChatResult<tauri::ipc::Response> {
     let body=input.body()?;

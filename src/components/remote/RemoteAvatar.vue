@@ -17,6 +17,13 @@ async function load(id, revision) {
   loading.value = true
   async function show(loaded) {
     if (disposed || request !== version || !loaded.mimeType.startsWith('image/') || !loaded.previewable) { loaded.release(); return }
+    try { const image = new Image(); image.src = loaded.url; await image.decode() }
+    catch {
+      loaded.release()
+      if (!disposed && request === version) invalidateRemoteAvatar(id, { notify: false })
+      throw new Error('头像图片暂时无法解码')
+    }
+    if (disposed || request !== version) { loaded.release(); return }
     const previous = resource
     resource = loaded; source.value = loaded.url; shownRevision = revision
     await nextTick(); previous?.release()
@@ -27,8 +34,10 @@ async function load(id, revision) {
     await show(await acquireRemoteAvatar(id))
   } catch (error) {
     if (!disposed && request === version && ['REMOTE_NOT_FOUND', 'REMOTE_FORBIDDEN'].includes(error.code)) { resource?.release(); resource = null; source.value = ''; shownRevision = -1; return }
-    // 短暂网络失败只延迟补一次；保留已显示头像，不进行持续轮询。
-    if (!disposed && request === version && retries++ === 0 && remoteState.connection === 'online') retryTimer = setTimeout(() => { retryTimer = null; load(id, revision) }, 1500)
+    const delays = [1500, 4000, 10000]
+    if (!disposed && request === version && retries < delays.length && remoteState.connection === 'online') {
+      retryTimer = setTimeout(() => { retryTimer = null; load(id, revision) }, delays[retries++])
+    }
   }
   finally { if (!disposed && request === version) loading.value = false }
 }

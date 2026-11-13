@@ -37,15 +37,54 @@ pub struct Runtime {
     retry_blocked:Mutex<bool>,
     blocked_error:Mutex<Option<ChatError>>,
     connect_lock:tokio::sync::Mutex<()>,
-    subscriptions:Mutex<std::collections::HashSet<String>>,
+    subscriptions:Mutex<StreamSet>,
     confirmed_subscriptions:Mutex<std::collections::HashSet<String>>,
     cursors:Mutex<std::collections::HashMap<String,u64>>,
     seen_messages:Mutex<std::collections::HashSet<String>>,
     input_lock:tokio::sync::Mutex<()>,
+    verified_connection: tokio::sync::Mutex<Option<VerifiedConnection>>,
+}
+struct VerifiedConnection {
+    token: Token,
+    profile: profiles::Profile,
+    client: reqwest::Client,
+    checked_at: std::time::Instant,
+}
+/// 同时保持的远程订阅上限（与服务端 Gateway 连接的订阅数无关，仅为本机保护）。
+const SUBSCRIPTION_LIMIT: usize = 100;
+/// 网关入站帧的新鲜度阈值：心跳每 15 秒一次，超过 20 秒无任何入站帧视为陈旧。
+const GATEWAY_FRESH_WINDOW: std::time::Duration = std::time::Duration::from_secs(20);
+/// 远程订阅集合，记录每个流最近一次使用的序号，达到上限时淘汰最久未使用的会话或执行流。
+/// 通知流长期有效，不参与淘汰；当前请求的流受保护。淘汰不会通知服务端（协议没有取消订阅），
+/// 因此被淘汰流的事件在接收端直接丢弃，游标保持不变，重新订阅时由服务端补发或要求快照。
+/// 只丢弃确实被本机淘汰过的流；服务端按受众主动推送、但本机从未显式订阅的流照常转发。
+#[derive(Default)]
+pub(super) struct StreamSet {tick:u64,used:std::collections::HashMap<String,u64>,evicted:std::collections::HashSet<String>}
+impl StreamSet {
+    pub(super) fn contains(&self,stream:&str)->bool {self.used.contains_key(stream)}
+    pub(super) fn len(&self)->usize {self.used.len()}
+    pub(super) fn touch(&mut self,stream:&str) {self.tick+=1;self.used.insert(stream.to_owned(),self.tick);self.evicted.remove(stream);}
+    pub(super) fn clear(&mut self) {self.used.clear();self.evicted.clear();}
+    pub(super) fn is_evicted(&self,stream:&str)->bool {self.evicted.contains(stream)}
+    pub(super) fn streams(&self)->std::collections::HashSet<String> {self.used.keys().cloned().collect()}
+    /// 淘汰最久未使用、且可以淘汰的流；返回被淘汰的流名。没有可淘汰项时返回 None。
+    pub(super) fn evict_lru(&mut self,protect:&str)->Option<String> {
+        let victim=self.used.iter()
+            .filter(|(stream,_)|stream.as_str()!=protect && (stream.starts_with("thread:") || stream.starts_with("execution:")))
+            .min_by_key(|(_,tick)|**tick).map(|(stream,_)|stream.clone())?;
+        self.used.remove(&victim);self.evicted.insert(victim.clone());Some(victim)
+    }
+}
+impl VerifiedConnection {
+    fn reusable(&self, token: &Token, profile: &profiles::Profile, now: std::time::Instant) -> bool {
+        self.token == *token && self.profile == *profile
+            && now.saturating_duration_since(self.checked_at) < std::time::Duration::from_secs(10)
+    }
 }
 pub(super) struct Session {app:AppHandle,token:Token,profile:profiles::Profile,secret:String,client:reqwest::Client}
 pub(super) fn inactive()->ChatError {ChatError::new("MODE_INACTIVE","远程运行代次已失效，请刷新当前模式")}
 pub fn stop_all(app:&AppHandle) {
+    if let Ok(mut verified)=app.state::<Runtime>().verified_connection.try_lock() {*verified=None;}
     preview::clear(app);
     if let Ok(mut error)=app.state::<Runtime>().blocked_error.lock() {*error=None;}
     if let Ok(mut blocked)=app.state::<Runtime>().retry_blocked.lock() {*blocked=false;}
@@ -61,6 +100,7 @@ pub(super) fn notify_error(app:&AppHandle,token:&Token,error:&ChatError) {
     if let Ok(_gate)=app.state::<Coordinator>().gate(Some(token),false) {
         background::connection_failed(app,token,&error.code);
         let runtime=app.state::<Runtime>();
+        if let Ok(mut verified)=runtime.verified_connection.try_lock() {*verified=None;}
         if let Ok(mut blocked)=runtime.retry_blocked.lock() {*blocked=true;}
         if let Ok(mut value)=runtime.blocked_error.lock() {*value=Some(error.clone());}
         if let Ok(mut handle)=runtime.gateway.lock() {if let Some(handle)=handle.take() {handle.stop();}}
@@ -98,7 +138,8 @@ pub fn start(app:AppHandle) {
 }
 pub fn validate_token(app:&AppHandle,token:&Token)->ChatResult<()> {
     if !matches!(token.target,Target::Remote {..}) {return Err(inactive());}
-    let _gate=app.state::<Coordinator>().gate(Some(token),false)?;Ok(())
+    // 只读校验：此处不持有写事务；需要持久写入的路径会在自己的门控事务中再次确认令牌。
+    app.state::<Coordinator>().verify(token)
 }
 async fn session(app:&AppHandle,token:&Token)->ChatResult<Session> {
     validate_token(app,token)?;
@@ -120,11 +161,32 @@ async fn session(app:&AppHandle,token:&Token)->ChatResult<Session> {
             notify_error(app,token,&error);error
         } else {error}
     })?;
-    let client=transport::client_for(&profile.endpoint,profile.certificate.as_ref())?;
-    let verified=identity::verify(&client,&profile,&secret).await.map_err(|error| {notify_error(app,token,&error);error})?;
-    let profile=identity::persist(app.state::<Coordinator>().path(),token,&verified)?;
-    if verified.recovered() {background::identity_recovered(app,token).await;}
-    validate_token(app,token)?;
+    let runtime = app.state::<Runtime>();
+    // 同一批请求共用一次身份探测与连接池，配置或运行代次改变后立即失效。
+    let mut saved = runtime.verified_connection.lock().await;
+    let (client, profile, recovered) = if let Some(verified) = saved.as_ref().filter(|entry| {
+        entry.reusable(token, &profile, std::time::Instant::now())
+    }) {
+        (verified.client.clone(), profile, false)
+    } else {
+        *saved = None;
+        let client = transport::client_for(&profile.endpoint, profile.certificate.as_ref())?;
+        let verified = identity::verify(&client, &profile, &secret).await.map_err(|error| {
+            notify_error(app, token, &error);
+            error
+        })?;
+        let profile = identity::persist(app.state::<Coordinator>().path(), token, &verified)?;
+        *saved = Some(VerifiedConnection {
+            token: token.clone(),
+            profile: profile.clone(),
+            client: client.clone(),
+            checked_at: std::time::Instant::now(),
+        });
+        (client, profile, verified.recovered())
+    };
+    drop(saved);
+    if recovered { background::identity_recovered(app, token).await; }
+    validate_token(app, token)?;
     Ok(Session {app:app.clone(),token:token.clone(),profile,secret,client})
 }
 async fn perform(session:&Session,route:operations::Route)->ChatResult<Value> {
@@ -209,15 +271,28 @@ async fn action_inner(app:AppHandle,token:Token,request_id:String,action:operati
     let route=action.route()?;
     // 探测失败发生在登记和写请求之前，调用者可以明确重试；发送后绝不自动重放。
     let session=tokio::select! {biased;_ =changes.changed()=>return Err(inactive()),result=session(&app,&token)=>result?,};
-    cache::prepare(&app,&token,&request_id,&json!({"kind":"action","input":action}))?;
-    let result=tokio::select! {biased;_ =changes.changed()=>return Err(inactive().with_outcome("unknown")),result=perform(&session,route)=>result,};
-    let data=cache::settle(&app,&token,&request_id,result)?;
+    // 获取主会话由服务端幂等创建，读取失败后可直接重试。
+    let tracked = !matches!(&action, operations::Action::LatestThread {..});
+    if tracked { cache::prepare(&app,&token,&request_id,&json!({"kind":"action","input":action}))?; }
+    let result=tokio::select! {biased;_ =changes.changed()=>return Err(inactive().with_outcome("unknown")),result=perform(&session,route)=>result,}
+        .and_then(|data| {
+            let thread = &data["thread"];
+            let valid = match &action {
+                operations::Action::LatestThread {agent_id} => thread["agentId"] == *agent_id && thread["id"].as_str().is_some_and(|id| !id.is_empty()),
+                operations::Action::ResetThread {id} => thread["id"] == *id && thread["generation"].as_u64().is_some_and(|generation| generation > 0),
+                operations::Action::ForkThread {id,..} => thread["id"].as_str().is_some_and(|created| !created.is_empty() && created != id),
+                _ => true,
+            };
+            if !valid { return Err(ChatError::new("REMOTE_PROTOCOL", "服务端未返回匹配的会话身份").with_outcome("unknown")); }
+            Ok(data)
+        });
+    let data = if tracked { cache::settle(&app,&token,&request_id,result)? } else { result? };
     Ok(json!({"modeToken":token,"requestId":request_id,"data":data}))
 }
 
 #[derive(Debug,Clone,Serialize,Deserialize)]
 #[serde(rename_all="camelCase",deny_unknown_fields)]
-pub struct ChatRequest {pub request_id:String,pub thread_id:String,pub agent_id:String,pub content:String,#[serde(default)] pub attachment_ids:Vec<String>,pub image_mode:Option<String>,#[serde(default)] pub workspace_context:Option<context::WorkspaceContext>,#[serde(default)] pub generation_type:Option<String>}
+pub struct ChatRequest {#[serde(default,skip_serializing_if="Option::is_none")] pub expected_generation:Option<u64>,pub request_id:String,pub thread_id:String,pub agent_id:String,pub content:String,#[serde(default)] pub attachment_ids:Vec<String>,pub image_mode:Option<String>,#[serde(default)] pub workspace_context:Option<context::WorkspaceContext>,#[serde(default)] pub generation_type:Option<String>}
 
 #[tauri::command]
 pub async fn remote_chat(app:AppHandle,token:Token,request:ChatRequest)->ChatResult<Value> {
@@ -226,7 +301,8 @@ pub async fn remote_chat(app:AppHandle,token:Token,request:ChatRequest)->ChatRes
 async fn chat_inner(app:AppHandle,token:Token,request:ChatRequest)->ChatResult<Value> {
     if request.content.trim().is_empty() || request.content.len()>128*1024 || request.attachment_ids.len()>5 || request.attachment_ids.iter().any(|id|uuid::Uuid::parse_str(id).is_err())
         || request.image_mode.as_ref().is_some_and(|mode|!["auto","native","relay"].contains(&mode.as_str()))
-        || request.generation_type.as_ref().is_some_and(|kind|!["normal","regenerate"].contains(&kind.as_str())) {return Err(ChatError::new("INVALID_INPUT","远程聊天内容或附件无效"));}
+        || request.generation_type.as_ref().is_some_and(|kind|!["normal","regenerate"].contains(&kind.as_str()))
+        || request.expected_generation.is_some_and(|generation|generation==0 || generation>9_007_199_254_740_991) {return Err(ChatError::new("INVALID_INPUT","远程聊天内容或附件无效"));}
     operations::segment(&request.thread_id)?;operations::segment(&request.agent_id)?;
     if let Some(context)=&request.workspace_context {context.validate()?;}
     let mode=app.state::<Coordinator>();let mut changes=mode.subscribe();validate_token(&app,&token)?;
@@ -236,14 +312,13 @@ async fn chat_inner(app:AppHandle,token:Token,request:ChatRequest)->ChatResult<V
     if let Some(image_mode)=&request.image_mode {body["imageMode"]=json!(image_mode);}
     if let Some(context)=&request.workspace_context {body["workspaceContext"]=json!(context);}
     if let Some(kind)=&request.generation_type {body["generationType"]=json!(kind);}
+    if let Some(generation)=request.expected_generation {body["expectedGeneration"]=json!(generation);}
     let result=tokio::select! {biased;
         _=changes.changed()=>return Err(inactive().with_outcome("unknown")),
         result=perform(&session,operations::Route {method:reqwest::Method::POST,path:format!("/chat/queue/{}",operations::segment(&request.thread_id)?),params:Vec::new(),body:Some(body)})=>result,
     }.and_then(|data| {
+        // 成功提交后返回当前队列，已完成的消息可能已经移出 items。
         validate_queue(&data,&request.thread_id)?;
-        if !data["items"].as_array().is_some_and(|items|items.iter().any(|item|item["id"]==request.request_id && item["input"]["agentId"]==request.agent_id)) {
-            return Err(ChatError::new("REMOTE_PROTOCOL","服务端队列未确认当前消息身份，请刷新核对").with_outcome("unknown"));
-        }
         Ok(data)
     });
     let data=cache::settle(&app,&token,&request.request_id,result)?;
@@ -272,18 +347,22 @@ pub async fn remote_connect(app:AppHandle,token:Token,principal_id:Option<String
         if principal.len()>64 {return Err(ChatError::new("INVALID_INPUT","远程角色身份过长"));}
     }
     validate_token(&app,&token)?;
+    // 强制重连只在存活连接陈旧时才重建；健康连接直接复用并恢复订阅，避免先停后连造成无网关窗口。
+    let fresh;
     {
         let runtime=app.state::<Runtime>();let _connect=runtime.connect_lock.lock().await;
         let _gate=app.state::<Coordinator>().gate(Some(&token),false)?;
+        fresh=force==Some(true) && !gateway_healthy(&runtime,&token);
         *app.state::<Runtime>().desired.lock().map_err(|_|inactive())?=Some((token.clone(),principal_id.clone()));
         *app.state::<Runtime>().retry_blocked.lock().map_err(|_|inactive())?=false;
         *app.state::<Runtime>().blocked_error.lock().map_err(|_|inactive())?=None;
-        if force==Some(true) {
-            if let Some(handle)=runtime.gateway.lock().map_err(|_|inactive())?.take() {handle.stop();}
-            runtime.confirmed_subscriptions.lock().map_err(|_|inactive())?.clear();
-        }
     }
-    ensure_gateway(&app,token).await
+    // 不在此处停止旧网关：新连接就绪后由 ensure_gateway_with 原子替换并停止旧连接，确认订阅也在替换时清空。
+    ensure_gateway_with(&app,token,fresh).await
+}
+/// 存活且最近收到过入站帧的同一令牌网关；可直接复用，无需重建。
+fn gateway_healthy(runtime:&Runtime,token:&Token)->bool {
+    runtime.gateway.lock().ok().and_then(|handle|handle.as_ref().map(|h|h.token==*token && h.alive() && h.inbound_within(GATEWAY_FRESH_WINDOW))).unwrap_or(false)
 }
 fn blocked_error(runtime:&Runtime)->ChatError {runtime.blocked_error.lock().ok().and_then(|value|value.clone()).unwrap_or_else(||ChatError::new("REMOTE_AUTH_REQUIRED","设备授权需要重新确认，请重新配对或登录"))}
 fn validate_selection(runtime:&Runtime,token:&Token,principal:&Option<String>)->ChatResult<()> {
@@ -291,6 +370,10 @@ fn validate_selection(runtime:&Runtime,token:&Token,principal:&Option<String>)->
     if selected.as_ref()!=Some(&(token.clone(),principal.clone())) {return Err(ChatError::new("REMOTE_SELECTION_CHANGED","远程角色选择已经改变，请重新读取当前连接"));}Ok(())
 }
 async fn ensure_gateway(app:&AppHandle,token:Token)->ChatResult<Value> {
+    ensure_gateway_with(app,token,false).await
+}
+/// `fresh=true` 时跳过现有连接的复用分支，直接建立新连接；新连接就绪后才替换并停止旧连接。
+async fn ensure_gateway_with(app:&AppHandle,token:Token,fresh:bool)->ChatResult<Value> {
     let runtime=app.state::<Runtime>();let _connect=runtime.connect_lock.lock().await;
     let mode=app.state::<Coordinator>();let mut changes=mode.subscribe();validate_token(&app,&token)?;
     let requested=runtime.desired.lock().map_err(|_|inactive())?.clone().filter(|(target,_)|*target==token).ok_or_else(inactive)?.1;
@@ -312,7 +395,7 @@ async fn ensure_gateway(app:&AppHandle,token:Token)->ChatResult<Value> {
     };
     operations::segment(&principal_id)?;
     if principal_id.len()>64 {return Err(ChatError::new("REMOTE_PROTOCOL","远程角色身份过长"));}
-    let existing=runtime.gateway.lock().map_err(|_|inactive())?.as_ref().filter(|h|h.token==token && h.principal==principal_id && h.alive()).cloned();
+    let existing=if fresh {None} else {runtime.gateway.lock().map_err(|_|inactive())?.as_ref().filter(|h|h.token==token && h.principal==principal_id && h.alive()).cloned()};
     if let Some(handle)=existing {
         restore_subscriptions(app,&token,&handle).await?;
         validate_selection(&runtime,&token,&requested)?;
@@ -341,7 +424,7 @@ async fn ensure_gateway(app:&AppHandle,token:Token)->ChatResult<Value> {
 }
 async fn restore_subscriptions(app:&AppHandle,token:&Token,handle:&gateway::Handle)->ChatResult<()> {
     let runtime=app.state::<Runtime>();
-    let desired=runtime.subscriptions.lock().map_err(|_|inactive())?.clone();
+    let desired=runtime.subscriptions.lock().map_err(|_|inactive())?.streams();
     let confirmed=runtime.confirmed_subscriptions.lock().map_err(|_|inactive())?.clone();
     for stream in desired.difference(&confirmed) {
         validate_token(app,token)?;
@@ -388,11 +471,17 @@ pub async fn remote_subscribe(app:AppHandle,token:Token,subscription:Subscriptio
         Subscription::Notifications {principal_id}=> {operations::segment(&principal_id)?;format!("notification:{principal_id}")}};
     let _handle=gateway_handle(&app,&token)?;
     {
-        let _gate=app.state::<Coordinator>().gate(Some(&token),false)?;
+        // 订阅集合只是本机记录，只读校验即可；达到上限时淘汰最久未使用的会话流，而不是拒绝新会话。
+        app.state::<Coordinator>().verify(&token)?;
         let runtime=app.state::<Runtime>();let mut subscriptions=runtime.subscriptions.lock().map_err(|_|inactive())?;
-        if subscriptions.len()>=100 && !subscriptions.contains(&stream) {return Err(ChatError::new("REMOTE_SUBSCRIPTION_LIMIT","远程订阅过多，请关闭不用的会话"));}
-        subscriptions.insert(stream.clone());
+        if !subscriptions.contains(&stream) && subscriptions.len()>=SUBSCRIPTION_LIMIT {
+            let victim=subscriptions.evict_lru(&stream).ok_or_else(||ChatError::new("REMOTE_SUBSCRIPTION_LIMIT","远程订阅过多，请关闭不用的会话"))?;
+            runtime.confirmed_subscriptions.lock().map_err(|_|inactive())?.remove(&victim);
+            eprintln!("远程订阅已达上限，淘汰最久未使用的流：{victim}");
+        }
+        subscriptions.touch(&stream);
     }
+
     // 与重连串行恢复全部期望订阅，存活连接不等于订阅已经确认。
     ensure_gateway(&app,token.clone()).await?;
     validate_token(&app,&token)?;Ok(json!({"modeToken":token,"data":{"streamId":stream,"subscribed":true}}))
@@ -467,10 +556,10 @@ async fn resolve_input_principal(session:&Session,input:&SurfaceInput)->ChatResu
     request["agentId"].as_str().filter(|id|!id.is_empty()).map(str::to_owned).ok_or_else(||ChatError::new("REMOTE_PROTOCOL","服务端未提供交互归属"))
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn remote_pending_requests(app:AppHandle,token:Token)->ChatResult<Value> {cache::pending(&app,&token)}
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn remote_review_request(app:AppHandle,token:Token,request_id:String,fingerprint:String,note:String)->ChatResult<Value> {
     cache::review(&app,&token,&request_id,&fingerprint,&note)?;
     Ok(json!({"modeToken":token,"requestId":request_id,"state":"reviewed"}))
@@ -533,8 +622,41 @@ pub async fn remote_reconcile_request(app:AppHandle,token:Token,request_id:Strin
 mod tests {
     use super::*;
     #[test]
+    fn queued_chat_keeps_generation_and_legacy_retry_fingerprints() {
+        let old = json!({"requestId":"request-a","threadId":"main","agentId":"pero","content":"原消息","attachmentIds":[],"imageMode":null,"workspaceContext":null,"generationType":null});
+        let request: ChatRequest = serde_json::from_value(old.clone()).unwrap();
+        assert_eq!(serde_json::to_value(request).unwrap(), old);
+        let mut current = old;
+        current["expectedGeneration"] = json!(7);
+        let request: ChatRequest = serde_json::from_value(current).unwrap();
+        assert_eq!(request.expected_generation, Some(7));
+    }
+    #[test]
     fn surface_version_is_checked_before_forwarding() {
         assert!(validate_frame(&json!({"protocolVersion":2,"operation":{"type":"surface.open"}})).is_err());
         assert!(validate_frame(&json!({"protocolVersion":1,"surfaceId":"a","generation":"g","operationId":"o","sequence":1,"revision":1,"operation":{"type":"surface.open"}})).is_ok());
+    }
+    #[test]
+    fn lru_evicts_oldest_conversation_stream_and_keeps_notifications_and_requested_stream() {
+        let mut set=StreamSet::default();
+        set.touch("notification:p1");
+        set.touch("thread:a");
+        set.touch("thread:b");
+        // 重新使用 a 之后，最久未使用的是 b。
+        set.touch("thread:a");
+        assert_eq!(set.evict_lru("thread:new"),Some("thread:b".to_owned()));
+        assert!(!set.contains("thread:b") && set.contains("thread:a") && set.contains("notification:p1"));
+        // 被请求的流受保护；只剩通知流时无可淘汰项。
+        assert_eq!(set.evict_lru("thread:a"),None);
+        assert!(set.contains("thread:a"));
+    }
+    #[test]
+    fn lru_never_evicts_notifications_even_when_they_are_oldest() {
+        let mut set=StreamSet::default();
+        set.touch("notification:p1");
+        set.touch("execution:x");
+        assert_eq!(set.evict_lru("thread:new"),Some("execution:x".to_owned()));
+        assert_eq!(set.evict_lru("thread:new"),None);
+        assert!(set.contains("notification:p1"));
     }
 }

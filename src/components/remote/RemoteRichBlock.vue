@@ -77,7 +77,8 @@ async function prepare() {
   if (!visible.value || pageHidden.value || disposed) return
   const block = props.block, key = `${block.kind}:${block.source}`
   if (prepared === key) return
-  const serial = ++generation; loading.value = true; failure.value = ''; html.value = ''
+  const serial = ++generation; loading.value = true; failure.value = ''
+  if (block.kind !== 'markdown') html.value = ''
   try {
     assertToken(token, 'remote')
     let result = ''
@@ -102,7 +103,12 @@ async function activateLink(event) {
 }
 function message(event) { if (event.source === frame.value?.contentWindow && event.data?.type === 'ppc-preview-size' && event.data.channel === channel && Number.isFinite(event.data.height)) { webHeight.value = Math.min(720, Math.max(120, event.data.height)); emit('resize') } }
 function visibility() { pageHidden.value = document.hidden; if (!document.hidden) prepare() }
-watch(() => [props.block.source, props.block.kind], () => { prepared = ''; generation++; prepare() })
+watch(() => [props.block.source, props.block.kind], () => {
+  prepared = ''; generation++
+  // 正文在本次渲染前完成排版，公式等异步能力随后补充。
+  if (props.block.kind === 'markdown') html.value = renderRemoteMarkdown(props.block.source)
+  prepare()
+}, { immediate: true })
 onMounted(() => {
   if (typeof IntersectionObserver === 'function') { observer = new IntersectionObserver(entries => { visible.value = entries.some(item => item.isIntersecting); if (visible.value) prepare() }, { rootMargin: '250px' }); observer.observe(root.value) }
   else { visible.value = true; prepare() }

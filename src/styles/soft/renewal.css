@@ -17,7 +17,7 @@
 .remote-themed.remote-themed[data-ui='soft'] :is(.remote-section-heading, .remote-manager-heading, .phase-hub-heading) { margin-bottom: 18px; gap: 10px; }
 .remote-themed.remote-themed[data-ui='soft'] :is(.remote-section-heading, .remote-manager-heading, .phase-hub-heading) h1 { font-size: calc(var(--ui-text) + 8px); letter-spacing: -.035em; line-height: 1.4; }
 .remote-themed.remote-themed[data-ui='soft'] :is(.remote-section-heading, .remote-manager-heading, .phase-hub-heading) > span > small { color: var(--ui-muted); font-size: var(--renewal-caption); }
-.remote-workspace.remote-themed[data-ui='soft'] .renewal-connection-bar { min-height: 44px; padding: calc(5px + env(safe-area-inset-top)) 16px 3px; }
+.remote-workspace.remote-themed[data-ui='soft'] .renewal-connection-bar { padding: calc(5px + env(safe-area-inset-top)) 16px 3px; }
 .renewal-connection-label { display: flex; align-items: center; gap: 7px; min-width: 0; min-height: 38px; margin-right: auto; padding: 0 3px; border: 0; background: transparent; color: var(--ui-muted); font: inherit; font-size: var(--ui-caption); }
 .renewal-connection-label > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .renewal-connection-label > svg { width: 12px; height: 12px; flex: none; }
@@ -134,6 +134,15 @@
 .remote-themed.remote-themed[data-ui='soft'] .remote-rich-caption { font-size: var(--renewal-caption); }
 .remote-themed.remote-themed[data-ui='soft'] .remote-rich-caption > i { background: transparent; border: 0; padding: 0; border-radius: 0; box-shadow: none; }
 .remote-themed.remote-themed[data-ui='soft'] .remote-rich-code { padding: 13px; font-size: max(12px, calc(var(--ui-text) - 1px)); line-height: 1.75; background: var(--ui-inset); }
+/* 浅色主题下代码块底色为浅色，原有语法配色是为深色底设计的，几乎看不清；这里换成深色文字配色（浅底对比度均不低于 4.5:1），深色主题保持原样。 */
+.remote-themed.remote-themed[data-ui='soft'][data-remote-theme]:not([data-remote-theme='dark']) .remote-rich-code { color: var(--ink); color-scheme: light; }
+.remote-themed.remote-themed[data-ui='soft'][data-remote-theme]:not([data-remote-theme='dark']) .remote-rich-code :is(.hljs-keyword, .hljs-selector-tag, .hljs-meta) { color: #7a3fb0; }
+.remote-themed.remote-themed[data-ui='soft'][data-remote-theme]:not([data-remote-theme='dark']) .remote-rich-code :is(.hljs-string, .hljs-attribute, .hljs-addition) { color: #2c7a57; }
+.remote-themed.remote-themed[data-ui='soft'][data-remote-theme]:not([data-remote-theme='dark']) .remote-rich-code :is(.hljs-title, .hljs-name, .hljs-type) { color: #22629b; }
+.remote-themed.remote-themed[data-ui='soft'][data-remote-theme]:not([data-remote-theme='dark']) .remote-rich-code :is(.hljs-number, .hljs-literal, .hljs-built_in, .hljs-symbol) { color: #9a5512; }
+.remote-themed.remote-themed[data-ui='soft'][data-remote-theme]:not([data-remote-theme='dark']) .remote-rich-code :is(.hljs-comment, .hljs-quote) { color: #687083; }
+.remote-themed.remote-themed[data-ui='soft'][data-remote-theme]:not([data-remote-theme='dark']) .remote-rich-code :is(.hljs-variable, .hljs-params, .hljs-property) { color: inherit; }
+.remote-themed.remote-themed[data-ui='soft'][data-remote-theme]:not([data-remote-theme='dark']) .remote-rich-code .hljs-deletion { color: #a1384f; }
 .remote-themed.remote-themed[data-ui='soft'] .markdown-body table { border-radius: 10px; font-size: .92em; }
 .remote-themed.remote-themed[data-ui='soft'] .markdown-body th { background: var(--ui-soft); padding: 9px 12px; }
 .remote-themed.remote-themed[data-ui='soft'] .markdown-body td { padding: 9px 12px; }
@@ -150,11 +159,6 @@
 .room-drawer-overlay.companion-surface[data-ui='soft'].is-detail-page .room-drawer-panel::before { display: none; }
 .renewal-leave-actions { display: flex; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
 .renewal-leave-actions > button { min-height: 42px; font-size: var(--ui-label); padding: 8px 12px; }
-.renewal-connection-guide { display: grid; gap: 11px; margin: 18px 0 24px; padding: 16px; border: 1px solid var(--ui-blue-edge); border-radius: 17px; background: var(--ui-blue-soft); }
-.renewal-connection-guide h3 { margin: 0 0 3px; font-size: var(--ui-text); color: var(--ui-ink); }
-.renewal-connection-guide ol { display: grid; gap: 12px; list-style: none; margin: 0; padding: 0; }
-.renewal-connection-guide li { display: flex; align-items: baseline; gap: 10px; font-size: var(--ui-label); line-height: 1.7; color: var(--ui-muted); }
-.renewal-connection-guide b { display: grid; place-items: center; width: 22px; height: 22px; flex: none; border-radius: 50%; background: var(--ui-paper); color: var(--ui-blue); font-size: 11px; }
 
 /* 阴影与圆角裁切分层，避免毛玻璃子层在预览上沿露出矩形尖角。 */
 :is(.companion-surface.companion-surface, .remote-themed.remote-themed)[data-ui='soft'] .background-editor { border-radius: 18px; }

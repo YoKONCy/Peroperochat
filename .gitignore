@@ -70,3 +70,6 @@ settings.json
 
 # Archived docs (原始文档与设计稿归档，仅本地保留)
 docs/archived/
+
+# 远程端视觉预览的截图与差异输出（tools/preview）
+tools/preview/output/

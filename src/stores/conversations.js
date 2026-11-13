@@ -29,7 +29,7 @@ async function refresh(entry, agentId, channel, force = false) {
   const revision = entry.revision
   const snapshot = await localChat.snapshot(agentId, channel)
   if (force || revision === entry.revision) {
-    entry.messages = snapshot.messages
+    entry.messages = [...snapshot.messages, ...entry.messages.filter(message => message.pendingRequestId)]
     entry.revision++
   }
   entry.loaded = true
@@ -60,6 +60,14 @@ export function useLocalConversation(channel = 'desktop') {
     entry.startedAt = Date.now()
     entry.activity = '正在听你说…'
     entry.controller = new AbortController()
+    const requestId = crypto.randomUUID()
+    if (input.content && !input.ephemeral) {
+      entry.messages = [...entry.messages, {
+        id: -Date.now(), role: 'user', agentId: 'user', content: input.content,
+        timestamp: Date.now(), status: 'sending', pendingRequestId: requestId,
+      }]
+      entry.revision++
+    }
     let started = false
     let preview = null
     let frameTimer = null
@@ -75,7 +83,7 @@ export function useLocalConversation(channel = 'desktop') {
     try {
       if (!entry.loaded) await refresh(entry, agentId, channel)
       const command = options.command || 'local_chat'
-      const request = { threadId: entry.threadId, ...(command === 'local_group_chat' ? {} : { agentId }), ...input }
+      const request = { threadId: entry.threadId, requestId, ...(command === 'local_group_chat' ? {} : { agentId }), ...input }
       const result = await localChat.turn(request, {
         command,
         signal: entry.controller.signal,
@@ -86,7 +94,10 @@ export function useLocalConversation(channel = 'desktop') {
             if (preview) flushPreview()
             entry.speaker = event.agentId
             started = true
-            if (event.user) mergeMessage(entry, event.user)
+            if (event.user) {
+              entry.messages = entry.messages.filter(message => message.pendingRequestId !== requestId)
+              mergeMessage(entry, event.user)
+            }
             entry.activity = '正在想怎么回答你…'
             preview = { ...event.message, content: '', reasoning: '', toolTimeline: [], status: 'pending', error: null }
             mergeMessage(entry, preview)
@@ -139,6 +150,7 @@ export function useLocalConversation(channel = 'desktop') {
       clearTimeout(frameTimer)
       frameTimer = null
       error.persisted = started
+      entry.messages = entry.messages.filter(message => message.pendingRequestId !== requestId)
       try { await refresh(entry, agentId, channel, true) }
       catch (refreshError) { console.error('恢复聊天记录失败：', refreshError) }
       throw error

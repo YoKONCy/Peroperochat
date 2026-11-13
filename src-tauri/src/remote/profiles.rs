@@ -44,7 +44,7 @@ fn decode_pairing(raw:&str)->ChatResult<PairingLink> {
     url.set_fragment(None);
     Ok(PairingLink {endpoint:normalize_endpoint(url.as_str(),true)?,code,requires_insecure})
 }
-#[tauri::command]
+#[tauri::command(async)]
 pub fn remote_decode_pairing(app:AppHandle,raw:String,mode_token:Token)->ChatResult<PairingLink> {
     let mode=app.state::<Coordinator>();let _gate=mode.gate(Some(&mode_token),false)?;
     // 扫码只校验并填表，不自动兑换配对码，也不替用户允许明文 HTTP。
@@ -70,7 +70,7 @@ pub(super) fn read_in(conn:&rusqlite::Connection,id:&str)->ChatResult<Profile> {
     serde_json::from_str(&raw.ok_or_else(||ChatError::new("PROFILE_NOT_FOUND","远程连接配置不存在"))?)
         .map_err(|_|ChatError::new("INVALID_PROFILE","远程连接配置损坏"))
 }
-#[tauri::command]
+#[tauri::command(async)]
 pub fn remote_profiles(mode:tauri::State<Coordinator>)->ChatResult<Vec<Profile>> {
     let conn=crate::mode::open_existing(mode.path())?;let mut stmt=conn.prepare("SELECT value FROM remote_profiles ORDER BY rowid")?;
     let rows=stmt.query_map([],|r|r.get::<_,String>(0))?;

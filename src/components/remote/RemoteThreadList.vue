@@ -1,9 +1,8 @@
 <template>
   <div class="conversation-thread-list">
-    <template v-for="(item, index) in threads" :key="item.id">
-    <h3 v-if="index === 0" class="chromatic-section-label">{{ t(firstPage ? '最近会话' : '其他会话') }}</h3>
-    <h3 v-else-if="firstPage && index === 1" class="chromatic-section-label">{{ t('其他会话') }}</h3>
-    <article class="conversation-thread-row" :class="{ 'is-current': item.id === selectedId, 'is-holding': holdingId === item.id, 'is-featured': firstPage && index === 0 }">
+    <section v-for="group in groups" :key="group.id">
+    <h3 class="chromatic-section-label">{{ t(group.label) }}</h3>
+    <article v-for="item in group.items" :key="item.id" class="conversation-thread-row" :class="{ 'is-current': item.id === selectedId, 'is-holding': holdingId === item.id, 'is-featured': item.threadKind === 'main' }">
       <button type="button" class="conversation-thread-open" :disabled="disabled" :aria-current="item.id === selectedId ? 'true' : undefined"
         @pointerdown="startHold($event, item)" @pointermove="moveHold" @pointerup="cancelHold" @pointercancel="cancelHold" @pointerleave="cancelHold"
         @contextmenu.prevent="showActions(item)" @click="open($event, item)">
@@ -11,20 +10,25 @@
         <span><strong>{{ item.title || t('新的对话') }}</strong><small :title="remoteDate(item.updatedAt || item.createdAt)">{{ agents.find(agent => agent.id === (item.agentId || agentId))?.name }} · {{ remoteDate(item.updatedAt || item.createdAt, { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' }) }}</small></span>
       </button>
       <button type="button" class="conversation-thread-more" :disabled="disabled || !online" :aria-label="t('管理会话：{0}', [item.title || t('新的对话')])" :title="t('会话管理')" @click="showActions(item)"><RoomIcon name="more" /></button>
-      <div v-if="firstPage && index === 0" class="conversation-thread-footer"><span class="chromatic-tag" data-ui-tone="rose"><RoomIcon name="chat" />{{ t(item.id === selectedId ? '当前会话' : '最近聊过') }}</span><button type="button" class="chromatic-action" :disabled="disabled" @click="continueThread($event, item)">{{ t('接着聊') }}<RoomIcon name="next" /></button></div>
+      <div v-if="item.threadKind === 'main'" class="conversation-thread-footer"><span class="chromatic-tag" data-ui-tone="rose"><RoomIcon name="chat" />{{ t('主会话') }}</span><button type="button" class="chromatic-action" :disabled="disabled" @click="continueThread($event, item)">{{ t('接着聊') }}<RoomIcon name="next" /></button></div>
     </article>
-    </template>
+    </section>
   </div>
 </template>
 
 <script setup>
-import { ref, onBeforeUnmount, watch } from 'vue'
+import { computed, ref, onBeforeUnmount, watch } from 'vue'
 import RemoteAvatar from './RemoteAvatar.vue'
 import RoomIcon from '../companion/RoomIcon.vue'
 import { t, remoteDate } from '../../i18n/remote'
 
-const props = defineProps({ threads: { type: Array, default: () => [] }, agents: { type: Array, default: () => [] }, agentId: String, selectedId: String, online: Boolean, disabled: Boolean, firstPage: { type: Boolean, default: true } })
+const props = defineProps({ threads: { type: /** @type {import('vue').PropType<import('../../types/ui').DataRecord[]>} */ (Array), default: () => [] }, agents: { type: Array, default: () => [] }, agentId: String, selectedId: String, online: Boolean, disabled: Boolean, firstPage: { type: Boolean, default: true } })
 const emit = defineEmits(['open', 'manage'])
+const groups = computed(() => [
+  { id: 'main', label: '主会话', items: props.threads.filter(item => item.threadKind === 'main') },
+  { id: 'side', label: '侧会话', items: props.threads.filter(item => item.threadKind === 'side') },
+  { id: 'legacy', label: props.firstPage ? '最近会话' : '其他会话', items: props.threads.filter(item => !['main', 'side'].includes(item.threadKind)) },
+].filter(group => group.items.length))
 const holdingId = ref(null)
 let timer = null, pointer = null, suppressedClick = null
 function cancelHold() { clearTimeout(timer); timer = null; pointer = null; holdingId.value = null }

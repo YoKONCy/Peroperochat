@@ -1,26 +1,24 @@
 # infOS 远程客户端技术文档
 
-PeroperoChat 作为用户所选 infOS 实例的客户端。LLM、工具执行、上下文编译、记忆检索、任务和提醒调度由该实例负责；本机负责连接、受限缓存、媒体呈现、输入与文件传输、原生通知及设备交互。本文合并自双模式规划、逻辑层实装、远程 UI、管理接入、文件说明、安卓远程通知与对话实装等文档（原始文件归档于 `docs/archived/`）。
+在 infOS 客户端模式下，PeroperoChat 作为用户所选 infOS 实例的随身客户端运行：LLM 推理、工具执行、上下文编译、记忆检索与定时调度均由服务端承担，本机负责加密连接、受限投影缓存、流式富文本与文件交互、原生通知以及远程管理转发。
 
-> 边界声明：接口存在不代表 Android 原生桥接、真实 infOS 或移动端用户流程已完成验收；真机与真实服务端联调状态见 `BUILD_AND_RELEASE.md` 的版本记录。所有子应用、系统任意 HTTP 代理、内置浏览器不在范围内。
+> 适用范围：不包含浏览器外跳任意网页与非受控通用 HTTP 代理；所有远程业务仅面向已配对的可信 infOS 实例。
 
 ## 1. 双模式定位与运行控制
 
-### 1.1 模式定位
+### 1.1 模式隔离边界
 
-| | 独立模式 | infOS 客户端模式 |
-| --- | --- | --- |
-| 权威 | 业务全部在本地 Rust | 聊天、任务与记忆以服务端为准 |
-| 数据 | 本机 SQLite 与 TDB，不向 infOS 上传 | 每个连接一个独立分区 |
-| 同名角色 | 两种模式中是不同数据归属，不因 `agentId` 相同而共用状态 | 同左 |
+| 维度 | 独立模式 | infOS 客户端模式 |
+| :--- | :--- | :--- |
+| **权威来源** | 全部业务在本地 Rust 执行 | 对话、任务与记忆以 infOS 服务端为准 |
+| **数据归属** | 本机 SQLite 与 TriviumDB，不向远程上传 | 按连接 `profileId` 分区隔离存储 |
+| **同名角色** | 与远程同名 `agentId` 数据完全隔离，互不共享 | 同左 |
 
-关键约束：**同一安装实例最多只有一套业务运行体系有效**——允许切换过程中暂时零套运行，不允许两套短暂并行。
+核心不变式：**同一应用安装实例在任意时刻最多只有一套业务运行体系处于活跃状态**——模式切换期间允许短暂无活跃目标，但不会出现两套模式并行运行。网络断线时仍保持远程模式（界面呈离线态），不会自动切回独立模式；切换远程档案视为完整目标切换，旧连接请求、缓存投影与在途回调立即失效。
 
-关闭、断线与切换的含义：远程断线仍为远程模式（显示离线），不自动启用独立模式；切换远程实例是一次完整的运行目标切换，旧实例请求、缓存投影、输入凭据和回调失效；已被 infOS 接受的执行继续由服务端负责，本机断开传输不等于服务端回滚。
+### 1.2 运行控制库（`runtime.sqlite`）
 
-### 1.2 运行控制库
-
-控制文件位于应用私有目录 `data/control/runtime.sqlite`，投影字段：
+运行控制状态存储于应用私有目录 `data/control/runtime.sqlite`，核心投影字段如下：
 
 ```text
 schemaVersion / revision / installationId / runtimeOwnerId
@@ -28,182 +26,173 @@ selectedTarget / activeTarget / activationEpoch
 phase / switchId / lastError
 ```
 
-目标格式为 `{ mode: 'standalone' }` 或 `{ mode: 'remote', profileId }`；活动令牌为 `{ installationId, target, epoch }`。
+目标格式为 `{ mode: 'standalone' }` 或 `{ mode: 'remote', profileId }`；每次请求、WebSocket 推送、回调、后台任务与通知动作均携带并校验活动令牌 `{ installationId, target, epoch }`。
 
-- 原生控制库是唯一权威，前端/localStorage 的副本不能单独授予执行权。每个请求、事件、回调、后台任务和通知动作携带当前运行令牌。
-- `mode_switch` 串行执行：先持久关闭运行门并递增代次，再通知前端、停止旧本地请求、断开远程观察连接、等待本地租约退出、受限取消清理、撤销系统登记，最后开放新目标。失败进入 `recovery_required`，活动目标为空，不自动启用另一模式。
-- 本地控制、JNI、桌面提醒通知及最终数据库提交使用同一控制 SQLite 的 `BEGIN IMMEDIATE` 短事务；控制事务先于业务数据库锁获取。网络与原生插件等待不持有控制事务。
-- 启动先递增代次并关闭门；只有选中独立目标时才初始化独立角色及业务存储。另一应用进程接管后，旧进程因所有权不符失去业务与切换权限。
-- 不使用墙上时钟判断新旧；WebSocket 连接代次、Surface generation、Input Seat epoch 与应用模式代次互不混用。
+- **单一运行权威**：原生控制库是唯一裁决源，前端内存或 `localStorage` 不可自行授予执行权。
+- **串行切换与安全态**：`mode_switch` 按「关闭运行门并递增代次 → 通知前端 → 停止旧本地请求与远程观测连接 → 等待租约退出及受限清理 → 撤销系统登记 → 开放新目标」串行推进；若中途失败则置为 `recovery_required`（活动目标置空）。
+- **并发与代次隔离**：控制操作、JNI 通知回调、桌面提醒及最终落盘统一通过短暂 `BEGIN IMMEDIATE` 控制事务协调（锁定顺序严格先于业务库）；WebSocket 游标、Surface `generation`、Input Seat `epoch` 与应用模式 `activationEpoch` 各自独立计数，严禁混用或依赖墙上时钟裁决新旧。
 
-### 1.3 数据、凭据与缓存隔离
+### 1.3 目录隔离、凭据保护与请求幂等
 
 ```text
 应用私有数据目录/
-  data/control/runtime.sqlite             模式控制与切换恢复，不保存业务正文
-  data/peropero.db                        独立模式专用
-  data/diary/...                          独立模式 TDB
-  data/remote/{profileId}/client.sqlite   指定远程身份的投影缓存与传输状态
-  data/remote/{profileId}/assets/...      该范围内的媒体与临时文件
+  data/control/runtime.sqlite             模式切换控制与代次恢复（不存业务正文）
+  data/peropero.db                        独立模式业务库
+  data/diary/...                          独立模式 TriviumDB
+  data/remote/{profileId}/client.sqlite   指定远程档案的投影缓存、传输与通知状态
+  data/remote/{profileId}/assets/...      对应档案的媒体与临时文件
 ```
 
-- 连接配置不可原位改变地址，新连接产生新 `profileId`，相同服务端不自动合并分区。Docker 重建可能改变基于主机名派生的 `serverId`：只有原设备令牌仍被服务端确认为同一个未过期设备，且授权核对前后的实例编号一致，才原子更新原连接的实例编号与展示信息；保留 `profileId`、凭据、草稿、阅读位置与请求墓碑。共享管理令牌、新配对或其他设备身份不能代替原设备证明。原连接重新授权与证书核对也复用此检查，前后台遵循同一规则。
-- 凭据平台为 Windows DPAPI、Android Keystore、iOS Keychain，不降级为明文；凭据不进入 Vue Store、localStorage 或业务备份。Android 云备份排除控制库、远程缓存、远程加密凭据与提醒系统登记缓存。
-- 投影缓存最多 64 个键、正文总计 32 MiB；单份超过 8 MiB 时跳过离线缓存，不阻断在线阅读。对话、队列与任务投影使用独立的 64 MiB 额度。历史消息默认每页 24 条，超出普通页预算时自动减半重读。
-- 写请求先登记不含客户端请求 ID 的内容指纹与恢复上下文；相同身份不能换内容，相同内容存在未决记录时也拒绝用新身份重复发送。重启／切换后，旧代次遗留的 `sending` 转为 `unknown`，绝不自动重放。
-- 原生错误携带可选 `outcome`（`not_sent` / `rejected` / `failed` / `unknown`）：只有明确连接失败或发送前错误才可判断未发送；超时、异常响应、观察断开保留未知状态。
-- `remote_reconcile_request` 只在已观察到持久 messageId、服务端权威投影确认相同会话／角色／消息时终结未知聊天；`remote_review_request` 供 UI 显式核对，需要请求指纹与非空核对说明，只记录用户已核对，不伪造服务端结果。
+- **连接身份延续**：档案不允许直接改写远程地址，新增地址生成新 `profileId`。当服务端因 Docker 重建导致基于主机名派生的 `serverId` 变化时，仅当原设备令牌仍被服务端认可为同一未过期设备且核验前后实例编号一致，才原子更新实例标识与展示信息，保留原 `profileId`、凭据、草稿、阅读位置与请求墓碑。
+- **平台凭据存储**：连接密钥分别托管于 **Windows DPAPI / Android Keystore / iOS Keychain**，不进入 Vue Store、Web Storage 或业务 JSON 备份；Android 云备份自动排除控制库、远程缓存、加密凭据与提醒调度缓存。
+- **投影缓存配额**：正文投影最多保留 64 键 / 32 MiB（单条超 8 MiB 跳过缓存），对话/队列/任务投影独立拥有 64 MiB 配额；历史分页默认每次 24 条，触发大小预算时自动减半重读。
+- **发送幂等与状态同步**：写请求发送前先落盘不含 `requestId` 的内容指纹，防止同内容未决期间重复创建新请求；重启或切换模式后，遗留的 `sending` 自动转为 `unknown` 等待人工或对账确认。原生错误携带 `outcome`（`not_sent` / `rejected` / `failed` / `unknown`）。
+- **队列回执与断线核对**：聊天消息通过持久客户端 UUID 提交，接收回执以服务端队列快照为准；`remote_reconcile_request` 根据队列 UUID、持久 `pairId` 或 `messageId` 在前台定期同步断线后状态，重发复用同一 UUID 交由服务端队列去重。本机在回执前展示临时发送项并与正式消息关联，Surface 结算帧按代次与删除墓碑过滤延迟数据。
+- **未知状态处理**：`remote_review_request`（保留兼容命名）支持一键忽略未知操作记录，备注可留空，同时兼容读取历史 `reviewed` 状态记录。
 
 ## 2. IPC 与前端服务
 
-| 原生命令 | 调用方与含义 |
-| --- | --- |
-| `mode_snapshot`、`mode_switch` | `src/stores/mode.js`；读取运行权威、提交目标切换 |
-| 现有独立命令 + 必填 `modeToken` | `src/services/localChat.js`；调用前后核对身份 |
-| `remote_profiles`、`remote_save_profile`、`remote_delete_profile` | 连接配置管理；不返回凭据；当前选中配置不能删除 |
-| `remote_query` | 受限的主体只读目录；可显式要求只读当前分区缓存 |
-| `remote_action` | 受限写意图，每次携带稳定 `requestId` |
-| `remote_chat` | 以持久客户端 UUID 提交服务端消息队列 |
-| `remote_connect`、`remote_subscribe` | Gateway 身份握手与主体流订阅，原生负责重连 |
-| `remote_surface_input` | 根据服务端请求确定角色，获取输入席位并提交审批／回答 |
-| `remote_pending_requests` | 查询当前分区尚待核对的写请求 |
-| `remote_upload`、`remote_resource` | 原生鉴权附件上传、头像／附件／带版本工作区资源读取 |
-| `remote_ui_read`、`remote_ui_write` | 仅接受 Home、Session、Character 三类有限作用域 |
-| `remote_manage` | 管理与工作台转发（见第 7 节） |
-| `remote_notifications`、`remote_ack_notification` | 离线读取持久通知、显式已读回执 |
+| 原生命令 | 用途 |
+| :--- | :--- |
+| `mode_snapshot`、`mode_switch` | 读取运行控制快照与提交模式切换（`src/stores/mode.js`） |
+| 独立模式命令 + `modeToken` | 本地对话命令携带运行令牌校验身份（`src/services/localChat.js`） |
+| `remote_profiles`、`remote_save_profile`、`remote_delete_profile` | 远程档案增删改查（不返回密钥；当前选中档案禁止删除） |
+| `remote_query` | 受限只读数据查询，支持指定仅读取本地离线缓存 |
+| `remote_action` | 携带稳定 `requestId` 的受限写意图转发 |
+| `remote_chat` | 携带持久 UUID 向 `/api/chat/queue/:threadId` 提交对话消息 |
+| `remote_connect`、`remote_subscribe` | Gateway 身份握手与事件流订阅，底层自动重连 |
+| `remote_surface_input` | 根据请求主体身份认领输入席位并提交审批或提问回答 |
+| `remote_pending_requests` | 查询当前分区待确认的写请求记录 |
+| `remote_upload`、`remote_resource` | 原生鉴权附件上传与头像、媒体、带版本工作区资源读取 |
+| `remote_ui_read`、`remote_ui_write` | 读写 `Home` / `Session` / `Character` 三类本机视图状态 |
+| `remote_manage` | 管理配置与工作台命令转发（详见第 7 节） |
+| `remote_notifications`、`remote_ack_notification` | 读取本地缓存通知与发送显式已读回执 |
 
-远程命令必须携带当前 `token`，响应与事件携带 `modeToken`，前端再次过滤旧异步结果。运行控制的 `revision` 用于拒绝晚到的旧模式投影，不能与 Surface revision 或 Input Seat epoch 混用。
+新版主会话「保存并重新生成」按修订保存消息正文后，调用 `/chat/threads/:id/regenerate` 并持久化同一提交 UUID 以便安全重试；历史旧会话恢复沿用原路径兼容。所有远程命令及回调均携带当前 `modeToken` 与 `revision`，过滤跨模式或跨代次过期事件。
 
-### 2.1 连接与认证
+### 2.1 连接、配对与认证
 
-- 认证方式：`pair` 使用一次性配对码，`login` 使用管理凭据兑换设备会话，`bearer` 为显式兼容模式。表单默认配对，不自动降级或重放配对请求。
-- 配对链接仅接受 HTTP(S) 的 `/#/app?pair=<10 位十六进制>` 格式，拒绝附带用户信息、重复参数和回环地址；明文 HTTP 的同意不会从二维码继承。扫码使用 Tauri 原生 barcode-scanner（Rust 与前端锁定 2.4.6 版本），配对码不写入日志或 Web 存储。
-- Rust 从 `Set-Cookie` 提取 `infos_device`，核对 `/api/client-access/status` 与稳定实例身份；设备令牌只进入原生系统保护存储，Cookie 不交给 WebView。未勾选「保持登录 30 天」时授权绑定本次进程所有者，重启后拒绝复用。
-- 使用标准 TLS 验证，不跟随 HTTP 重定向；地址中不接受用户名、密码、查询参数与片段。每次业务传输前重新核对保存的 `serverId`；编号变化先按原设备授权核对连续性，认证失败、无法证明原实例或协议不兼容时拒绝操作。身份恢复提交受运行代次与原授权快照约束，不能覆盖并发换证、重新配对或切换模式。
-- 凭据过期、服务端撤销、HTTP 401 或带授权失效原因的 WS 关闭会停止自动重连，保留远程目标；`remote_logout_device` 明确注销设备会话，不删除远程业务与本机阅读记录。
+- **三种登录路径**：`pair`（一次性配对码，默认）、`login`（管理凭据换取设备令牌）与 `bearer`（显式令牌兼容），不自动降级鉴权方式。
+- **配对校验**：链接严格限定 HTTP(S) 的 `/#/app?pair=<10 位十六进制>` 格式，拒绝附带账号、重复参数或回环地址；局域网明文 HTTP 须用户在界面显式勾选授权，扫码由 Tauri 原生 `barcode-scanner`（前后端锁定 `2.4.6`）执行，配对码不写日志或 Web 存储。
+- **会话令牌管理**：Rust 从 `Set-Cookie` 提取 `infos_device` 并核对 `/api/client-access/status` 与实例身份；令牌写入系统保护存储且不注入 WebView Cookie。未勾选「保持登录 30 天」时会话绑定当前进程生命周期，重启失效。
+- **连接验证与复用**：强制标准 TLS 验证、禁用 HTTP 自动重定向、禁用 URL 凭据/查询/片段。相同运行代次与连接配置在 **10 秒** 窗口内复用一次 `serverId` 核验与连接池（认证或证书出错即刻清除缓存）；遇到 HTTP 401、凭据撤销或鉴权失败关闭 WS 时停止自动重连。`remote_logout_device` 仅注销当前设备会话，保留本机阅读记录与远端业务数据。
 
-### 2.2 Gateway 与恢复
+### 2.2 Gateway 订阅与输入席位
 
-- WS 升级通过 Bearer 鉴权，`hello` 不重复发送凭据。Gateway 按流记录本次运行的 sequence，重订阅传回真实游标并消费补发事件，按事件身份去重；事件缺口、保留窗口过期或服务端序号回退触发权威快照刷新。游标不跨模式或连接复用。
-- 断线重连采用带随机抖动的指数退避；认证／身份／协议错误暂停自动重连。恢复订阅仅刷新读模型，不重新发送写操作。
-- 缓存查询在发起时取得持久化读票据，只有该键最新票据能写缓存；网络不可用时允许读取明确标识为过期的缓存，认证或实例身份变化不触发此兜底。
-- 输入席位按交互请求真实角色获取；另一客户端抢先回答、席位失效或 Surface generation 改变时由服务端拒绝。输入提交在 Rust 串行化；业务提交仅在服务端明确返回席位缺失／过期／身份不匹配且尚无副作用时恢复一次。
+- **序列号补发与重连**：WebSocket 升级头携带 Bearer 鉴权（`hello` 帧不重传密钥）。Gateway 按流追踪当次运行 `sequence`，断线后采用带随机抖动的指数退避重连，依据真实游标拉取增量补发并去重；出现序列缺口、保留窗口过期或序号回退时主动全量刷新快照。
+- **读票据与过期兜底**：缓存查询发起前取得持久化读票据，仅最新票据允许覆盖本地缓存；纯网络断联时允许读取带过期标记的旧缓存，但证书/实例变更时不启用此兜底。
+- **输入席位（Input Seat）**：审批与问答按服务端交互请求归属角色抢占席位；若被其他客户端抢答、席位失效或 Surface `generation` 变更，服务端直接拒绝。业务提交仅在服务端明确返回席位丢失或未产生副作用时自动重新认领一次。
 
-## 3. 界面结构
+## 3. 界面导航与主题体系
 
-入口：独立模式房间菜单的「infOS 客户端」或设置的「运行模式与远程连接」。底栏五栏：首页、会话、任务、资料、管理；通知与审批从页头铃铛或首页入口进入。启动保留上次会话恢复，优先从当前远程分区的 Home 记录恢复角色。
+远程模式入口位于独立房间菜单的「infOS 客户端」或 **设置 → 运行模式与远程连接**。底栏固定五个核心标签：**`首页`、`会话`、`任务`、`资料`、`管理`**；通知与审批收件箱从页头铃铛或首页直达。启动默认恢复上次远程会话，并优先读取当前分区的 Home 记录还原角色。
 
-| 功能 | 实际接入 |
-| --- | --- |
-| 首页 | 当前实例、连接状态、角色 CG 或头像、上次会话、服务端任务、当前会话工作区文件、通知入口 |
-| 会话 | Surface/SSE 投影、历史分页、阅读位置恢复、原生草稿、附件上传、发送和停止 |
-| 极简／聊天／工作切换 | `interaction_mode` 受限 Rust 意图，成功后重新读取会话权威数据 |
-| 执行和审批 | 工具／思考折叠、任务投影、审批、提问与回答、任务控制 |
-| 任务 | 状态过滤、分页、新建远程任务；提交结果不明确时禁止直接重复派发 |
-| 资料 | 文件分类、版本描述读取、独立的记忆和文档检索、分页与来源详情 |
-| 管理与工作台 | 见第 7 节 |
-| 通知 | 设备待阅通知、标为已读、待审批、问题、待核对请求 |
+| 板块 | 核心内容与行为 |
+| :--- | :--- |
+| **首页** | 当前实例概况、连接状态、角色 CG/头像、上次会话快捷入口、服务端任务与当前工作区文件、通知概览 |
+| **会话** | Surface/SSE 流式投影、历史分页加载、阅读位置记忆、原生输入草稿、队列操作、附件上传与停止生成 |
+| **交互模式切换** | 极简 / 聊天 / 工作模式通过 `interaction_mode` 切换并重新拉取会话权威投影 |
+| **执行与审批** | 紧凑折叠的思考过程与工具轨迹、关联任务、交互审批与问答确认 |
+| **任务** | 按状态分页筛选与新建远程任务（结果未决时禁止盲目重复派发） |
+| **资料** | 分类文件浏览、版本描述、独立记忆与文档检索及来源详情 |
+| **管理与工作台** | 五大管理分组、Skills/插件/提示词/终端/据点等工作台能力（详见第 7 节） |
+| **通知中心** | 持久待阅通知、显式已读回执、待审批与待核对操作请求 |
 
-模式切换使用内联 SVG＋CSS 过渡动画（星笺、缎带、月晷），首次绘制后至少展示 2 秒，原生交接完成后淡出；普通断线重连不弹全屏动画。远程工作区用 `restoringView` 标识首次恢复；普通网络重连不触发全屏页。
+模式切换采用内联 SVG 与 CSS 过渡动效（星笺、缎带、月晷），首次绘制至少持续 2 秒并在原生切换完成后淡出；普通网络断连不触发全屏转场动画。
 
-### 3.1 主题与本机外观
+### 3.1 主题、本地外观与图标资源
 
-- `remote-theme.css` 限定在 `.remote-themed` 容器；主题不通过独立模式角色 ID 或独立 Store 推导。
-- 显示偏好：标准浅色、暗色、跟随系统；八组配色；减少动效。持久化在连接分区 `client.sqlite`：连接级 `{ kind: 'appearance' }` 与角色级 `{ kind: 'character', agentId }`，均不写入 localStorage。
-- 角色样式包：JSON 导入，`schemaVersion: 1`，字段含 `lightAccent`、`darkAccent`、`secondary`、`bubble`（`standard/ribbon/soft`）、`decoration`（`standard/ribbon/constellation/none`）；文件上限 32 KiB，Rust 校验枚举，拒绝任意 CSS／脚本／资源 URL。
-- 本机 CG 支持 PNG、JPEG、WebP，上限 2 MiB，按角色保存；CG 与样式属于本机展示偏好，不改写服务端、不上传、不与其他客户端同步。
-- `RemoteIcon.vue` 仅渲染 `remoteArtwork.js` 内受信任的矢量常量，不接受远程 SVG 源码。
+- `.remote-themed` 限定 `remote-theme.css` 作用范围，外观状态按连接与角色分别持久化于 `client.sqlite`（`{ kind: 'appearance' }` 与 `{ kind: 'character', agentId }`），不与独立模式状态混淆。
+- 支持 **浅色 / 暗色 / 跟随系统**、**8 套主题配色** 及 **减少动效** 开关。
+- **本机角色定制**：支持导入角色样式 JSON（`schemaVersion: 1`，上限 32 KiB，含 `lightAccent`、`darkAccent`、`secondary`、`bubble`、`decoration`，Rust 严格校验枚举并拒绝外链脚本与任意 CSS）与本地角色 CG（PNG/JPEG/WebP ≤ 2 MiB），仅作用本机界面呈现。
+- **矢量图标安全**：`RemoteIcon.vue` 仅渲染 `src/constants/remoteArtwork.js` 内置的受信任矢量常数，不解析来自远端的任意 SVG 代码。
 
-## 4. 对话渲染
+## 4. 增量富内容渲染
 
-- `RemoteRichText` 持有每个正文节点的增量分段器：稳定块交给 `RemoteRichBlock`，活跃尾部使用 `RemoteStreamText` 追加；不为每次正文增量整段替换 Markdown DOM。停止或失败后，未闭合围栏、公式、HTML 保留原文。
-- 稳定块支持 Markdown、代码面板（highlight.js 按需高亮）、公式（KaTeX）、Mermaid（严格模式＋二次净化）、HTML／SVG 和独立资源引用。表格固定首列并局部横滑；解析失败不阻断其他块。
-- HTML 正文使用独立无同源 iframe 与 CSP，自包含预览不能读取网络或应用原生桥；文件 HTML 通过原生层申请 infOS 短期票据（`/api/attachments/browser-preview`），前端不接收设备凭据。隐藏或离开可见区后卸载 iframe。
-- 工具轨迹：按同一 Surface 内唯一的 `callId` 合并调用与返回；NIT 内部工具按 `parentCallId` 收纳到 `run_script` 父卡，子调用独立折叠。工具展示名称优先服务端 `display`，离线时使用 97 项官方工具兜底（仅展示，不代表已获执行授权）。参数和结果默认渲染前 6000 字符。
-- 依赖固定版本：`highlight.js@11.11.1`、`katex@0.18.4`、`mermaid@11.16.1`。
+- **增量分段器**：`RemoteRichText` 为每条消息维护增量分段状态，已闭合的稳定块交给 `RemoteRichBlock` 缓存渲染，流式增长中的尾部交给 `RemoteStreamText` 追加，避免整段 DOM 重复销毁重建；生成异常中断时，未闭合的代码围栏、公式或 HTML 原样呈现源码。
+- **富文本支持**：支持完整 Markdown、代码高亮（`highlight.js@11.11.1`）、公式（`katex@0.18.4`）、流程图（`mermaid@11.16.1` 严格模式 + 二次净化）、独立资源引用与首列固定可横滑表格；单块解析失败不影响相邻区块正常渲染。
+- **HTML 沙盒与票据**：内联 HTML 在无同源独立 `iframe` 与严格 CSP 沙盒中运行，隔离网络与原生桥访问；工作区 HTML 文档通过原生层向 `/api/attachments/browser-preview` 申请短期预览票据，前端不接触设备鉴权凭据。组件离开可视区域后自动卸载 `iframe`。
+- **工具轨迹聚合**：按同一 Surface 唯一的 `callId` 配对调用与输出（NIT 内部调用按 `parentCallId` 折叠收纳进 `run_script` 父卡片）；展示名称优先取服务端 `display` 字段，离线时匹配 97 项内置工具名称表，参数与结果默认展示前 6000 字符。
 
-## 5. 文件访问、预览与保存
+## 5. 文件下载、预览与资源白名单
 
-入口：会话消息附件、资料页工作区文件、管理工作台。私有文件读取和保存共用 `Resource` 白名单与 Rust 原生鉴权，不向页面提供服务端凭据。相关 Rust 转发：`remote_resolve_resource` → `/api/attachments/resolve-reference`、`Resource::Reference` → `/api/attachments/reference-content`、`remote_html_preview` → `/api/attachments/browser-preview`。
+对话附件、资料页与工作台文件共用 `Resource` 白名单与原生鉴权转发：`remote_resolve_resource` → `/api/attachments/resolve-reference`、`Resource::Reference` → `/api/attachments/reference-content`、`remote_html_preview` → `/api/attachments/browser-preview`。
 
-### 5.1 保存
+### 5.1 流式原件下载
 
-- `remote_download_resource` 原生 HTTP 流逐块写入专用临时文件；单任务上限 2 GiB，同时允许一个下载任务，显示进度、可取消。
-- 下载空闲超时 45 秒，总请求超时 30 分钟；已知长度在接收前后校验。没有断点续传。网络失败、取消、长度不符不显示成功，不自动重试或覆盖现有文件。
-- Android 使用系统文档创建选择器，不申请整盘存储权限；Windows 保存到下载目录并加唯一前缀；iOS 保存到应用「文稿/infOS导出」。
+- `remote_download_resource` 通过原生 HTTP 流直接写入专用临时路径（单任务上限 **2 GiB**，并发度 1），实时回传进度并支持取消；空闲超时 45 秒、总超时 30 分钟，已知大小会在传输前后校对长度（暂不支持断点续传）。
+- 平台落盘方式：Android 调用系统文档创建器（无需全盘存储权限）；Windows 写入系统下载目录并防重名；iOS 写入应用 `文稿/infOS导出`。
 
-### 5.2 预览
+### 5.2 内置多格式预览
 
-| 格式 | 显示方式与限制 |
-| --- | --- |
-| 图片／GIF、音频、视频 | 消息内查看与放大；小图片自动读取上限 8 MiB；完整预览上限 100 MiB，按原生 Range 分段拼接 Blob |
-| 文本、代码、JSON、XML | UTF-8 源码预览，完整面板最多前 256 KiB，小窗最多前 64 KiB |
-| MD | 小窗正文片段，展开后富文本阅读 |
-| HTML | 小窗隔离预览；完整面板优先 infOS 短期票据；页面不具有同源或原生桥权限 |
-| SVG | 隔离 iframe 预览与源码切换；截断内容只显示源码 |
-| PDF | 本地 PDF.js，逐页画布；文件最大 512 MiB，每次只绘制一页；不提供脚本、活动表单执行 |
-| DOCX / DOC | 正文文字速览；DOC 在 Worker 内提取未加密的 Word 97–2003 正文片段，不执行宏 |
-| XLSX / CSV | 工作表及缓存单元格值；不计算公式，每表最多 200 行、30 列 |
-| PPTX | 各页文字速览 |
-| ZIP | 目录与条目大小，最多 600 项，不解压 |
-| ODT/ODS/ODP、EPUB、RTF | 文本内容速览 |
-| DOCM/XLSM/PPTM | 只读取正文 XML；宏不载入不执行 |
-| 其他（RAR/7z、旧版 XLS 等） | 保留元数据与保存原件入口 |
+| 格式 | 预览能力与资源上限 |
+| :--- | :--- |
+| **图片 / GIF / 音视频** | 消息内联展示与灯箱放大；小图自动加载 ≤ 8 MiB；大媒体完整预览 ≤ 100 MiB（原生 Range 分段拼接） |
+| **文本 / 代码 / JSON / XML** | UTF-8 源码高亮预览，完整面板前 256 KiB、小窗前 64 KiB |
+| **Markdown** | 小窗展示摘要片段，展开进入完整富文本视图 |
+| **HTML / SVG** | 独立隔离 `iframe` 渲染与源码查看；文档型 HTML 优先通过服务端短期票据预览；被截断 SVG 仅显示源码 |
+| **PDF** | 本地 PDF.js 逐页渲染（文件上限 512 MiB，每次仅绘制当前单页，禁用脚本与活动表单） |
+| **DOCX / DOC / PPTX / ODT / EPUB / RTF** | Worker 提取正文文本速览；DOC 仅读取未加密 Word 97–2003 正文片段，忽略宏 |
+| **XLSX / CSV / ODS** | 展示工作表及缓存值，不触发公式重算，单表限制 200 行 × 30 列 |
+| **DOCM / XLSM / PPTM** | 仅提取纯正文 XML，绝不载入或执行宏 |
+| **ZIP** | 在 Worker 内浏览目录结构与条目大小（上限 600 项，不解压磁盘） |
+| **其他压缩包（RAR / 7z 等）** | 显示文件元信息与原件保存入口 |
 
-Office 与 ZIP 输入上限 8 MiB，解包在独立 Worker 中执行；XML 拒绝 DTD/实体声明。文件预览任务最多并发两个；离开可见区后停止播放器、卸载 PDF／HTML 预览。
+Office 与 ZIP 预览统一限制输入文件 ≤ 8 MiB，解包操作隔离在独立 Web Worker 中执行，XML 解析拒绝 DTD 与实体扩展；文件预览最大并发任务数为 2，离开视口时释放音频/视频播放器及 PDF/HTML 资源。
 
-## 6. 安卓远程后台接收
+## 6. Android 独立后台通知服务
 
-独立原生进程接收 infOS 通知，不依赖 Google 服务；不包含厂商推送、FCM、UnifiedPush 或 iOS APNs，默认关闭。
+可选开启的独立后台事件接收进程，不依赖 Google 服务（GMS）、FCM、UnifiedPush 或 APNs（默认关闭）。
 
 ```mermaid
 flowchart LR
-    UI[主进程：Tauri / Vue] --> Control[(运行目标与代次控制库)]
-    Service[独立进程：Android 前台服务] --> JNI[JNI / Rust 通知运行时]
+    UI[主进程：Tauri / Vue] --> Control[(runtime.sqlite 运行控制)]
+    Service[独立进程 :remote_notifications] --> JNI[JNI / Rust 通知运行时]
     JNI --> Control
     JNI <-->|Bearer / WebSocket| Server[infOS Gateway]
     JNI --> Notify[Android 系统通知]
     Notify -->|用户点击| UI
 ```
 
-- `RemoteNotificationService` 运行在 `:remote_notifications` 进程，不创建 Activity、WebView 或本地 Agent；Rust 接收器使用当前线程 Tokio 运行时，不依赖 Tauri `AppHandle`。
-- Android 14+ 声明 `specialUse` 前台服务类型；接收进程通过 Android Keystore 解密凭据（密文位于 `noBackupFilesDir/remote-credentials/` 的原子文件，旧 SharedPreferences 密文迁移）。
-- 协议：`GET /api/distributed/identity` 核对 `serverId` → 读取分区 `preferences.principal`（首次通过 `/api/agents` 发现角色）→ Bearer 连接 `/ws/gateway` → 协议版本 1 `hello`（节点身份 `ppc-notifier-{installationId}-{profileId}`，不申请输入席位、不提交任何写操作）→ 只处理 `push / durable_notification`。
-- 心跳每 15 秒，45 秒无入站活动则重连；认证失效、实例变化、协议不兼容持久阻止自动重试。
-- 每两秒核对持久运行目标、代次、开关和凭据期限；每次通知落盘、显示及点击也校验运行门，切换期间拒绝旧回调。
-- 通知缓存到当前分区 `notifications` 表（最近 256 条，展示正文限 4096 字符）；`notification_receipts` 分开保存系统展示版本与明确已读版本。只有用户明确标为已读才发送 `gateway.notifications.ack`。
-- 通知点击打开远程收件箱并定位记录，不自动切换角色、实例或模式；点击在 Tauri 冷启动更新代次前核验。
+- **进程隔离**：`RemoteNotificationService` 运行于 `:remote_notifications` 进程（Android 14+ 声明 `specialUse` 前台服务类型），不拉起 WebView 或主 Activity；Rust 侧使用 `current_thread` Tokio 运行时直接解密读取位于 `noBackupFilesDir/remote-credentials/` 的 Keystore 加密凭据（兼容迁移旧 SharedPreferences 密文）。
+- **轻量订阅流程**：通过 `GET /api/distributed/identity` 核对 `serverId` → 读取当前档案角色（首次缺省则查询 `/api/agents`） → 以 `ppc-notifier-{installationId}-{profileId}` 节点身份通过 `/ws/gateway` 协议 1 握手（只读订阅，不争抢输入席位、不发送写操作） → 仅消费 `push` / `durable_notification`。
+- **保活与门控检查**：心跳周期 15 秒、45 秒无入站自动重连（遇鉴权失败或协议变更停止重试）；每 2 秒及每次收发/点击通知均核查控制库运行门、档案归属与代次，防止切模式后串扰。
+- **通知收件箱**：本地分区 `notifications` 表缓存最近 256 条记录（单条展示正文 ≤ 4096 字符），`notification_receipts` 分离追踪「系统已弹出」与「用户已阅」，仅在用户显式确认已读时向服务端回传 `gateway.notifications.ack`；点击通知直接打开远程收件箱定位对应条目，冷启动优先过门控校验。
 
-## 7. 管理与工作台
+## 7. 远程工作台与系统管理
 
-入口为远程底栏「管理」；会话页操作菜单可直接打开会话设置和工作台。`remote/management.rs` 按固定操作名映射方法、路径与查询条件，复用原生凭据、实例身份核验和运行代次校验；不提供任意 HTTP 代理。
+可通过远程底栏 **`管理`** 或会话菜单直接进入管理与工作台面板。原生后端 `src-tauri/src/remote/management.rs` 按固定操作名映射服务端路径与方法，复用设备凭据、实例身份及运行代次校验。
 
-| 分组 | 功能 |
-| --- | --- |
-| 角色 | 创建、人设编辑、互动台词、工具/技能能力矩阵、启停、头像上传、角色包导出、删除与重载 |
-| 模型 | 服务商连接、模型发现、参数、备用模型顺序、主模型/任务模型/角色模型指派 |
-| 提示词 | 框架与区块编辑、草稿校验/保存、编译预览、发布与版本恢复、JSON 与酒馆预设导入/导出 |
-| 其他配置 | 用户资料、配置项读写、MCP 服务、技能、工具目录、外部消息路由 |
-| 会话 | 会话模型与思考强度、执行方式、工具开关、Token 预算、暂停/继续/追加指令、按修订编辑消息、回滚并重新生成 |
-| 资料 | 记忆归档/恢复/删除、事实撤回、文档导入、检索与重建索引 |
-| 工作台 | 会话绑定文件树、文本编辑、终端（创建/选择/输入/中断/终止/归档/固定） |
-| 据点 | 设施和房间创建、成员移动、群聊 Surface 与消息发送、提及、管家设置 |
-| 任务与其他 | 任务派发与状态操作、定时任务、主动陪伴策略、用量统计、设备接入、数据重置 |
+### 会话、技能与插件扩展
 
-职责与隔离：
+- **主会话与侧会话**：列表依据 `threadKind` 区分展示，均支持持续对话。主会话经 `threads/latest` 打开并依据 `canReset` 提供重置；侧会话依据 `canDelete` / `canFork` 提供删除与按消息分支创建。发送携带读取到的 `expectedGeneration`，清空主会话后作废在途读票据防止旧投影回流。
+- **Skills 与 SelfMind**：会话级设置从 `/chat/threads/:id/skills` 读取并更新 `enabledSkills`；全局技能目录支持完整说明查看、依赖检查、服务器目录导入与重新扫描。SelfMind 快捷入口直接映射提示词工作区 `components/expression/selfminding`，复用同一校验、草稿保存与发布流程。
+- **插件包（`/packages`）**：支持上传安装最高 **20 MiB** 的 ZIP 插件包，按版本摘要授权并支持启停、重载、重审、回退与卸载；原生宿主组件负责渲染插件 `integrations` 声明式配置面板与 `tool-groups` 开关，提交保留服务端 `revision`。敏感配置值仅在内存中流转，审计记录只记操作指纹。
 
-- `remote_manage` 读取直接返回，不进入投影缓存；写入登记只保存操作名、对象标识与请求指纹，不保存配置正文或回执中的密钥/配对码。
-- 配置、提示词与资料的业务校验、权限、发布、持久化由 infOS 处理；手机只保留编辑态，离开页面释放。写请求不自动重试，未知结果从核对抽屉处理。
-- 文件保存发送 `expectedHash`，消息编辑发送 `expectedRevision`；服务端冲突不由客户端强行覆盖。
-- 常规管理正文限制 1 MiB，上传和普通响应 8 MiB；文本编辑一次最多读取 128000 字符。终端是服务端游标轮询的有界文本输出，不是完整 ANSI/TUI 终端。
-- 群聊读取最近 100 条消息；语音支持主动录音、上传识别和朗读，未实现后台常驻监听。
+### 管理能力覆盖
 
-二期（日常与据点）补充分层：管理首页常用设置图块、模型与服务商分开、主动陪伴三模式卡、会话单聊群聊并列、用量与运行真实接口；新增 `src/i18n/remote.js` 三语词库（简中/繁中/英文），跟随 `user.language` 和 Gateway 语言变更，展示层不翻译角色名、模型名或请求参数。
+| 分组 | 核心管理能力 |
+| :--- | :--- |
+| **角色与陪伴** | 角色创建、人设与互动台词编辑、工具/技能矩阵、启停、头像上传、角色包导出、主动陪伴模式切换 |
+| **模型与语音** | 服务商与模型目录分开维护、模型发现、参数与备用链、主/任务/角色模型分配、TTS 与语音识别 |
+| **提示词工作区** | 框架与区块编辑、草稿校验保存、编译预览、发布与版本回滚、JSON 与酒馆预设导入导出 |
+| **扩展与能力** | MCP 服务、Skills、工具目录、Packages 插件包、外部消息路由 |
+| **会话操作** | 模型与思考强度、执行策略、工具开关、Token 预算、队列编辑/置顶/重排/暂停、按修订修改与回滚重生 |
+| **资料与记忆** | 记忆归档/恢复/删除、事实撤回、文档导入、检索与重建索引 |
+| **工作台** | 绑定会话的文件树、文本编辑与终端（创建、切换、输入、中断、终止、归档与固定） |
+| **据点群聊** | 设施与房间创建、成员调度、群聊 Surface、提及与管家配置 |
+| **任务与系统** | 任务派发、定时任务、用量与运行统计、设备接入维护与数据重置 |
 
-## 8. 待完成事项（TODO 汇总）
+> 界面使用 `src/i18n/remote.js` 维护简中 / 繁中 / 英文三语词库，随 `user.language` 与 Gateway 语言同步切换（角色名、模型 ID 与原始接口字段保持原文不译）。
 
-- 接入真实 infOS 完成会话、审批、多客户端席位、任务和据点闭环联调；与 infOS 明确写请求幂等、接受状态查询、未知请求核对及版本／能力合同。
-- 补齐通知的业务对象跳转与完整分页；多角色设备订阅和通知合同待 infOS 配合。
-- 补齐未纳入目录的次级模型／资料管理与语音范围。
-- Android 真机验证：Kotlin 桥接、Keystore、发布压缩、系统备份排除、切换撤销与冷启动展示竞态；iOS 凭据分支与扫码真机验收。
-- 对远程 UI、模式过渡与恢复流程进行已获授权的运行与真机验收。
+### 传输限制与并发边界
+
+- **缓存隔离**：`remote_manage` 读操作不进持久化投影缓存；写请求自动省略正文与密钥，不自动重放，未知结果可在请求记录页查看或一键忽略。
+- **并发锁与体积上限**：文本保存校验 `expectedHash`，消息编辑校验 `expectedRevision`；常规管理文本上限 1 MiB，文件上传与常规响应 8 MiB，工作台单次文本读取 ≤ 128,000 字符。终端采用基于服务端游标轮询的有界文本流（非完整 ANSI/TUI 仿真器）；群聊读取最近 100 条消息；语音支持按需录音上传与朗读，不提供后台常驻拾音。
+
+## 8. 后续联调与待办事项
+
+- **插件独立 Web UI**：对接插件扩展独立页面的远程资源代理、会话绑定、流式动作与取消桥接。
+- **真实 infOS 闭环联调**：围绕多端输入席位抢占、队列幂等回执、未知状态核对、审批交互、据点群聊以及多角色多设备通知分发合同完成全链路联调。
+- **次级管理面板与通知跳转**：补齐通知列表点击后的业务对象精确定位与完整分页加载，以及剩余次级模型、资料与语音细分设置项。
+- **移动端真机验收**：对 Android Kotlin 桥接（Keystore 跨进程访问、Release 混淆压缩、云备份排除、切模式撤销与冷启动恢复）及 iOS Keychain / 扫码链路执行实机与视觉验收。

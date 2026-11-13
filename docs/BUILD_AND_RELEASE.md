@@ -1,81 +1,78 @@
 # 构建与发布技术文档
 
-本文合并自 Android 签名说明、版本与验证记录及各版本实装记录（原始文件归档于 `docs/archived/`），覆盖版本维护、发布流程、签名校验与各版本验证边界。
+本文说明 PeroperoChat 的版本元数据维护、CI/CD 发布流水线、Android 签名策略、测试校验口径与版本演进。
 
 ## 1. 版本维护
 
-版本同时维护在 **4 处**：`package.json`、`src-tauri/Cargo.toml`、`src-tauri/Cargo.lock` 与 `src-tauri/tauri.conf.json`。Android 的版本名称与版本代码由 Tauri 在 CI 中生成到忽略跟踪的 `tauri.properties`，不手动修改生成文件。
+版本号同步维护在 **4 处**：
 
-## 2. 发布流程
+- `package.json`
+- `src-tauri/Cargo.toml`
+- `src-tauri/Cargo.lock`
+- `src-tauri/tauri.conf.json`
 
-推送 `v<版本号>` tag 会触发 GitHub Actions（`.github/workflows/tauri-build.yml`）执行 Android ARM64 APK 打包及 GitHub Release：
+Android 构建时的版本名与版本代码由 Tauri 在 CI 阶段生成至 `.gitignore` 忽略的 `tauri.properties`，无需手动维护。
 
-- 固定使用 `com.peroperochat.mobile` 应用身份；版本元数据和发布 tag 必须一致。
-- 只允许选中一个 ARM64 Release APK；使用 SDK Build Tools 36.0.0，先 `zipalign -P 16`，再 `apksigner sign`，之后检查对齐与签名。
-- 用 keystore 导出的 DER 证书计算 SHA-256，并与最终 APK 的签名证书比较；不匹配或出现多余签名者时拒绝上传。
-- 每次 Release 附带 `PeroperoChat-signing-certificate.sha256`；后续运行在构建前与上一版指纹比较。
-- 仓库变量 `ANDROID_SIGNING_CERT_SHA256` 可显式固定期望指纹，支持纯十六进制或冒号分隔形式。不要无意更换该变量或签名 Secrets。
-- 发布流程串行执行，避免两个版本同时读取、更新签名基线；临时 keystore 在失败时也会清理。
+## 2. 自动构建与发布流程
 
-## 3. Android 签名
+推送 `v<版本号>` 标签或手动触发 `.github/workflows/tauri-build.yml`，将执行 Android ARM64 Release APK 构建并创建 GitHub Release：
 
-1.4.0 之前的 CI 在全新 runner 的 `~/.android/debug.keystore` 中随机生成密钥——即便别名和口令相同，每次生成的证书仍不同，Android 因而拒绝将新 APK 覆盖到上一版。从 1.4.0 起使用仓库 Secrets 中的固定签名：
+- 应用标识固定为 `com.peroperochat.mobile`，构建前校验标签版本号与项目元数据一致。
+- 只打包单架构 ARM64 Release APK，使用 Android SDK Build Tools `36.0.0` 按顺序执行 `zipalign -P 16` 与 `apksigner sign`，并在签名后复核对齐与签名完整性。
+- 从 keystore 导出的 DER 证书计算 SHA-256，与最终 APK 的签名证书指纹比对，存在差异或多余签名者时中止发布。
+- 发布产物同步附带 `PeroperoChat-signing-certificate.sha256`；后续发布在构建前与前一版本指纹进行基线校验。可通过仓库变量 `ANDROID_SIGNING_CERT_SHA256`（纯十六进制或冒号分隔）显式锁定预期指纹。
+- 工作流配置为串行执行，避免并发版本读写同一签名基线；临时解码的 keystore 文件在流程结束或失败时自动清理。
 
-| Secret | 内容 |
-| --- | --- |
-| `SIGNING_KEY` | 发布 keystore 文件的 Base64 |
+## 3. Android 发布签名与旧版迁移
+
+1.4.0 之前的 CI 每次均使用临时生成的 `debug.keystore`，导致每次证书指纹不同而无法覆盖安装。自 **1.4.0** 起改用仓库 Secrets 注入固定发布密钥：
+
+| Secret | 用途 |
+| :--- | :--- |
+| `SIGNING_KEY` | 发布 keystore 文件的 Base64 编码 |
 | `ALIAS` | 私钥别名 |
-| `KEY_STORE_PASSWORD` | keystore 口令 |
+| `KEY_STORE_PASSWORD` | keystore 访问口令 |
 | `KEY_PASSWORD` | 私钥口令 |
 
-私钥只在 runner 临时目录中解码，口令经环境变量交给工具，不放进命令行或日志。签名配置缺失、密码不正确或别名错误时停止发布，不降级到调试签名。keystore、JKS 和 P12 文件已加入 Git 忽略规则。
+私钥仅在 runner 临时目录解码，口令通过环境变量传递；密钥缺失或口令错误时直接终止发布，不降级至调试签名。所有 `.jks` / `.keystore` / `.p12` 文件均已列入 `.gitignore`。
 
-### 旧版本迁移
+### 1.4.0 以前版本迁移
 
-旧随机证书的私钥不能从 APK 或公开证书中还原。1.4.0 之前的旧包无法直接覆盖安装：
+1. 在旧版应用内导出 JSON 数据备份，并保存至外部目录。
+2. 卸载旧版安装包，安装 `1.4.0` 或更高版本 APK。
+3. 导入备份恢复独立模式数据；远程连接凭据不包含在业务备份内，需重新与 infOS 配对。
+4. 后续同签名版本可直接覆盖升级。
 
-1. 在旧应用中导出数据备份，并确认备份文件已保存到应用之外。
-2. 卸载旧包，安装 1.4.0 或更高版本的固定签名包。
-3. 恢复独立数据；远程凭据不在业务备份中，需要重新配对 infOS。
-4. 后续使用同一固定发布密钥的版本直接覆盖更新。
+参考资料：[Android 应用签名](https://developer.android.com/studio/publish/app-signing)、[apksigner](https://developer.android.com/tools/apksigner)、[zipalign](https://developer.android.com/tools/zipalign)。
 
-参考：[Android 应用签名](https://developer.android.com/studio/publish/app-signing)、[apksigner](https://developer.android.com/tools/apksigner)、[zipalign](https://developer.android.com/tools/zipalign)。
-
-## 4. 测试命令与口径
+## 4. 质量校验命令
 
 ```bash
-pnpm test        # 前端：传输、消息展示、品牌识别及全部 Vue 组件/模板内存校验
-pnpm test:rust   # Rust 后端（cargo test --manifest-path src-tauri/Cargo.toml --lib）
-pnpm lint        # ESLint
-pnpm typecheck   # Vue 模板与 JavaScript 类型检查（不生成构建产物）
+pnpm test        # 前端单元测试（传输、渲染、品牌识别及 Vue 模板内存编译校验）
+pnpm test:rust   # Rust 后端单元测试（本地模拟服务隔离外部网络）
+pnpm lint        # ESLint 代码规范检查
+pnpm typecheck   # vue-tsc 模板与 JS/TS 类型检查（不产出构建包）
 ```
 
-- Vue 校验在内存中解析组件脚本与模板，不生成应用构建产物；Rust 网络测试使用本地模拟服务，未调用真实模型。
-- 测试通过不代替本地生产构建、安卓/iOS 打包、真实模型与 infOS 联调或安卓真机验收，也不代替视觉和端到端验收。
+> 以上校验运行在本地模拟与静态分析环境，用于回归逻辑与类型检查；本地打包、真机手势及真实服务联调需在对应环境中单独完成。
 
-## 5. 版本与验证记录
+## 5. 版本演进与待联调范围
 
-| 版本 | 内容摘要 | 验证 |
-| --- | --- | --- |
-| 1.3.4 | 独立陪伴模式、角色房间与安卓提醒 | 前端 35 项、Rust 52 项通过；未构建/打包/真机 |
-| 1.4.0 | 开放 infOS 客户端并固定 Android 发布签名 | 前端 50 项、Rust 69 项通过；发布工作流 YAML 与 Bash 语法检查通过 |
-| 1.4.1 | 角色显示优化、房间切换卡、infOS 队列接入、原生扫码与 iOS Keychain | 前端 55 项、Rust 72 项及 ESLint 通过 |
-| 1.4.2 | Android 远程后台接收、房间时段背景、本地气泡与表单控件 | 仅核对源码差异与版本元数据，未重新运行测试 |
-| 1.4.3 | 本地单聊和家庭群聊的工具调用时间线（随消息保存、旧记录回填） | 补充 Rust 回归用例；未运行测试/构建 |
-| 1.4.4 | 远程管理、会话操作、文件原件流式保存与统一文件浏览 | 前端 73 项通过；此前文件接入阶段 Rust 99 项通过 |
-| 1.4.5 | 远程消息编辑/回滚/重新生成、对话一期视觉、流式富文本、媒体与文档小窗 | 前端 86 项、Rust 103 项通过 |
-| 1.4.6 | 长对话读取与状态冲突修复、会话重排、富文本层级、轻气泡反馈 | 前端 101 项、Rust 108 项通过 |
-| 1.5.0 | 导航与背景设计实装、紧凑思考与工具轨迹、连接引导、Docker 更新后的连接恢复；加入 Vue/JavaScript 类型检查并修正事件参数与 PDF 清理调用 | 前端 155 项、Rust 145 项、ESLint 与类型检查通过；设计稿脚本语法和 4 处版本元数据核对通过；未执行本地应用构建、真机或真实 infOS 联调 |
+| 版本 | 核心变更 |
+| :--- | :--- |
+| **1.3.4** | 独立陪伴模式、角色房间视觉与 Android 本地 `AlarmManager` 提醒 |
+| **1.4.0** | 开放 infOS 远程客户端模式、双模式运行控制与固定 Android 发布签名 |
+| **1.4.1** | 立绘/Live2D 切换与衣柜、infOS 会话队列接入、原生扫码与 iOS Keychain 分支 |
+| **1.4.2** | Android 远程后台独立前台通知进程、房间三时段自动背景、气泡与表单统一样式 |
+| **1.4.3** | 独立单聊与家庭群聊的工具调用时间线持久化与历史回填 |
+| **1.4.4** | 远程工作台与管理能力接入、原件流式下载与多格式本地文件预览 |
+| **1.4.5** | 远程消息编辑/回滚/重新生成、流式富文本分段渲染、媒体与文档小窗阅读 |
+| **1.4.6** | 长对话加载与状态竞态修复、队列消息重排、富文本层级与轻气泡反馈优化 |
+| **1.5.0** | 导航与背景视觉改版、紧凑思考与工具轨迹、Docker 实例升级后设备重连恢复、接入 `vue-tsc` 类型检查 |
+| **1.6.0** | 主／侧会话、会话 Skills 与插件管理接入，移动端消息与头像加载优化，任务及资料列表改版，远程样式清理 |
 
-### 各版本未验证边界（累积）
+### 当前待真机与联调事项
 
-以下事项在各版本发布时均未完成验收，状态以此清单为准：
-
-- **本地构建与启动**：未执行本地生产构建、Tauri 启动验收（部分阶段曾按用户明确要求启动桌面查看，见归档文档）。
-- **移动端**：未执行 Android/iOS 打包或真机验收。安卓提醒的原生桥接、系统唤醒，远程通知的 Kotlin 桥接、Keystore 跨进程、功耗与厂商策略，远程 UI 的视觉与手势均待设备确认。
-- **真实服务**：未连接真实 infOS 联调（协议对照基于本地 infOS 工作区源码）；未进行真实模型联调。
-- **iOS**：工程未初始化；iOS Keychain 分支与扫码链路未经真机验证。
-- **性能**：1.4.1 的渲染优化未在用户手机上采样帧率，不将源码优化等同于真机性能验收。
-- **新增能力**：1.4.5 的富文本渲染、DOC 提取、HTML 票据、媒体小窗缺少真实服务端与设备端到端验收；二期（据点/日常）页面未运行前后端测试。
-
-历史阶段的详细实装与验证记录见 `docs/archived/` 下的 V1_4_1_IMPLEMENTATION.md、V1_4_2_IMPLEMENTATION.md、V1_4_3_IMPLEMENTATION.md、CHAT_PHASE_ONE_IMPLEMENTATION.md、WORKSPACE_PHASE_TWO_IMPLEMENTATION.md 及 REMOTE_CLIENT_LOGIC.md。
+- **移动端原生能力**：Android `AlarmManager` 调度与唤醒、`:remote_notifications` 跨进程 Keystore 读取、厂商省电策略适配及远程触控手势需继续真机验收。
+- **真实服务端闭环**：infOS 多端输入席位、审批流、工作台文件与新管理接口持续对接联调中。
+- **iOS 平台**：`src-tauri/gen/ios` 工程目录尚未初始化，Keychain 凭据分支与扫码链路待 macOS / 真机环境验证。

@@ -18,11 +18,17 @@ export function setRemoteLocale(value) {
   if (!loading.has(language)) loading.set(language, Promise.all(Object.entries(resources).filter(([path]) => path.includes(`/${language}/`)).map(async ([path, read]) => [path.split('/').at(-1).replace('.json', ''), await read()])).then(entries => { catalogs[language] = Object.fromEntries(entries); catalogVersion.value++ }).catch(() => { loading.delete(language) }))
   loading.get(language).then(() => { if (request === localeRequest && catalogs[language]) remoteLocale.value = language })
 }
+const fallbackScopes = ['workspace', 'feedback', 'settings', 'stronghold', 'usage', 'common', 'navigation', 'renewal', 'alignment']
+function fallbackText(language, source) {
+  for (const name of fallbackScopes) if (language[name]?.[source] !== undefined) return language[name][source]
+  // 未指定用途的调用也可能落在其他词库；继续补查，避免非中文界面直接显示中文原文。
+  for (const entries of Object.values(language)) if (entries?.[source] !== undefined) return entries[source]
+}
 export function t(source, parameters = [], scope = 'workspace') {
   source = String(source ?? '')
   void catalogVersion.value
   const language = catalogs[remoteLocale.value] || {}
-  const text = language[scope]?.[source] ?? ['workspace', 'feedback', 'settings', 'stronghold', 'usage', 'common', 'navigation', 'renewal'].map(name => language[name]?.[source]).find(value => value !== undefined) ?? source
+  const text = language[scope]?.[source] ?? fallbackText(language, source) ?? source
   return text.replace(/\{(\d+)\}/g, (token, index) => parameters[Number(index)] == null ? token : String(parameters[Number(index)]))
 }
 const choices = {

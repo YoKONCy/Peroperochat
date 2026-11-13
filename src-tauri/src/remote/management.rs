@@ -146,6 +146,25 @@ fn endpoint(input:&Request)->ChatResult<(Route,bool)> {
         "mcp.tools"=>("GET","/mcp/tools".into(),&[],false),
         "skills.list"=>("GET","/mcp/skills".into(),&[],false),
         "skills.get"=>("GET",format!("/mcp/skills/{id}/content"),&[],false),
+        "skills.compatibility"=>("GET",format!("/mcp/skills/{id}/compatibility"),&[],false),
+        "thread.skills"=>("GET",format!("/chat/threads/{id}/skills"),&[],false),
+        "thread.save_skills"=>("PUT",format!("/chat/threads/{id}/skills"),&[],true),
+        "packages.list"=>("GET","/packages".into(),&[],false),
+        "packages.authorize"=>("POST",format!("/packages/{id}/authorize"),&[],true),
+        "packages.enabled"=>("PUT",format!("/packages/{id}/enabled"),&[],true),
+        "packages.reload"=>("POST",format!("/packages/{id}/reload"),&[],true),
+        "packages.review"=>("POST",format!("/packages/{id}/review"),&[],true),
+        "packages.rollback"=>("POST",format!("/packages/{id}/rollback"),&[],true),
+        "packages.delete"=>("DELETE",format!("/packages/{id}"),&[],true),
+        "packages.panels"=>("GET",format!("/packages/panels/{id}"),&[],false),
+        "packages.action"=>("POST","/packages/panel-actions".into(),&[],true),
+        "packages.settings" => {
+            let body = input.body.as_ref().ok_or_else(|| ChatError::new("INVALID_INPUT", "请选择插件设置入口"))?;
+            if body["actionId"] != "settings.load" || !body["panelId"].as_str().is_some_and(|id| !id.is_empty() && id.len() <= 250) || !body["payload"].is_null() {
+                return Err(ChatError::new("INVALID_INPUT", "插件设置读取参数无效"));
+            }
+            ("POST", "/packages/panel-actions".into(), &[], false)
+        },
         "skills.import"=>("POST","/mcp/skills/import".into(),&[],true),
         "skills.reload"=>("POST","/mcp/skills/reload".into(),&[],true),
         "skills.delete"=>("DELETE",format!("/mcp/skills/{id}"),&[],true),
@@ -362,11 +381,13 @@ async fn upload(app:&AppHandle,token:&Token,request_id:&str,kind:&str,id:Option<
             ("/voice/tts/references".into(),"audio",Vec::<&str>::new())
         },
         "knowledge"=>("/knowledge/documents/upload".into(),"file",vec!["title","replaceId"]),
+        "package"=>("/packages/install".into(),"package",Vec::<&str>::new()),
         "asr"=>("/voice/asr".into(),"audio",vec!["language"]),
         _=>return Err(ChatError::new("INVALID_INPUT","不支持的远程上传类型")),
     };
-    if file.bytes.is_empty() || file.bytes.len()>transport::MAX_BODY || file.name.is_empty() || file.name.len()>240 || file.name.contains(['/', '\\']) || file.name.chars().any(char::is_control) || file.mime_type.len()>128 || file.mime_type.contains(['\r','\n'])
-        || fields.iter().any(|(key,value)|!allowed.contains(&key.as_str()) || value.len()>2048) {return Err(ChatError::new("INVALID_FILE","文件或上传字段无效，文件上限 8 MiB"));}
+    let limit = if kind == "package" { 20 * 1024 * 1024 } else { transport::MAX_BODY };
+    if file.bytes.is_empty() || file.bytes.len()>limit || file.name.is_empty() || file.name.len()>240 || file.name.contains(['/', '\\']) || file.name.chars().any(char::is_control) || file.mime_type.len()>128 || file.mime_type.contains(['\r','\n'])
+        || fields.iter().any(|(key,value)|!allowed.contains(&key.as_str()) || value.len()>2048) {return Err(ChatError::new("INVALID_FILE","文件或上传字段无效，请检查类型与大小"));}
     let avatar_bytes=if matches!(kind,"avatar"|"owner_avatar") {Some(file.bytes.clone())} else {None};
     let sha=format!("{:x}",Sha256::digest(&file.bytes));
     let part=reqwest::multipart::Part::bytes(file.bytes).file_name(file.name).mime_str(&file.mime_type).map_err(|_|ChatError::new("INVALID_FILE","文件类型无效"))?;
@@ -400,7 +421,7 @@ fn keep_avatar_snapshot(app:&AppHandle,token:&Token,agent:Option<&str>,profile:&
         Ok(())
     })();
 }
-fn part_name(kind:&str)->&'static str {match kind {"avatar"|"owner_avatar"=>"avatar","asr"|"tts_reference"=>"audio",_=>"file"}}
+fn part_name(kind:&str)->&'static str {match kind {"avatar"|"owner_avatar"=>"avatar","asr"|"tts_reference"=>"audio","package"=>"package",_=>"file"}}
 fn upload_method(kind:&str)->reqwest::Method {if kind=="owner_avatar" {reqwest::Method::PUT} else {reqwest::Method::POST}}
 fn validate_owner_avatar(bytes:&[u8])->ChatResult<()> {
     // 与 infOS 的裁切接口一致，只发送 512px 方形 PNG；头像内容不写入操作回执。
@@ -438,6 +459,31 @@ mod tests {
     }
     fn input(operation:&str,id:Option<&str>,body:Option<Value>)->Request {
         Request {operation:operation.into(),id:id.map(str::to_owned),params:Map::new(),body}
+    }
+    #[test]
+    fn skills_and_packages_follow_server_contracts_and_keep_revisions() {
+        let (skills, write) = endpoint(&input("thread.skills", Some("thread/a"), None)).unwrap();
+        assert!(!write);
+        assert_eq!(skills.path, "/chat/threads/thread%2Fa/skills");
+        let body = json!({"enabledSkills":["skill-a"]});
+        let (save, write) = endpoint(&input("thread.save_skills", Some("main"), Some(body.clone()))).unwrap();
+        assert!(write);
+        assert_eq!(save.method, reqwest::Method::PUT);
+        assert_eq!(save.body, Some(body));
+        let (report, write) = endpoint(&input("skills.compatibility", Some("skill-a"), None)).unwrap();
+        assert!(!write);
+        assert_eq!(report.path, "/mcp/skills/skill-a/compatibility");
+        let payload = json!({"panelId":"plugin:tools","actionId":"settings.save","payload":{"revision":7,"groups":[],"values":{"mode":"auto"},"disabledTools":[]}});
+        let (action, write) = endpoint(&input("packages.action", None, Some(payload.clone()))).unwrap();
+        assert!(write);
+        assert_eq!(action.path, "/packages/panel-actions");
+        assert_eq!(action.body, Some(payload));
+        let (settings, write) = endpoint(&input("packages.settings", None, Some(json!({"panelId":"plugin:tools","actionId":"settings.load"})))).unwrap();
+        assert!(!write);
+        assert_eq!(settings.path, "/packages/panel-actions");
+        assert!(endpoint(&input("packages.settings", None, Some(json!({"panelId":"plugin:tools","actionId":"settings.save"})))).is_err());
+        assert_eq!(part_name("package"), "package");
+        assert_eq!(upload_method("package"), reqwest::Method::POST);
     }
     #[test]
     fn finite_catalog_rejects_arbitrary_routes_and_missing_identity() {

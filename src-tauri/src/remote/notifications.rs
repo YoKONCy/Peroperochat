@@ -34,7 +34,7 @@ pub(super) fn capture_in(conn:&mut rusqlite::Connection,payload:&Value)->ChatRes
     tx.execute("DELETE FROM notifications WHERE rowid NOT IN (SELECT rowid FROM notifications ORDER BY touched DESC,rowid DESC LIMIT 256)",[])?;
     tx.commit()?;Ok(())
 }
-#[tauri::command]
+#[tauri::command(async)]
 pub fn remote_notifications(app:AppHandle,token:Token)->ChatResult<Value> {
     super::validate_token(&app,&token)?;
     let mode=app.state::<Coordinator>();let _gate=mode.gate(Some(&token),false)?;

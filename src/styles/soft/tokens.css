@@ -122,8 +122,6 @@
   --ui-depth-small: 0px;
   --ui-press-travel: 1px;
   --ui-shadow-ink: #03050b;
-  --ui-shadow: 0 7px 20px rgb(3 5 11 / 21%), inset 0 1px 0 rgb(255 255 255 / 3%);
-  --ui-floating-shadow: 0 12px 32px rgb(3 5 11 / 38%), inset 0 1px 0 rgb(255 255 255 / 5%);
   --ui-action: var(--accent);
   --ui-action-top: color-mix(in srgb, var(--accent) 94%, white);
   --ui-line: var(--ui-neutral-line);

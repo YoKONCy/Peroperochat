@@ -69,5 +69,20 @@
   "第一次连接，从这里开始": "Your first connection",
   "在电脑端打开「局域网与设备」": "Open LAN & Devices on your computer",
   "生成配对二维码，用手机扫描或粘贴链接": "Create a pairing code, then scan it or paste the link",
-  "核对连接信息，进入你的 infOS": "Review the connection and enter your infOS"
+  "核对连接信息，进入你的 infOS": "Review the connection and enter your infOS",
+  "消息发送状态": "Message delivery",
+  "操作状态": "Operation status",
+  "连接恢复后会自动同步": "Status updates automatically when reconnected",
+  "暂时没有收到服务端回执。": "No response received from infOS yet.",
+  "查看对应会话": "Open conversation",
+  "刷新状态": "Refresh status",
+  "重新发送": "Send again",
+  "忽略这条记录": "Dismiss this record",
+  "状态已更新。": "Status updated.",
+  "有 {0} 条消息正在同步发送状态": "Updating delivery status for {0} messages",
+  "状态同步中": "Updating status",
+  "发送中…": "Sending…",
+  "已送达": "Delivered",
+  "发送状态同步中": "Updating delivery status",
+  "发送失败": "Send failed"
 }

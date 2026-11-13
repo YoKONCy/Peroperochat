@@ -8,8 +8,28 @@ use super::{cache,operations::{Action,Query}};
 #[derive(Default)]
 pub struct Workflows(pub tokio::sync::Mutex<()>);
 #[derive(Clone,Serialize,Deserialize)]
+struct RegenerationSource {
+    message_id: u64,
+    revision: u64,
+}
+#[derive(Clone,Serialize,Deserialize)]
 #[serde(rename_all="camelCase")]
-struct Plan {id:String,token:Token,thread_id:String,agent_id:String,message_id:u64,input:Value,preview:Value,phase:String,#[serde(default)] rewind_request_id:Option<String>,#[serde(default)] send_request_id:Option<String>}
+struct Plan {
+    #[serde(default)]
+    regeneration_source: Option<RegenerationSource>,
+    id: String,
+    token: Token,
+    thread_id: String,
+    agent_id: String,
+    message_id: u64,
+    input: Value,
+    preview: Value,
+    phase: String,
+    #[serde(default)]
+    rewind_request_id: Option<String>,
+    #[serde(default)]
+    send_request_id: Option<String>,
+}
 fn connection(app:&AppHandle,token:&Token)->ChatResult<rusqlite::Connection> {
     let conn=cache::connection(app,token)?;
     conn.execute_batch("CREATE TABLE IF NOT EXISTS regeneration_plans(id TEXT PRIMARY KEY,value TEXT NOT NULL,created INTEGER NOT NULL)")?;Ok(conn)
@@ -89,8 +109,35 @@ pub async fn remote_prepare_regeneration(app:AppHandle,token:Token,request_id:St
     if !agent_id.is_empty() && actual_agent!=agent_id {return Err(ChatError::new("REMOTE_CONFLICT","角色与目标会话不一致"));}
     let agent_id=actual_agent.to_string();
     let result=super::remote_action(app.clone(),token.clone(),request_id,Action::EditMessage {thread_id:thread_id.clone(),id:message_id.to_string(),content,expected_revision:Some(revision)}).await?;
+    if thread["thread"]["threadKind"] == "main" {
+        let message = result["data"]["messages"].as_array().and_then(|messages| {
+            messages.iter().find(|item| {
+                item["messageId"].as_str().and_then(|id| id.parse::<u64>().ok())
+                    .or_else(|| item["messageId"].as_u64()) == Some(message_id)
+            })
+        }).ok_or_else(|| ChatError::new("REMOTE_PROTOCOL", "正文已保存，请刷新消息后重新生成"))?;
+        let source = RegenerationSource {
+            message_id,
+            revision: message["revision"].as_u64().ok_or_else(super::inactive)?,
+        };
+        let mut plan = Plan {
+            regeneration_source: Some(source),
+            id: uuid::Uuid::new_v4().to_string(),
+            token: token.clone(),
+            thread_id,
+            agent_id,
+            message_id,
+            input: json!({"content":message["content"],"attachments":message["attachments"]}),
+            preview: Value::Null,
+            phase: "saved".into(),
+            rewind_request_id: None,
+            send_request_id: None,
+        };
+        save(&app, &plan)?;
+        return regenerate_saved_message(&app, &token, &mut plan).await;
+    }
     let (message_id,input)=input_from_projection(&result["data"],message_id)?;
-    let mut plan=Plan {id:uuid::Uuid::new_v4().to_string(),token:token.clone(),thread_id,agent_id,message_id,input,preview:Value::Null,phase:"saved".into(),rewind_request_id:None,send_request_id:None};
+    let mut plan=Plan {regeneration_source:None,id:uuid::Uuid::new_v4().to_string(),token:token.clone(),thread_id,agent_id,message_id,input,preview:Value::Null,phase:"saved".into(),rewind_request_id:None,send_request_id:None};
     save(&app,&plan)?;
     match preview(&app,&token,&plan.thread_id,plan.message_id).await {
         Ok(value)=> {plan.preview=value;plan.phase="ready".into();save(&app,&plan)?;},
@@ -111,6 +158,7 @@ pub async fn remote_confirm_rewind(app:AppHandle,token:Token,request_id:String,t
 #[tauri::command]
 pub async fn remote_commit_regeneration(app:AppHandle,token:Token,id:String)->ChatResult<Value> {
     let state=app.state::<Workflows>();let _lock=state.0.lock().await;let mut plan=load(&app,&token,&id)?;
+    if plan.regeneration_source.is_some() {return regenerate_saved_message(&app,&token,&mut plan).await;}
     if !["ready","saved","rewound"].contains(&plan.phase.as_str()) {return Err(ChatError::new("REQUEST_UNRESOLVED","重新生成已执行或结果待核对，不会重复提交"));}
     if plan.phase!="rewound" {
         let fresh=preview(&app,&token,&plan.thread_id,plan.message_id).await?;
@@ -129,7 +177,7 @@ pub async fn remote_commit_regeneration(app:AppHandle,token:Token,id:String)->Ch
         plan.phase="rewound".into();save(&app,&plan)?;
     }
     let send_id=uuid::Uuid::new_v4().to_string();plan.send_request_id=Some(send_id.clone());plan.phase="submitting".into();save(&app,&plan)?;
-    let request=super::ChatRequest {request_id:send_id,thread_id:plan.thread_id.clone(),agent_id:plan.agent_id.clone(),content:plan.input["content"].as_str().unwrap_or_default().into(),attachment_ids:serde_json::from_value(plan.input["attachmentIds"].clone()).map_err(|_|super::inactive())?,image_mode:Some("auto".into()),workspace_context:None,generation_type:Some("regenerate".into())};
+    let request=super::ChatRequest {expected_generation:None,request_id:send_id,thread_id:plan.thread_id.clone(),agent_id:plan.agent_id.clone(),content:plan.input["content"].as_str().unwrap_or_default().into(),attachment_ids:serde_json::from_value(plan.input["attachmentIds"].clone()).map_err(|_|super::inactive())?,image_mode:Some("auto".into()),workspace_context:None,generation_type:Some("regenerate".into())};
     match super::remote_chat(app.clone(),token.clone(),request).await {
         Ok(_)=> {plan.phase="completed".into();save(&app,&plan)?;Ok(json!({"modeToken":token,"data":{"state":"accepted","threadId":plan.thread_id}}))},
         Err(error)=> {
@@ -138,6 +186,62 @@ pub async fn remote_commit_regeneration(app:AppHandle,token:Token,id:String)->Ch
         },
     }
 }
+// 新版服务端负责关联输入、撤回旧发布与入队，本机只保存可恢复的提交标识。
+async fn regenerate_saved_message(app: &AppHandle, token: &Token, plan: &mut Plan) -> ChatResult<Value> {
+    if let Some(id) = &plan.send_request_id {
+        if cache::request(app, token, id).is_ok_and(|record| record["state"] == "completed") {
+            plan.phase = "completed".into();
+        }
+    }
+    if plan.phase == "completed" {
+        return Ok(json!({"modeToken":token,"data":{"state":"accepted","threadId":plan.thread_id}}));
+    }
+    if !["saved", "submitting", "unknown"].contains(&plan.phase.as_str()) {
+        return Err(ChatError::new("REQUEST_UNRESOLVED", "这次重新生成已结束，请重新选择消息"));
+    }
+    let source = plan.regeneration_source.clone().ok_or_else(super::inactive)?;
+    let session = super::session(app, token).await?;
+    let request_id = plan.send_request_id.clone().unwrap_or_else(|| uuid::Uuid::new_v4().to_string());
+    plan.send_request_id = Some(request_id.clone());
+    plan.phase = "submitting".into();
+    save(app, plan)?;
+    cache::prepare(app, token, &request_id, &json!({"kind":"regenerate","transport":"queue","input":{
+        "threadId":plan.thread_id,"agentId":plan.agent_id,"messageId":source.message_id,"revision":source.revision
+    }}))?;
+    let mode = app.state::<Coordinator>();
+    let mut changes = mode.subscribe();
+    let route = super::operations::Route {
+        method: reqwest::Method::POST,
+        path: format!("/chat/threads/{}/regenerate", super::operations::segment(&plan.thread_id)?),
+        params: Vec::new(),
+        body: Some(json!({"messageId":source.message_id,"revision":source.revision,"clientMessageId":request_id})),
+    };
+    let result = tokio::select! {biased;
+        _ = changes.changed() => Err(super::inactive().with_outcome("unknown")),
+        result = super::perform(&session, route) => result,
+    }.and_then(|data| {
+        super::validate_queue(&data, &plan.thread_id)?;
+        Ok(data)
+    });
+    match cache::settle(app, token, &request_id, result) {
+        Ok(data) => {
+            plan.phase = "completed".into();
+            save(app, plan).map_err(|error| error.with_outcome("unknown"))?;
+            Ok(json!({"modeToken":token,"data":{"state":"accepted","threadId":plan.thread_id,"queue":data}}))
+        }
+        Err(error) => {
+            if matches!(error.outcome.as_deref(), Some("not_sent"|"rejected"|"failed")) {
+                plan.phase = "saved".into();
+                plan.send_request_id = None;
+            } else {
+                plan.phase = "unknown".into();
+            }
+            save(app, plan).map_err(|error| error.with_outcome("unknown"))?;
+            Ok(json!({"modeToken":token,"data":{"state":plan.phase,"planId":plan.id,"message":"正文已保存，生成请求暂未确认，可以重试。"}}))
+        }
+    }
+}
+
 #[tauri::command]
 pub async fn remote_regeneration_recovery(app:AppHandle,token:Token,thread_id:String)->ChatResult<Value> {
     let workflows=app.state::<Workflows>();let _lock=workflows.0.lock().await;
@@ -150,7 +254,8 @@ pub async fn remote_regeneration_recovery(app:AppHandle,token:Token,thread_id:St
         let step=if plan.phase=="unknown" {if plan.send_request_id.is_some() {"submitting"} else {"rewinding"}} else {plan.phase.as_str()};
         let receipt=if step=="rewinding" {plan.rewind_request_id.as_ref()} else if step=="submitting" {plan.send_request_id.as_ref()} else {None};
         let state=receipt.and_then(|id|conn.query_row("SELECT state FROM requests WHERE id=?1",[id],|r|r.get::<_,String>(0)).ok());
-        let next=recovered_phase(step,state.as_deref());
+        let mut next=recovered_phase(step,state.as_deref());
+        if plan.regeneration_source.is_some() && next=="rewound" {next="saved".into();plan.send_request_id=None;}
         if next!=step && next!=plan.phase {plan.phase=next;let mode=app.state::<Coordinator>();let _gate=mode.gate(Some(&token),false)?;conn.execute("UPDATE regeneration_plans SET value=?2 WHERE id=?1",rusqlite::params![plan.id,serde_json::to_string(&plan).map_err(|_|super::inactive())?])?;}
         if plan.thread_id==thread_id && plan.phase!="completed" && plan.phase!="discarded" {
             recovery=json!({"planId":plan.id,"state":plan.phase,"input":plan.input,"threadId":plan.thread_id,"agentId":plan.agent_id,"canRestore":plan.phase=="rewound","canDismiss":state.as_deref()==Some("reviewed")});break;
@@ -169,6 +274,21 @@ pub async fn remote_discard_regeneration(app:AppHandle,token:Token,id:String)->C
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn previous_regeneration_plans_remain_readable_without_new_source_fields() {
+        let old = json!({
+            "id":"plan-a","token":{"installationId":"测试安装","epoch":1,"target":{"mode":"remote","profileId":uuid::Uuid::new_v4().to_string()}},
+            "threadId":"thread-a","agentId":"pero","messageId":2,"input":{"content":"保留的输入"},
+            "preview":{},"phase":"ready","rewindRequestId":null,"sendRequestId":null
+        });
+        let plan:Plan=serde_json::from_value(old).unwrap();
+        assert!(plan.regeneration_source.is_none());
+        assert_eq!(plan.input["content"],"保留的输入");
+        let mut updated=plan;
+        updated.regeneration_source=Some(RegenerationSource {message_id:2,revision:7});
+        let restored:Plan=serde_json::from_value(json!(updated)).unwrap();
+        assert_eq!(restored.regeneration_source.unwrap().revision,7);
+    }
     #[test]
     fn regeneration_uses_same_pair_input_and_original_attachments() {
         let snapshot=json!({"messages":[{"messageId":"1","role":"user","pairId":"a","content":"旧轮"},{"messageId":"2","role":"user","pairId":"b","content":"修订输入","attachments":[{"id":"image"}]},{"messageId":"3","role":"assistant","pairId":"b","content":"回答"}]});

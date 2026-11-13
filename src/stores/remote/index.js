@@ -9,9 +9,13 @@ import { observeRemoteResult } from '../../services/remoteObservation.js'
 import { taskResultQuery, opensTaskResult } from '../../utils/taskCenter.js'
 
 // 独立模式 Store 不参与远程数据投影；服务端是消息、任务与角色状态的权威。
+// 会话首屏页长与界面一致，避免同一会话两种页长的读取互相作废缓存票据。
+export const remoteConversationPageSize = 24
 export const remoteState = shallowReactive({ connection: 'offline', sessionId: null, agents: [], activeAgentId: null, pendingTaskResult: null, error: null, pendingError: null, notificationError: null, ready: false, initializing: false, restoringView: false, hasReadableData: false })
 export const remoteViews = reactive(new Map())
 export const remoteExecutions = reactive(new Map())
+export const remoteOutgoingMessages = reactive(new Map())
+export const remoteThreadGenerations = reactive(new Map())
 export const remotePendingRequests = reactive(new Map())
 export const remoteNotifications = reactive(new Map())
 export const remoteUnavailableThreads = reactive(new Set())
@@ -88,13 +92,14 @@ async function synchronizeFocusedThread() {
   const read = query => terminalReads.has(key(query)) ? Promise.resolve(null) : readRemote(query, { allowCached: false })
   const promise = (async () => {
     await Promise.allSettled([
-      read({ kind: 'conversation', id: threadId, pageSize: 60, beforeCursor: null }),
+      read({ kind: 'conversation', id: threadId, pageSize: remoteConversationPageSize, beforeCursor: null }),
       read({ kind: 'queue', id: threadId }),
       read({ kind: 'active_executions' }),
     ])
     assertToken(token, 'remote')
     const queue = remoteViews.get(key({ kind: 'queue', id: threadId }))
     if (!queue?.cached && (queue?.data?.active || queue?.data?.items?.some(item => item.state === 'running'))) await read({ kind: 'queue_live', id: threadId })
+    if ([...remotePendingRequests.values()].some(item => item.state === 'unknown' && item.context?.kind === 'chat' && item.context?.input?.threadId === threadId)) await reconcileRemotePendingRequests()
   })()
   focusedSync = { threadId, promise }
   try { await promise } finally { if (focusedSync?.promise === promise) focusedSync = null }
@@ -128,6 +133,7 @@ export function retireRemoteThread(id) {
   // 只释放展示和刷新记录；原生草稿、未确认请求及服务端执行均不在这里删除。
   for (const [name, view] of remoteViews) if (queryThread(view.query) === id) { remoteViews.delete(name); terminalReads.delete(name) }
   for (const [name, execution] of remoteExecutions) if (execution.threadId === id) remoteExecutions.delete(name)
+  for (const [requestId, message] of remoteOutgoingMessages) if (message.threadId === id) remoteOutgoingMessages.delete(requestId)
 }
 function assertReadable(query) { if (remoteUnavailableThreads.has(queryThread(query))) throw missingThread() }
 function queryOnce(query, cachedOnly, token) {
@@ -171,6 +177,8 @@ export function clearRemoteState() {
   remoteViews.clear()
   remoteUnavailableThreads.clear(); pendingReads.clear(); terminalReads.clear(); focusedThread = null
   remoteExecutions.clear()
+  remoteOutgoingMessages.clear()
+  remoteThreadGenerations.clear()
   remotePendingRequests.clear()
   clearTimeout(notificationTimer); notificationTimer = null; notificationVersion++
   remoteNotifications.clear(); remoteState.notificationError = null
@@ -231,12 +239,12 @@ export async function refreshRemotePendingRequests() {
   remoteState.pendingError = null
 }
 
-export async function reviewRemoteRequest(requestId, note, { confirmed = false } = {}) {
+export async function dismissRemoteRequest(requestId) {
   const token = currentToken()
   assertToken(token, 'remote')
   const pending = remotePendingRequests.get(requestId)
-  if (!confirmed || !pending || pending.state !== 'unknown' || !note?.trim()) throw new Error('请先查看结果，并填写确认说明。')
-  await remoteClient.reviewRequest(requestId, pending.fingerprint, note, token)
+  if (!pending || pending.state !== 'unknown') throw new Error('操作状态已更新，请刷新。')
+  await remoteClient.reviewRequest(requestId, pending.fingerprint, '', token)
   assertToken(token, 'remote')
   await refreshRemotePendingRequests()
 }
@@ -248,7 +256,7 @@ export async function reconcileRemotePendingRequests() {
   if (reconciliation?.version === version) return reconciliation.promise
   const promise = (async () => {
     await refreshRemotePendingRequests()
-    const candidates = [...remotePendingRequests.values()].filter(item => item.state === 'unknown' && item.context?.kind === 'chat' && (item.context?.transport === 'queue' || item.result?.messageId))
+    const candidates = [...remotePendingRequests.values()].filter(item => item.state === 'unknown' && (item.context?.transport === 'queue' || item.context?.kind === 'chat' && item.result?.messageId))
     const workers = Array.from({ length: Math.min(2, candidates.length) }, async () => {
       while (candidates.length) {
         assertToken(token, 'remote')
@@ -259,7 +267,7 @@ export async function reconcileRemotePendingRequests() {
     assertToken(token, 'remote')
     await refreshRemotePendingRequests()
     const failure = results.find(result => result.status === 'rejected')
-    if (failure) remoteState.pendingError = failure.reason?.message || '远程操作核对暂未完成'
+    if (failure) remoteState.pendingError = failure.reason?.message || '操作状态暂时未能同步。'
   })()
   reconciliation = { version, promise }
   try { await promise } finally { if (reconciliation?.promise === promise) reconciliation = null }
@@ -301,7 +309,6 @@ async function listenOnce() {
       if (event.data.state === 'online') {
         for (const view of remoteViews.values()) view.stale = true
         scheduleForegroundSync(150)
-        invalidateAllRemoteAvatars()
         remoteState.sessionId = event.data.sessionId
         if (event.data.principalId) remoteState.activeAgentId = event.data.principalId
         if (!remoteState.ready) scheduleBootstrap(150)
@@ -320,6 +327,9 @@ async function listenOnce() {
       } else scheduleRefresh()
     }
     if (event.kind === 'gateway' || event.kind === 'snapshot_required') {
+      if (event.data?.payload?.action === 'thread_reset') {
+        trackThreadGeneration(event.data.payload.threadId, event.data.payload.generation)
+      }
       if (event.kind === 'snapshot_required') invalidateAllRemoteAvatars()
       if (event.kind === 'snapshot_required' || event.data?.payload?.ownerAvatarChanged === true) quietlyRefreshRemoteUserAvatar()
       if (event.data?.payload?.action === 'state_update' && event.data.payload.ownerAvatarChanged === true && Object.keys(event.data.payload).length === 2) return
@@ -403,6 +413,11 @@ export async function readRemote(query, { cachedOnly = false, allowCached = true
     }
     const result = await queryOnce(query, cachedOnly, token)
     assertToken(token, 'remote')
+    const generation = query.kind === 'thread' ? result.data?.thread?.generation : result.data?.threadGeneration
+    if (['conversation', 'thread'].includes(query.kind) && !trackThreadGeneration(query.id, generation)) {
+      throw Object.assign(new Error('正在读取重置后的会话'), { code: 'REMOTE_STALE_READ' })
+    }
+    if (query.kind === 'conversation' && !result.cached) reconcileOutgoingMessages(result.data)
     noteReadable(query, result.data)
     if (retryUnavailable && query.kind === 'thread' && !cachedOnly && remoteViews.get(id)?.requestVersion === requestVersion) remoteUnavailableThreads.delete(query.id)
     assertReadable(query)
@@ -540,24 +555,41 @@ export async function initializeRemote() {
 export async function performRemote(action, options) {
   const token = options?.token || currentToken()
   assertToken(token, 'remote')
+  let failed = false
   try {
     const result = await remoteClient.action(action, { ...options, token })
     assertToken(token, 'remote')
     if (action.kind === 'delete_thread') retireRemoteThread(action.id)
+    if (action.kind === 'reset_thread') {
+      trackThreadGeneration(action.id, result.data?.thread?.generation, true)
+      const query = { kind: 'thread', id: action.id }
+      remoteViews.set(key(query), { query, data: result.data, cached: false, stale: true, loading: false })
+    }
     return result.data
   }
-  finally { await afterRemoteWrite(token) }
+  catch (error) { failed = true; throw error }
+  finally { await settleRemoteWrite(token, failed) }
 }
 export async function manageRemote(request, options) {
   const token = options?.token || currentToken()
   assertToken(token, 'remote')
+  let failed = false
   try { return (await remoteClient.manage(request, { ...options, token })).data }
-  finally { await afterRemoteWrite(token) }
+  catch (error) { failed = true; throw error }
+  finally { await settleRemoteWrite(token, failed) }
 }
 export async function submitRemoteInput(input, options) {
   const token = currentToken()
+  let failed = false
   try { return (await remoteClient.submitInput(input, { ...options, token })).data.projection }
-  finally { await afterRemoteWrite(token) }
+  catch (error) { failed = true; throw error }
+  finally { await settleRemoteWrite(token, failed) }
+}
+// 成功的写入立即交还调用方，待核对记录与视图刷新在后台完成；
+// 失败时结果可能未知，调用方会据此锁定重复提交，因此仍等待待核对记录刷新后再抛出。
+async function settleRemoteWrite(token, failed) {
+  const follow = afterRemoteWrite(token)
+  if (failed) await follow
 }
 async function afterRemoteWrite(token) {
   try {
@@ -575,49 +607,81 @@ async function afterRemoteWrite(token) {
     remoteState.pendingError = error.message
   }
 }
+export function stageRemoteChat(input, requestId) {
+  assertToken(currentToken(), 'remote')
+  const previous = remoteOutgoingMessages.get(requestId)
+  if (previous) return Object.assign(previous, input, { state: 'sending', error: '' })
+  const message = reactive({ ...input, requestId, createdAt: Date.now(), state: 'sending', error: '' })
+  remoteOutgoingMessages.set(requestId, message)
+  return message
+}
 export async function sendRemoteChat(input, { requestId = crypto.randomUUID() } = {}) {
   const token = currentToken()
   assertToken(token, 'remote')
-  assertReadable({ kind: 'thread', id: input.threadId })
-  await listenOnce()
-  assertToken(token, 'remote')
+  const outgoing = stageRemoteChat(input, requestId)
   const execution = reactive({ requestId, threadId: input.threadId, input: { ...input }, startedAt: Date.now(), state: 'observing', frame: null, presentation: createRemoteSurfaceState(), revision: 0, needsRefresh: false, error: null })
-  // 展示缓存可以释放，待核对操作由独立的持久化记录恢复，不占用活跃执行名额。
-  if (remoteExecutions.size >= 30) {
-    for (const [id, item] of remoteExecutions) {
-      if (item.state !== 'observing') remoteExecutions.delete(id)
-      if (remoteExecutions.size < 30) break
-    }
-    if (remoteExecutions.size >= 30) throw new Error('同时观察的远程执行过多，请稍后再试')
-  }
-  remoteExecutions.set(requestId, execution)
+  let submitted = false
   try {
+    assertReadable({ kind: 'thread', id: input.threadId })
+    // 展示缓存可以释放，待确认操作由独立的持久化记录恢复。
+    for (const [id, item] of remoteExecutions) {
+      if (remoteExecutions.size < 30 || remoteExecutions.has(requestId)) break
+      if (item.state !== 'observing') remoteExecutions.delete(id)
+    }
+    if (remoteExecutions.size >= 30 && !remoteExecutions.has(requestId)) throw new Error('同时观察的远程执行过多，请稍后再试')
+    remoteExecutions.set(requestId, execution)
+    await listenOnce()
+    assertToken(token, 'remote')
+    submitted = true
     const result = await observeRemoteResult(remoteClient.chat(input, { requestId, token }), {
       timeout: 90000,
       error: () => Object.assign(new Error('正在确认消息是否送达。'), { code: 'REMOTE_NETWORK', outcome: 'unknown', requestId }),
     })
     assertToken(token, 'remote')
     execution.state = 'accepted'
+    outgoing.state = 'accepted'
     const query = { kind: 'queue', id: input.threadId }
     remoteViews.set(key(query), { query, data: result.data, cached: false, stale: false, loading: false })
   } catch (error) {
     try { assertToken(token, 'remote') } catch { throw error }
+    if (!submitted) error.outcome = 'not_sent'
     execution.state = ['not_sent', 'rejected', 'failed'].includes(error.outcome) ? error.outcome : 'unknown'
     execution.error = error.message
+    Object.assign(outgoing, { state: execution.state, error: error.message })
     throw error
   } finally {
-    await afterRemoteWrite(token)
-    try {
+    // 回执先交还输入框，列表同步独立完成。
+    if (submitted) afterRemoteWrite(token).catch(() => {})
+    const refresh = async () => { try {
       assertToken(token, 'remote')
       execution.needsRefresh = true
-      const projection = await readRemote({ kind: 'conversation', id: input.threadId, pageSize: 60, beforeCursor: null }, { allowCached: false })
+      const projection = await readRemote({ kind: 'conversation', id: input.threadId, pageSize: remoteConversationPageSize, beforeCursor: null }, { allowCached: false })
       installRemoteProjection(execution.presentation, projection)
       execution.needsRefresh = false
-    } catch { /* 断线保留原分区待核对状态，恢复后显式读取。 */ }
+    } catch { /* 网络恢复后继续读取持久记录。 */ } }
+    if (submitted) refresh().catch(() => {})
   }
   return execution
 }
 
+function reconcileOutgoingMessages(snapshot) {
+  if (!snapshot?.threadId) return
+  const confirmed = new Set((snapshot?.messages || []).map(message => message.pairId))
+  for (const [id, message] of remoteOutgoingMessages) {
+    if (message.threadId === snapshot.threadId && confirmed.has(`queue_${id}`)) remoteOutgoingMessages.delete(id)
+  }
+}
+function trackThreadGeneration(threadId, value, reset = false) {
+  if (!threadId || !Number.isSafeInteger(value)) return true
+  const previous = remoteThreadGenerations.get(threadId)
+  if (previous !== undefined && value < previous) return false
+  remoteThreadGenerations.set(threadId, value)
+  if (!reset && (previous === undefined || previous === value)) return true
+  for (const view of remoteViews.values()) if (queryThread(view.query) === threadId) Object.assign(view, { data: null, stale: true })
+  for (const [id, execution] of remoteExecutions) if (execution.threadId === threadId) remoteExecutions.delete(id)
+  for (const [id, message] of remoteOutgoingMessages) if (message.threadId === threadId) remoteOutgoingMessages.delete(id)
+  return true
+}
 function queueExecution(id, threadId) {
   if (remoteUnavailableThreads.has(threadId)) return null
   const key = `queue-live:${id}`
@@ -633,6 +697,7 @@ function queueExecution(id, threadId) {
 }
 export function installQueuedLive(surface, threadId = surface?.threadId) {
   if (!threadId) return
+  if (!trackThreadGeneration(threadId, surface?.threadGeneration)) return
   let retired = false
   for (const execution of remoteExecutions.values()) {
     if (execution.threadId !== threadId || !execution.requestId.startsWith('queue-live:') || execution.state !== 'observing') continue
@@ -649,18 +714,24 @@ export function installQueuedLive(surface, threadId = surface?.threadId) {
   if (execution.presentation.retired.get(surface.surfaceId) === surface.generation) return
   const current = execution.presentation.surfaces.get(surface.surfaceId)
   if (current?.generation === surface.generation && current.sequence >= surface.sequence) return
-  installRemoteProjection(execution.presentation, { protocolVersion: 1, threadId: surface.threadId, surfaces: [surface] })
+  installRemoteProjection(execution.presentation, { protocolVersion: 1, threadId: surface.threadId, threadGeneration: surface.threadGeneration, surfaces: [surface] })
   execution.state = 'observing'; execution.revision++
 }
 function applyQueuedSurface(frame) {
   if (!frame?.surfaceId || !frame.operation) return
   const operation = frame.operation
-  const execution = operation.type === 'surface.open' ? queueExecution(frame.surfaceId, operation.threadId) : remoteExecutions.get(`queue-live:${frame.surfaceId}`)
+  const snapshot = operation.snapshot
+  const threadId = frame.threadId || operation.threadId || snapshot?.threadId
+  if (!trackThreadGeneration(threadId, frame.threadGeneration ?? snapshot?.threadGeneration)) return
+  const execution = operation.type === 'surface.open'
+    ? queueExecution(frame.surfaceId, operation.threadId)
+    : remoteExecutions.get(`queue-live:${frame.surfaceId}`) || (snapshot ? queueExecution(frame.surfaceId, snapshot.threadId) : null)
   if (!execution) return
   try {
     applyRemoteFrame(execution.presentation, frame); execution.frame = frame; execution.revision++
+    if (snapshot) reconcileOutgoingMessages(snapshot)
     execution.needsRefresh ||= execution.presentation.needsRefresh
-    if (['surface.commit', 'surface.fail', 'surface.dispose'].includes(operation.type)) {
+    if (['surface.commit', 'surface.settled', 'surface.fail', 'surface.dispose'].includes(operation.type)) {
       execution.state = operation.type === 'surface.fail' ? 'failed' : 'completed'; execution.needsRefresh = true
       for (const view of remoteViews.values()) if (['conversation', 'queue', 'queue_live', 'agent_state', 'active_executions'].includes(view.query.kind)) view.stale = true
       scheduleRefresh()

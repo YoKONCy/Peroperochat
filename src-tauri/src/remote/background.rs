@@ -74,7 +74,7 @@ pub async fn remote_background_settings(app:AppHandle,token:Token,kind:String)->
     native(app.clone(),"openSettings",json!({"kind":kind})).await?;
     super::validate_token(&app,&token)?;Ok(json!({"modeToken":token}))
 }
-#[tauri::command]
+#[tauri::command(async)]
 pub fn remote_consume_notification_open(app:AppHandle,token:Token)->ChatResult<Value> {
     super::validate_token(&app,&token)?;
     let data=execute(&app,"consumeOpen",&json!({"modeToken":token}))?;

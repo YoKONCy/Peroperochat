@@ -29,6 +29,25 @@ fn profile()->Profile {
     Profile {id:uuid::Uuid::new_v4().to_string(),server_id:"infos-node-before".into(),endpoint:String::new(),display_name:"原来的 infOS".into(),app_version:"1".into(),
         credential_id:Some(uuid::Uuid::new_v4().to_string()),device:Some(access::Device {id:uuid::Uuid::new_v4().to_string(),expires_at:chrono::Utc::now().timestamp_millis()+86_400_000,admin:false}),session_owner:None,certificate:None}
 }
+#[test]
+fn connection_verification_requires_same_credentials_profile_and_runtime() {
+    let original = profile();
+    let token = Token { installation_id: "测试安装".into(), epoch: 1,
+        target: mode::Target::Remote { profile_id: original.id.clone() } };
+    let now = std::time::Instant::now();
+    let verified = super::super::VerifiedConnection {
+        token: token.clone(), profile: original.clone(),
+        client: transport::client().unwrap(), checked_at: now,
+    };
+    assert!(verified.reusable(&token, &original, now));
+    let mut switched = token.clone(); switched.epoch += 1;
+    assert!(!verified.reusable(&switched, &original, now));
+    let mut changed = original.clone(); changed.credential_id = Some(uuid::Uuid::new_v4().to_string());
+    assert!(!verified.reusable(&token, &changed, now));
+    changed = original.clone(); changed.endpoint = "https://other.invalid".into();
+    assert!(!verified.reusable(&token, &changed, now));
+    assert!(!verified.reusable(&token, &original, now + std::time::Duration::from_secs(10)));
+}
 fn fixture(profile:&Profile)->(mode::Coordinator,Token) {
     let root=std::env::temp_dir().join(format!("ppc-identity-{}",uuid::Uuid::new_v4())).join("data");
     let coordinator=mode::Coordinator::initialize(root.join("control/runtime.sqlite")).unwrap();

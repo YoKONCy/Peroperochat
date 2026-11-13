@@ -7,10 +7,10 @@ import { remoteState } from '../stores/remote'
 const urls = new Set()
 const avatars = new Map()
 export const remoteAvatarRevisions = reactive(new Map())
-export function invalidateRemoteAvatar(id) {
+export function invalidateRemoteAvatar(id, { notify = true } = {}) {
   const token = currentToken(); assertToken(token, 'remote')
   for (const [key, entry] of avatars) if (entry.id === id) { avatars.delete(key); if (entry.refs === 0) entry.media?.release() }
-  remoteAvatarRevisions.set(id, (remoteAvatarRevisions.get(id) || 0) + 1)
+  if (notify) remoteAvatarRevisions.set(id, (remoteAvatarRevisions.get(id) || 0) + 1)
 }
 export function invalidateAllRemoteAvatars() {
   const ids = new Set([...avatars.values()].map(entry => entry.id))
@@ -36,14 +36,19 @@ function pumpAvatars() {
 export async function acquireRemoteAvatar(id, { cachedOnly = false } = {}) {
   const token = currentToken()
   assertToken(token, 'remote')
-  const key = `${token.target.profileId}:${token.epoch}:${id}:${cachedOnly ? 'cached' : 'live'}`
+  const prefix = `${token.target.profileId}:${token.epoch}:${id}`
+  const hot = avatars.get(`${prefix}:live`)
+  const key = `${prefix}:${cachedOnly && !hot?.media ? 'cached' : 'live'}`
   let entry = avatars.get(key)
   if (entry?.media && entry.expiresAt <= Date.now() && !cachedOnly) { avatars.delete(key); if (!entry.refs) entry.media.release(); entry = null }
   if (!entry) {
     entry = { id, refs: 0, media: null, expiresAt: 0 }
-    entry.promise = new Promise((resolve, reject) => { avatarQueue.push({ id, token, cachedOnly, resolve, reject }); pumpAvatars() }).then(media => {
+    // 本机副本独立读取，避免排在网络头像请求后等待。
+    const loading = cachedOnly ? loadRemoteResource({ kind: 'agent_avatar', id }, { cachedOnly: true })
+      : new Promise((resolve, reject) => { avatarQueue.push({ id, token, cachedOnly, resolve, reject }); pumpAvatars() })
+    entry.promise = loading.then(media => {
       if (!media.previewable || !media.mimeType.startsWith('image/')) { media.release(); throw new Error('头像图片暂时无法显示') }
-      entry.expiresAt = Date.now() + 60000; entry.media = media; return media
+      entry.expiresAt = Date.now() + 300000; entry.media = media; return media
     })
     avatars.set(key, entry)
   }

@@ -8,10 +8,13 @@ use crate::{mode::{Coordinator,Token},local::types::*};
 
 struct Rpc {id:String,action:String,payload:Value,reply:oneshot::Sender<ChatResult<Value>>}
 #[derive(Clone)]
-pub struct Handle {pub token:Token,pub principal:String,pub window_id:String,pub session_id:String,queue:mpsc::Sender<Rpc>,task:Arc<tokio::task::JoinHandle<()>>}
+pub struct Handle {pub token:Token,pub principal:String,pub window_id:String,pub session_id:String,queue:mpsc::Sender<Rpc>,task:Arc<tokio::task::JoinHandle<()>>,
+    /// 最近一次收到任意入站帧（含心跳确认）的时间，用于判断连接是否仍然新鲜。
+    inbound:Arc<std::sync::Mutex<std::time::Instant>>}
 impl Handle {
     pub fn stop(&self) {self.task.abort();}
     pub fn alive(&self)->bool {!self.task.is_finished()}
+    pub fn inbound_within(&self,window:Duration)->bool {self.inbound.lock().map(|at|at.elapsed()<window).unwrap_or(false)}
     pub async fn request(&self,action:&str,payload:Value)->ChatResult<Value> {
         let (reply,receive)=oneshot::channel();
         self.queue.try_send(Rpc {id:uuid::Uuid::new_v4().to_string(),action:action.into(),payload,reply})
@@ -24,7 +27,7 @@ fn envelope(node:&str,id:&str,kind:&str,payload:Value)->Value {
     json!({"protocolVersion":1,"id":id,"type":kind,"sourceId":node,"targetId":"server","timestamp":chrono::Utc::now().timestamp_millis(),"payload":payload})
 }
 fn emit(app:&AppHandle,token:&Token,kind:&str,data:Value) {
-    if let Ok(_gate)=app.state::<Coordinator>().gate(Some(token),false) {let _=app.emit("remote-event",json!({"modeToken":token,"kind":kind,"data":data}));}
+    if app.state::<Coordinator>().verify(token).is_ok() {let _=app.emit("remote-event",json!({"modeToken":token,"kind":kind,"data":data}));}
 }
 fn transient_room_hint(value:&Value)->bool {
     let payload=&value["payload"];
@@ -39,22 +42,31 @@ fn transient_room_hint(value:&Value)->bool {
 pub(super) fn accept_push(app:&AppHandle,token:&Token,value:Value)->ChatResult<()> {
     // infOS 据点通过未编号的临时广播展示接话状态。它们不参与持久回执、去重或流游标，恢复仍读取权威房间快照。
     if transient_room_hint(&value) {
-        let mode=app.state::<Coordinator>();let _gate=mode.gate(Some(token),false)?;
+        // 临时广播不落库，只做只读令牌校验。
+        let mode=app.state::<Coordinator>();mode.verify(token)?;
         return app.emit("remote-event",json!({"modeToken":token,"kind":"gateway","data":value})).map_err(|_|super::inactive());
     }
     if value["protocolVersion"]!=1 || value["type"]!="push" || !value["id"].as_str().is_some_and(|id|!id.is_empty() && id.len()<=1024) {
         return Err(ChatError::new("REMOTE_PROTOCOL","Gateway 补发事件身份或版本无效"));
     }
     if value["payload"]["action"]=="surface" {super::validate_frame(&value["payload"]["frame"])?;}
-    let mode=app.state::<Coordinator>();let _gate=mode.gate(Some(token),false)?;
+    let mode=app.state::<Coordinator>();
+    // 只有持久通知需要写入缓存库，才取控制门；其余推送（包括每个流式帧）仅做只读校验，避免串行化全部写事务。
+    let _gate=if value["payload"]["action"]=="durable_notification" {Some(mode.gate(Some(token),false)?)} else {mode.verify(token)?;None};
     let runtime=app.state::<super::Runtime>();
     let id=value["id"].as_str().ok_or_else(super::inactive)?;
     let mut seen=runtime.seen_messages.lock().map_err(|_|super::inactive())?;
     if seen.contains(id) {return Ok(());}
     super::notifications::capture(app,token,&value["payload"])?;
     if let (Some(stream),Some(sequence))=(value["streamId"].as_str(),value["sequence"].as_u64()) {
+        // 已被 LRU 淘汰的流不转发也不推进游标；重新订阅时以旧游标请求服务端补发。未显式订阅的受众推送照常转发。
+        let subscriptions=runtime.subscriptions.lock().map_err(|_|super::inactive())?;
+        if subscriptions.is_evicted(stream) {return Ok(());}
         let mut cursors=runtime.cursors.lock().map_err(|_|super::inactive())?;
-        if stream.len()>1024 || sequence==0 || (!cursors.contains_key(stream) && cursors.len()>=128) {return Err(ChatError::new("REMOTE_PROTOCOL","Gateway 流游标无效或数量过多"));}
+        if stream.len()>1024 || sequence==0 {return Err(ChatError::new("REMOTE_PROTOCOL","Gateway 流游标无效或数量过多"));}
+        // 容量不足时先回收已淘汰流的旧游标，其余流的游标保持原有上限语义。
+        if !cursors.contains_key(stream) && cursors.len()>=128 {cursors.retain(|name,_|!subscriptions.is_evicted(name));}
+        if !cursors.contains_key(stream) && cursors.len()>=128 {return Err(ChatError::new("REMOTE_PROTOCOL","Gateway 流游标无效或数量过多"));}
         let previous=cursors.get(stream).copied().unwrap_or(0);
         if previous>0 && sequence>previous+1 {let _=app.emit("remote-event",json!({"modeToken":token,"kind":"snapshot_required","data":{"streamId":stream}}));}
         app.emit("remote-event",json!({"modeToken":token,"kind":"gateway","data":value})).map_err(|_|super::inactive())?;
@@ -80,7 +92,7 @@ fn rpc_error(value:&Value)->ChatError {
 pub async fn connect(app:&AppHandle,session:&super::Session,principal:&str)->ChatResult<Handle> {
     if principal.is_empty() || principal.len()>64 {return Err(ChatError::new("INVALID_INPUT","远程角色身份无效"));}
     let mode=app.state::<Coordinator>();let token=session.token.clone();let mut changes=mode.subscribe();
-    {let _gate=mode.gate(Some(&token),false)?;}
+    mode.verify(&token)?;
     let node=format!("ppc-{}-{}",token.installation_id,session.profile.id);
     let window_id=format!("{}:{}",node,uuid::Uuid::new_v4());
     let mut url=reqwest::Url::parse(&format!("{}/ws/gateway",session.profile.endpoint)).map_err(|_|super::transport::network())?;
@@ -109,11 +121,14 @@ pub async fn connect(app:&AppHandle,session:&super::Session,principal:&str)->Cha
         || !["surface-v1","input-seat-v1","cursor-v1","audience-v1"].iter().all(|feature|ack["payload"]["features"].as_array().is_some_and(|items|items.iter().any(|v|v==feature))) {
         return Err(ChatError::new("REMOTE_INCOMPATIBLE","目标 infOS 不支持所需 Gateway 与 Surface 协议"));
     }
-    {let _gate=mode.gate(Some(&token),false)?;}
+    mode.verify(&token)?;
     let session_id=ack["payload"]["sessionId"].as_str().filter(|id|!id.is_empty()).ok_or_else(super::transport::network)?.to_owned();
     let handle_session_id=session_id.clone();
     let (queue,mut receiver)=mpsc::channel::<Rpc>(32);let app=app.clone();let run_token=token.clone();
+    // 与连接任务共享的入站时间戳；新连接视为刚刚收到过帧。
+    let inbound=Arc::new(std::sync::Mutex::new(std::time::Instant::now()));let inbound_task=inbound.clone();
     let task=tokio::spawn(async move {
+        let inbound=inbound_task;
         let mut pending:HashMap<String,(tokio::time::Instant,oneshot::Sender<ChatResult<Value>>)>=HashMap::new();
         let mut seen=HashSet::new();let mut heartbeat=tokio::time::interval(Duration::from_secs(15));let mut last_received=tokio::time::Instant::now();
         loop {
@@ -126,14 +141,14 @@ pub async fn connect(app:&AppHandle,session:&super::Session,principal:&str)->Cha
                 },
                 request=receiver.recv()=> {
                     let Some(request)=request else {break};
-                    if app.state::<Coordinator>().gate(Some(&run_token),false).is_err() {let _=request.reply.send(Err(super::inactive()));break;}
+                    if app.state::<Coordinator>().verify(&run_token).is_err() {let _=request.reply.send(Err(super::inactive()));break;}
                     let mut payload=request.payload;payload["action"]=json!(request.action);
                     if socket.send(Message::Text(envelope(&node,&request.id,"request",payload).to_string().into())).await.is_err() {break;}
                     pending.insert(request.id,(tokio::time::Instant::now(),request.reply));
                 },
                 message=tokio::time::timeout(Duration::from_secs(50),socket.next())=> {
                     let Ok(Some(Ok(message)))=message else {break};
-                    last_received=tokio::time::Instant::now();
+                    last_received=tokio::time::Instant::now();if let Ok(mut at)=inbound.lock() {*at=std::time::Instant::now();}
                     if let Message::Ping(bytes)=message {if socket.send(Message::Pong(bytes)).await.is_err() {break;}continue;}
                     if let Message::Close(frame)=&message {
                         if frame.as_ref().is_some_and(|frame|frame.code==tokio_tungstenite::tungstenite::protocol::frame::coding::CloseCode::Policy && (frame.reason.contains("授权") || frame.reason.contains("过期"))) {
@@ -167,7 +182,7 @@ pub async fn connect(app:&AppHandle,session:&super::Session,principal:&str)->Cha
         let _=tokio::time::timeout(Duration::from_secs(1),socket.close(None)).await;
         emit(&app,&run_token,"connection",json!({"state":"offline","sessionId":session_id}));
     });
-    Ok(Handle {token,principal:principal.into(),window_id,session_id:handle_session_id,queue,task:Arc::new(task)})
+    Ok(Handle {token,principal:principal.into(),window_id,session_id:handle_session_id,queue,task:Arc::new(task),inbound})
 }
 
 #[cfg(test)]

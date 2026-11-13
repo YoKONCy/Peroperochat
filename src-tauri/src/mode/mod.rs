@@ -109,6 +109,14 @@ impl Coordinator {
     pub fn gate(&self,expected:Option<&Token>,standalone:bool)->ChatResult<Gate> {
         let gate=lock_existing(self.path(),expected,standalone)?;if &gate.snapshot.runtime_owner_id!=self.owner.as_ref() {return Err(closed());}Ok(gate)
     }
+    /// 只读校验运行令牌：不取写锁，只读取 WAL 中已提交的快照。
+    /// 仅用于随后不会在控制库内写入的路径；凡需要持久写入，仍必须使用 gate。
+    pub fn verify(&self,expected:&Token)->ChatResult<()> {
+        let state=read(&open_existing(self.path())?)?;
+        if &state.runtime_owner_id!=self.owner.as_ref() {return Err(closed());}
+        if &state.token()?!=expected {return Err(closed());}
+        Ok(())
+    }
     pub fn local_gate(&self)->ChatResult<Gate> {
         let expected=LOCAL_TOKEN.try_with(Clone::clone).ok();self.gate(expected.as_ref(),true)
     }
@@ -152,7 +160,8 @@ impl Coordinator {
     }
 }
 
-#[tauri::command]
+// 线程池执行：控制库读取可能等待写锁，不能占用 IPC 线程（Android 上即 JS 主线程）。
+#[tauri::command(async)]
 pub fn mode_snapshot(mode:tauri::State<Coordinator>)->ChatResult<Snapshot> {mode.snapshot()}
 
 #[tauri::command]

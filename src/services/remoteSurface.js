@@ -1,5 +1,5 @@
 // infOS Surface v1 的展示合成器。只合并服务端帧，不解释或执行工具参数与可执行节点。
-const operationTypes = new Set(['surface.open', 'surface.append-text', 'surface.append-tool-arguments', 'surface.upsert-node', 'surface.patch-node', 'surface.commit', 'surface.fail', 'surface.dispose'])
+const operationTypes = new Set(['surface.open', 'surface.append-text', 'surface.append-tool-arguments', 'surface.upsert-node', 'surface.patch-node', 'surface.commit', 'surface.publish', 'surface.settled', 'surface.fail', 'surface.dispose'])
 const supportedKinds = new Set(['markdown', 'native-reasoning', 'thinking', 'model-retry', 'code', 'math', 'mermaid', 'tool-call', 'tool-result', 'status', 'error', 'attachment', 'approval', 'progress', 'input', 'panel', 'table', 'notification', 'document'])
 
 function protocolError() { return Object.assign(new Error('远程 Surface 数据不兼容，请刷新权威投影'), { code: 'REMOTE_PROTOCOL' }) }
@@ -13,18 +13,37 @@ function descriptorView(surface) {
       !Array.isArray(surface.nodes) || surface.nodes.length > 1000) throw protocolError()
   return { ...surface, nodes: surface.nodes.map(nodeView), operationIds: new Set(), needsRefresh: false }
 }
-export function createRemoteSurfaceState() { return { surfaces: new Map(), retired: new Map(), needsRefresh: false } }
+export function createRemoteSurfaceState() { return { surfaces: new Map(), messages: new Map(), retired: new Map(), deletedMessageIds: new Set(), threadId: null, threadGeneration: 0, needsRefresh: false } }
 
 export function installRemoteProjection(state, projection, { merge = false } = {}) {
   if (projection?.protocolVersion !== 1 || !Array.isArray(projection.surfaces) || projection.surfaces.length > 500) throw protocolError()
+  if (state.threadId && projection.threadId !== state.threadId) throw protocolError()
+  state.threadId = projection.threadId
+  if (projection.threadGeneration !== undefined && projection.threadGeneration < state.threadGeneration) return
+  const reset = projection.threadGeneration !== undefined && projection.threadGeneration > state.threadGeneration
+  if (reset) {
+    state.surfaces.clear(); state.messages.clear(); state.retired.clear(); state.deletedMessageIds.clear()
+    state.threadGeneration = projection.threadGeneration
+  }
   const next = merge ? new Map(state.surfaces) : new Map()
+  const messages = merge ? new Map(state.messages) : new Map()
+  for (const id of projection.deletedMessageIds || []) state.deletedMessageIds.add(id)
+  const deleted = state.deletedMessageIds
+  for (const id of deleted) messages.delete(id)
+  for (const [id, surface] of next) if (deleted.has(surface.messageId)) next.delete(id)
+  for (const message of projection.messages || []) {
+    const current = messages.get(message.messageId)
+    if (!deleted.has(message.messageId) && (!current || (message.revision || 0) >= (current.revision || 0))) messages.set(message.messageId, message)
+  }
   for (const descriptor of projection.surfaces) {
     const surface = descriptorView(descriptor)
+    if (deleted.has(surface.messageId)) continue
     const current = next.get(surface.surfaceId)
     if (current?.generation === surface.generation && current.revision > surface.revision) continue
     next.set(surface.surfaceId, surface)
   }
   state.surfaces = next
+  state.messages = messages
   state.needsRefresh = false
 }
 function upsert(surface, node) {
@@ -39,6 +58,20 @@ export function applyRemoteFrame(state, frame) {
   if (frame?.protocolVersion !== 1 || typeof frame.surfaceId !== 'string' || typeof frame.generation !== 'string' || typeof frame.operationId !== 'string' ||
       !Number.isSafeInteger(frame.sequence) || !Number.isSafeInteger(frame.revision) || !operationTypes.has(frame.operation?.type)) throw protocolError()
   const operation = frame.operation
+  const threadId = frame.threadId || operation.threadId || operation.surface?.threadId
+  if (state.threadId && threadId && state.threadId !== threadId) throw protocolError()
+  if (threadId) state.threadId = threadId
+  if (frame.threadGeneration !== undefined && frame.threadGeneration < state.threadGeneration) return
+  if (operation.type === 'surface.publish' || operation.type === 'surface.settled') {
+    if (frame.threadId && frame.threadId !== operation.snapshot?.threadId) throw protocolError()
+    installRemoteProjection(state, operation.snapshot, { merge: true })
+    if (operation.type === 'surface.settled' && !state.surfaces.get(frame.surfaceId)?.messageId) state.surfaces.delete(frame.surfaceId)
+    return
+  }
+  if (frame.threadGeneration !== undefined && frame.threadGeneration > state.threadGeneration) {
+    state.surfaces.clear(); state.messages.clear(); state.retired.clear(); state.deletedMessageIds.clear()
+    state.threadGeneration = frame.threadGeneration
+  }
   if (state.retired.get(frame.surfaceId) === frame.generation) return
   let current = state.surfaces.get(frame.surfaceId)
   if (current && current.generation !== frame.generation) {
@@ -59,6 +92,16 @@ export function applyRemoteFrame(state, frame) {
   } else if (operation.type === 'surface.commit') {
     surface = descriptorView(operation.surface)
     if (!['committed', 'failed'].includes(surface.state) || (current && (current.threadId !== surface.threadId || current.principalId !== surface.principalId))) throw protocolError()
+    if (operation.snapshot) installRemoteProjection(state, operation.snapshot, { merge: true })
+    if (state.deletedMessageIds.has(surface.messageId)) {
+      state.surfaces.delete(frame.surfaceId)
+      state.retired.set(frame.surfaceId, frame.generation)
+      return
+    }
+    if (operation.message) {
+      const previous = state.messages.get(operation.message.messageId)
+      if (!previous || (operation.message.revision || 0) >= (previous.revision || 0)) state.messages.set(operation.message.messageId, operation.message)
+    }
     // 流式预览与持久消息使用不同身份；最终描述的序号、版本不可被预览帧覆盖。
     if (frame.surfaceId !== surface.surfaceId) {
       state.surfaces.delete(frame.surfaceId)

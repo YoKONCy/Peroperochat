@@ -1,14 +1,11 @@
 /* 一级导航、工作台及配置页面共享秩序，但保留不同内容的识别方式。 */
 .remote-workspace[data-ui='soft'] .remote-page-stage { background: var(--ui-page); }
 .remote-workspace[data-ui='soft'] .remote-section-body { padding-inline: 17px; background: var(--ui-page); }
-.remote-workspace[data-ui='soft'] .remote-header { border: 0; border-radius: 0 0 20px 20px; background: var(--ui-paper); backdrop-filter: none; box-shadow: 0 3px 12px color-mix(in srgb, var(--ui-accent) 9%, transparent); z-index: 3; }
-.remote-workspace[data-ui='soft'] .remote-header > .room-icon-button { width: 38px; min-width: 38px; height: 40px; border-radius: 12px; }
-.remote-workspace[data-ui='soft'] .remote-avatar-button .character-avatar { border-radius: 50%; object-fit: contain; border: 2px solid var(--ui-paper); box-shadow: 0 0 0 2px var(--ui-soft), 0 0 0 3px var(--ui-line); }
-.remote-workspace[data-ui='soft'] .remote-navigation { position: relative; padding: 5px 8px calc(7px + env(safe-area-inset-bottom)); border: 0; border-top: 1px solid var(--ui-line); border-radius: 19px 19px 0 0; background: var(--ui-paper); box-shadow: 0 -3px 12px color-mix(in srgb, var(--ui-accent) 7%, transparent); }
-.remote-workspace[data-ui='soft'] .remote-navigation button { gap: 4px; min-height: 50px; font-size: var(--ui-caption); font-weight: 550; letter-spacing: 0; }
-.remote-workspace[data-ui='soft'] .remote-navigation button > span { width: 42px; height: 29px; border-radius: 12px; border: 1px solid transparent; }
-.remote-workspace[data-ui='soft'] .remote-navigation button.selected > span { border-color: var(--ui-emphasis); background: var(--ui-action); color: var(--ui-on-accent); box-shadow: var(--ui-press-shadow); transform: translateY(-2px) rotate(-3deg); }
-.remote-workspace[data-ui='soft'] .remote-navigation button.selected > span > svg { transform: rotate(3deg); color: inherit; }
+.remote-workspace[data-ui='soft'] .remote-header { border: 0; backdrop-filter: none; z-index: 3; }
+.remote-workspace[data-ui='soft'] .remote-navigation { position: relative; border: 0; border-top: 1px solid var(--ui-line); }
+.remote-workspace[data-ui='soft'] .remote-navigation button { font-size: var(--ui-caption); letter-spacing: 0; }
+.remote-workspace[data-ui='soft'] .remote-navigation button > span { border: 1px solid transparent; }
+.remote-workspace[data-ui='soft'] .remote-navigation button.selected > span > svg { color: inherit; }
 :is(.companion-surface, .remote-themed)[data-ui='soft'] :is(.remote-section-heading, .remote-manager-heading, .phase-hub-heading) { align-items: center; margin-bottom: 18px; }
 :is(.companion-surface, .remote-themed)[data-ui='soft'] :is(.remote-section-heading, .remote-manager-heading, .phase-hub-heading) h1 { margin-block: 4px 0; font-size: calc(var(--ui-text) + 9px); font-weight: 750; line-height: 1.4; }
 :is(.companion-surface, .remote-themed)[data-ui='soft'] :is(.remote-section-heading, .remote-manager-heading, .phase-hub-heading) .room-icon-button { border: 1px solid var(--ui-line); border-radius: 50%; background: var(--ui-paper); }
@@ -19,22 +16,15 @@
 :is(.companion-surface, .remote-themed)[data-ui='soft'] .phase-card > h3 { display: flex; align-items: center; gap: 8px; font-size: calc(var(--ui-text) + 1px); font-weight: 650; }
 :is(.companion-surface, .remote-themed)[data-ui='soft'] .phase-card > h3 > svg { width: 29px; height: 29px; padding: 5px; border: 1px solid var(--ui-line); border-radius: 10px 10px 10px 4px; color: var(--ui-emphasis); background: var(--ui-soft); box-shadow: 0 var(--ui-depth-small) 0 var(--ui-shelf); }
 :is(.companion-surface, .remote-themed)[data-ui='soft'] :is(.phase-welcome, .phase-assignment-main, .phase-profile-hero, .phase-stats-hero) { border-radius: 22px; border-color: var(--ui-line); background: linear-gradient(125deg, var(--ui-warm), var(--ui-paper)); box-shadow: var(--ui-shadow); }
-:is(.companion-surface, .remote-themed)[data-ui='soft'] .phase-welcome h1 { font-size: calc(var(--ui-text) + 10px); font-weight: 750; }
 :is(.companion-surface, .remote-themed)[data-ui='soft'] :is(.phase-quick-grid, .remote-manager-grid, .phase-room-grid) { gap: 11px; }
-:is(.companion-surface, .remote-themed)[data-ui='soft'] :is(.phase-quick-grid, .remote-manager-grid) > button { border-radius: 18px 18px 18px 8px; border-color: var(--ui-contour); background: linear-gradient(135deg, var(--ui-paper) 45%, var(--ui-soft)); box-shadow: var(--ui-shadow); }
 :is(.companion-surface, .remote-themed)[data-ui='soft'] :is(.phase-tile-icon, .remote-record-symbol) { border-radius: 13px; border-color: var(--ui-line); background: var(--ui-soft); color: var(--ui-accent); }
-:is(.companion-surface, .remote-themed)[data-ui='soft'] .phase-quick-grid > button .phase-tile-icon { background: var(--ui-action); color: var(--ui-on-accent); box-shadow: var(--ui-press-shadow); transform: rotate(-5deg); }
-:is(.companion-surface, .remote-themed)[data-ui='soft'] .phase-quick-grid > button .phase-tile-icon > svg { transform: rotate(5deg); }
-:is(.companion-surface, .remote-themed)[data-ui='soft'] .phase-quick-grid > button:nth-child(even) { background: linear-gradient(135deg, var(--ui-paper) 45%, var(--ui-warm)); }
 :is(.companion-surface, .remote-themed)[data-ui='soft'] .phase-destinations { border-color: var(--ui-contour); border-radius: 20px 20px 20px 8px; background: var(--ui-paper); box-shadow: var(--ui-shadow); }
 :is(.companion-surface, .remote-themed)[data-ui='soft'] .phase-destinations > button { border-radius: 0; border-color: var(--ui-line); background: transparent; box-shadow: none; }
 :is(.companion-surface, .remote-themed)[data-ui='soft'] .phase-destination-button { border-radius: 17px; border-color: var(--ui-line); background: var(--ui-paper); box-shadow: 0 var(--ui-depth-control) 0 var(--ui-shelf), inset 0 1px 0 var(--ui-edge); }
 :is(.companion-surface, .remote-themed)[data-ui='soft'] .phase-destinations > button > :is(svg:first-child, .phase-tile-icon) { flex: none; width: 36px; height: 36px; padding: 7px; margin: 0; background: var(--ui-soft); border: 1px solid var(--ui-contour); border-radius: 12px 12px 12px 5px; box-shadow: 0 var(--ui-depth-control) 0 var(--ui-shelf); }
-:is(.companion-surface, .remote-themed)[data-ui='soft'] .phase-insight-links > button { border-color: var(--ui-contour); border-radius: 16px 16px 16px 6px; background: linear-gradient(135deg, var(--ui-warm), var(--ui-card-face)); box-shadow: 0 var(--ui-depth-control) 0 var(--ui-shelf); }
 :is(.companion-surface, .remote-themed)[data-ui='soft'] .phase-agent-picker { gap: 12px; padding-block: 6px 13px; }
 :is(.companion-surface, .remote-themed)[data-ui='soft'] .phase-agent-picker .character-avatar { aspect-ratio: 1; object-fit: contain; border-radius: 50%; }
 :is(.companion-surface, .remote-themed)[data-ui='soft'] .phase-agent-picker button.selected .character-avatar { box-shadow: 0 0 0 3px var(--ui-paper), 0 0 0 5px var(--ui-accent); }
-:is(.companion-surface, .remote-themed)[data-ui='soft'] .remote-thread-list > button, :is(.companion-surface, .remote-themed)[data-ui='soft'] .remote-thread-list > article { border-radius: 17px; border-color: var(--ui-line); background: var(--ui-paper); }
 :is(.companion-surface, .remote-themed)[data-ui='soft'] .conversation-thread-row { margin-bottom: 10px; border: 1px solid var(--ui-line); border-radius: 18px; background: var(--ui-paper); box-shadow: 0 var(--ui-depth-control) 0 color-mix(in srgb, var(--ui-accent) 8%, transparent); }
 :is(.companion-surface, .remote-themed)[data-ui='soft'] .conversation-thread-row.is-current { border-color: var(--ui-accent); background: linear-gradient(110deg, var(--ui-soft), var(--ui-card-face)); box-shadow: inset 3px 0 0 var(--ui-accent), var(--ui-shadow); }
 :is(.companion-surface, .remote-themed)[data-ui='soft'] .conversation-thread-open { padding: 13px 11px; }
@@ -105,9 +95,6 @@
 :is(.companion-surface, .remote-themed)[data-ui='soft'] .model-reasoning-section { border-color: var(--ui-contour); background: var(--ui-thought); box-shadow: 0 var(--ui-depth-control) 0 var(--ui-shelf), inset 0 1px 0 var(--ui-edge); }
 :is(.companion-surface, .remote-themed)[data-ui='soft'] .model-reasoning-section header p { display: none; }
 :is(.companion-surface, .remote-themed)[data-ui='soft'] .model-reasoning-section .model-section-icon { border-radius: 11px 11px 11px 5px; background: var(--ui-action); color: var(--ui-on-accent); box-shadow: 0 var(--ui-depth-small) 0 var(--ui-contour); transform: rotate(-5deg); }
-:is(.companion-surface, .remote-themed)[data-ui='soft'] .model-reasoning-options { display: grid; grid-template-columns: repeat(auto-fit, minmax(48px, 1fr)); gap: 6px; }
-:is(.companion-surface, .remote-themed)[data-ui='soft'] .model-reasoning-options > button { min-height: 37px; border-radius: 12px; border-color: transparent; background: var(--ui-paper); font-size: var(--ui-caption); }
-:is(.companion-surface, .remote-themed)[data-ui='soft'] .model-reasoning-options > button.selected { border-color: color-mix(in srgb, var(--ui-accent) 75%, var(--ui-ink)); background: var(--ui-accent); color: var(--ui-on-accent); box-shadow: var(--ui-press-shadow); }
 :is(.companion-surface, .remote-themed)[data-ui='soft'] .model-sampling-section, :is(.companion-surface, .remote-themed)[data-ui='soft'] .model-capability-section { background: transparent; border: 0; padding: 0; }
 :is(.companion-surface, .remote-themed)[data-ui='soft'] .model-sampling-section > header, :is(.companion-surface, .remote-themed)[data-ui='soft'] .model-capability-section > header { padding: 0 3px; }
 :is(.companion-surface, .remote-themed)[data-ui='soft'] :is(.model-sampling-section, .model-capability-section) header p { display: none; }

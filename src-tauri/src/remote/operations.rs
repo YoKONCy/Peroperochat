@@ -133,6 +133,9 @@ impl Query {
 #[serde(tag="kind",rename_all="snake_case",deny_unknown_fields)]
 pub enum Action {
     CreateThread {#[serde(rename="agentId")] agent_id:String,title:String},
+    LatestThread {#[serde(rename="agentId")] agent_id:String},
+    ResetThread {id:String},
+    ForkThread {id:String,#[serde(rename="messageId")] message_id:u64},
     RenameThread {id:String,title:String},DeleteThread {id:String},
     StopChat {#[serde(rename="threadId")] thread_id:String},
     QueueItem {#[serde(rename="threadId")] thread_id:String,id:String,revision:u64,action:String,content:Option<String>},
@@ -154,6 +157,15 @@ impl Action {
     pub fn route(&self)->ChatResult<Route> {
         let (method,path,body)=match self {
             Self::CreateThread {agent_id,title}=> ("POST","/chat/threads".into(),json!({"agentId":agent_id,"title":title,"channel":"desktop","platform":"peroperochat"})),
+            Self::LatestThread {agent_id} => {
+                segment(agent_id)?;
+                ("POST", "/chat/threads/latest".into(), json!({"agentId":agent_id}))
+            },
+            Self::ResetThread {id} => ("POST", format!("/chat/threads/{}/reset", segment(id)?), json!({})),
+            Self::ForkThread {id,message_id} => {
+                if *message_id == 0 || *message_id > 9_007_199_254_740_991 { return Err(invalid()); }
+                ("POST", format!("/chat/threads/{}/fork", segment(id)?), json!({"messageId":message_id}))
+            },
             Self::RenameThread {id,title}=> {if title.encode_utf16().count()>100 {return Err(invalid());}("PATCH",format!("/chat/threads/{}",segment(id)?),json!({"title":title}))},
             Self::DeleteThread {id}=> ("DELETE",format!("/chat/threads/{}",segment(id)?),json!({})),
             Self::StopChat {thread_id}=> ("POST","/chat/stop".into(),json!({"threadId":thread_id})),
@@ -266,6 +278,19 @@ mod tests {
         let query=Query::Conversation {id:"t".into(),before_cursor:None,page_size:24};let mut calls=0;
         let result=fetch_query(&query,|_,_| {calls+=1;std::future::ready(Err(ChatError::new("REMOTE_AUTH_REQUIRED","需要登录")))}).await;
         assert_eq!(calls,1);assert_eq!(result.unwrap_err().code,"REMOTE_AUTH_REQUIRED");
+    }
+    #[test]
+    fn main_thread_and_fork_routes_preserve_target_identity() {
+        let latest = Action::LatestThread { agent_id: "pero".into() }.route().unwrap();
+        assert_eq!(latest.path, "/chat/threads/latest");
+        assert_eq!(latest.body, Some(json!({"agentId":"pero"})));
+        let reset = Action::ResetThread { id: "thread/a".into() }.route().unwrap();
+        assert_eq!(reset.method, reqwest::Method::POST);
+        assert_eq!(reset.path, "/chat/threads/thread%2Fa/reset");
+        let fork = Action::ForkThread { id: "side-a".into(), message_id: 7 }.route().unwrap();
+        assert_eq!(fork.path, "/chat/threads/side-a/fork");
+        assert_eq!(fork.body, Some(json!({"messageId":7})));
+        assert!(Action::ForkThread { id: "side-a".into(), message_id: 0 }.route().is_err());
     }
     #[test]
     fn typed_routes_encode_ids_and_keep_bounds_and_explicit_rewind() {

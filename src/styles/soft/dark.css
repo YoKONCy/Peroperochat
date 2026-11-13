@@ -142,11 +142,6 @@
 }
 .remote-themed[data-ui='soft'][data-remote-theme='dark'] .remote-reasoning > summary > strong { color: var(--ui-muted); }
 .remote-themed[data-ui='soft'][data-remote-theme='dark'] .remote-reasoning::before { display: none; }
-.remote-themed[data-ui='soft'][data-remote-theme='dark'] .soft-thought-symbol {
-  background: transparent;
-  color: var(--ui-violet);
-  box-shadow: none;
-}
 .remote-themed[data-ui='soft'][data-remote-theme='dark'] .remote-tool-trace > summary {
   background: transparent;
   border-right: 0;
@@ -156,7 +151,6 @@
   background: color-mix(in srgb, var(--trace-accent) 12%, var(--ui-paper));
   box-shadow: 0 0 0 3px var(--ui-page);
 }
-.remote-themed[data-ui='soft'][data-remote-theme='dark'] .chat-trace-run::before { border-width: 1px; border-style: solid; }
 .remote-themed[data-ui='soft'][data-remote-theme='dark'] .remote-tool-trace:is([data-state='calling'], [data-state='assembling'], [data-state='failed']) > summary {
   background: linear-gradient(90deg, transparent 44px, color-mix(in srgb, var(--trace-accent) 5%, transparent) 44px);
 }
@@ -175,18 +169,7 @@
 .remote-themed[data-ui='soft'][data-remote-theme='dark'] .remote-jump-latest { background: var(--ui-raised); }
 
 /* 管理、任务与资料靠用途色分区，卡片内的图标保持小而轻。 */
-.remote-themed[data-ui='soft'][data-remote-theme='dark'] .phase-quick-grid > button,
-.remote-themed[data-ui='soft'][data-remote-theme='dark'] .phase-quick-grid > button:nth-child(even) {
-  background: linear-gradient(130deg, var(--ui-tone-soft), var(--ui-paper));
-  border-color: var(--ui-tone-edge);
-  box-shadow: var(--ui-shadow);
-}
-.remote-themed[data-ui='soft'][data-remote-theme='dark'] .phase-quick-grid > button .phase-tile-icon {
-  background: color-mix(in srgb, var(--ui-tone) 8%, var(--ui-paper));
-  box-shadow: inset 0 1px 0 var(--ui-edge);
-}
 .remote-themed[data-ui='soft'][data-remote-theme='dark'] :is(.chromatic-management-hero, .phase-room-overview, .phase-room-heading, .chromatic-task-overview) { box-shadow: var(--ui-shadow); }
-.remote-themed[data-ui='soft'][data-remote-theme='dark'] .chromatic-management-hero > .character-avatar { border-color: var(--ui-raised); transform: rotate(-4deg); }
 .remote-themed[data-ui='soft'][data-remote-theme='dark'] .chromatic-task-card[data-ui-tone='amber'] { border-top: 2px solid var(--ui-amber); }
 .remote-themed[data-ui='soft'][data-remote-theme='dark'] :is(.remote-approval-card, .remote-input-card) {
   background: linear-gradient(120deg, var(--ui-amber-soft), var(--ui-paper));
@@ -194,7 +177,7 @@
   border-top: 2px solid var(--ui-amber);
 }
 .remote-themed[data-ui='soft'][data-remote-theme='dark'] .remote-approval-card .remote-eyebrow { color: var(--ui-amber); }
-.remote-themed[data-ui='soft'][data-remote-theme='dark'] .chromatic-library-categories > button { background: linear-gradient(135deg, var(--ui-tone-soft), var(--ui-paper)); }
+.remote-themed[data-ui='soft'][data-remote-theme='dark'] .chromatic-library-categories > button.selected { background: var(--ui-tone-soft); }
 .remote-themed[data-ui='soft'][data-remote-theme='dark'] .file-folder-tile { box-shadow: inset 0 1px 0 var(--ui-edge); }
 .remote-themed[data-ui='soft'][data-remote-theme='dark'] .remote-file-miniature { background: var(--ui-inset); }
 .remote-themed[data-ui='soft'][data-remote-theme='dark'] .file-button.primary { color: var(--ui-on-accent); background: var(--ui-action); box-shadow: var(--ui-press-shadow); }
@@ -221,7 +204,3 @@
 .remote-themed[data-ui='soft'][data-remote-theme='dark'] .remote-rich-table tbody tr:nth-child(even) { --table-row: var(--ui-inset); }
 .remote-themed[data-ui='soft'][data-remote-theme='dark'] .remote-rich-table tr > :first-child { box-shadow: 5px 0 9px -9px var(--ui-shadow-ink); }
 .remote-themed[data-ui='soft'][data-remote-theme='dark'] .message-aside { color: color-mix(in srgb, var(--ui-violet) 80%, var(--ui-ink)); }
-
-@media (hover: hover) {
-  .remote-themed[data-ui='soft'][data-remote-theme='dark'] .phase-quick-grid > button:hover:not(:disabled) { border-color: color-mix(in srgb, var(--ui-tone) 42%, var(--ui-paper)); }
-}

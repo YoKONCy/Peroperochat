@@ -135,9 +135,11 @@ fn settle_sent_draft(tx:&rusqlite::Transaction<'_>,scope:&Scope,value:&mut Value
     Ok(true)
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn remote_ui_read(app:AppHandle,token:Token,scope:Scope)->ChatResult<Value> {
     super::validate_token(&app,&token)?;let key=scope.key()?;
+    // 已迁移分区先走只读快照；只有需要结算已送达草稿（会写入）时才回落到门控写事务。
+    if let Some(value)=read_settled(&app,&token,&scope,&key)? {return Ok(json!({"modeToken":token,"data":value}));}
     let mode=app.state::<Coordinator>();let _gate=mode.gate(Some(&token),false)?;
     let mut conn=super::cache::connection(&app,&token)?;
     let tx=conn.transaction_with_behavior(TransactionBehavior::Immediate)?;
@@ -148,8 +150,18 @@ pub fn remote_ui_read(app:AppHandle,token:Token,scope:Scope)->ChatResult<Value> 
     }
     tx.commit()?;Ok(json!({"modeToken":token,"data":value}))
 }
+/// 纯读取路径：仅在分区已迁移且无需结算草稿时返回结果；否则返回 None，由调用方走门控写事务。
+fn read_settled(app:&AppHandle,token:&Token,scope:&Scope,key:&str)->ChatResult<Option<Value>> {
+    if !super::cache::migrated(app,token)? {return Ok(None);}
+    let mut conn=super::cache::connection(app,token)?;
+    let tx=conn.transaction()?;
+    let raw:Option<String>=tx.query_row("SELECT value FROM preferences WHERE key=?1",[key],|row|row.get(0)).optional()?;
+    let mut value=validate(scope,raw.map(|raw|serde_json::from_str(&raw).map_err(|_|ChatError::new("STORAGE_ERROR","远程阅读偏好损坏，请重置该项偏好"))).transpose()?.unwrap_or(Value::Null))?;
+    if settle_sent_draft(&tx,scope,&mut value)? {return Ok(None);}
+    tx.commit()?;Ok(Some(value))
+}
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn remote_ui_write(app:AppHandle,token:Token,scope:Scope,value:Value)->ChatResult<Value> {
     super::validate_token(&app,&token)?;let key=scope.key()?;let mut value=validate(&scope,value)?;
     let mode=app.state::<Coordinator>();let _gate=mode.gate(Some(&token),false)?;

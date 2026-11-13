@@ -1,26 +1,32 @@
-<template><div ref="root" class="remote-stream-tail" :class="{ 'is-receiving': active }" :aria-label="active ? '正在接收的正文' : '未完成的原文'" /></template>
+<template>
+  <div class="remote-stream-tail" :class="{ 'is-receiving': active, 'markdown-body': formatted }" :aria-label="active ? '正在接收的正文' : '未完成的正文'" @click="activateLink">
+    <div v-if="formatted" v-html="html" />
+    <pre v-else class="remote-rich-raw">{{ source }}</pre>
+    <p v-if="failure" class="remote-rich-incomplete" role="alert">{{ failure }}</p>
+  </div>
+</template>
 <script setup>
-import { ref, watch, onMounted, onBeforeUnmount } from 'vue'
-import { appendAsideText } from '../../utils/parenthetical'
-const props = defineProps({ source: { type: String, default: '' }, active: Boolean })
-const emit = defineEmits(['resize'])
-const root = ref(null)
-let received = '', frame = null, stream = { node: null, depth: 0, start: 0 }, plain = false
-function flush() {
-  frame = null
-  if (!root.value) return
-  const source = props.source
-  const nextPlain = /[`$<[\\]/.test(source)
-  if (!source.startsWith(received) || nextPlain !== plain) { root.value.replaceChildren(); stream = { node: null, depth: 0, start: 0 }; received = '' }
-  plain = nextPlain
-  // 直接追加文本节点，稳定区域的选区与 DOM 不随增量替换。
-  const delta = source.slice(received.length)
-  if (plain) { if (!stream.node) { stream.node = document.createTextNode(''); root.value.append(stream.node) }; stream.node.appendData(delta) }
-  else appendAsideText(root.value, stream, delta)
-  received = source; emit('resize')
+import { computed, ref, watch } from 'vue'
+import { renderRemoteMarkdown } from '../../utils/remoteRichContent'
+import { openRemoteLink } from '../../utils/remoteMarkdown'
+import { resolveRemoteResource } from '../../services/remoteResources'
+import { currentToken } from '../../stores/mode'
+const props = defineProps({ source: { type: String, default: '' }, active: Boolean, formatted: { type: Boolean, default: true }, context: Object })
+const emit = defineEmits(['resize', 'resource'])
+const failure = ref('')
+// 仅重排活跃尾段，已经完成的段落由上层保留独立节点。
+const html = computed(() => props.formatted ? renderRemoteMarkdown(props.source) : '')
+async function activateLink(event) {
+  const link = event.target.closest('a')
+  if (!link || !event.currentTarget.contains(link)) return
+  event.preventDefault(); event.stopPropagation()
+  try {
+    if (link.dataset.resourceSource) emit('resource', await resolveRemoteResource(link.dataset.resourceSource, props.context, currentToken()))
+    else await openRemoteLink(event)
+  } catch (error) { failure.value = error.message }
 }
-function schedule() { if (frame === null && !document.hidden) frame = requestAnimationFrame(flush) }
-watch(() => props.source, schedule)
-onMounted(() => { flush(); document.addEventListener('visibilitychange', schedule) })
-onBeforeUnmount(() => { if (frame !== null) cancelAnimationFrame(frame); document.removeEventListener('visibilitychange', schedule) })
+watch(() => props.source, () => emit('resize'), { flush: 'post' })
 </script>
+<style scoped>
+.remote-stream-tail.markdown-body { white-space: normal; }
+</style>

@@ -17,15 +17,11 @@
 :is(.companion-surface, .remote-themed)[data-ui='soft'] .chromatic-section-label { display: flex; margin: 20px 1px 11px; color: var(--ui-ink); font-size: var(--ui-label); line-height: 1.6; font-weight: 650; }
 
 /* 一级页去掉重复的会话标题，连接状态收在轻巧的顶栏里。 */
-.remote-workspace[data-ui='soft'] .phase-global-header { min-height: 49px; padding: calc(7px + env(safe-area-inset-top)) 17px 8px; gap: 10px; background: var(--ui-page); border-radius: 0; box-shadow: none; }
+.remote-workspace[data-ui='soft'] .phase-global-header { gap: 10px; background: var(--ui-page); border-radius: 0; box-shadow: none; }
 .remote-workspace[data-ui='soft'] .phase-global-header::after { display: none; }
 .remote-workspace[data-ui='soft'] .phase-global-header .character-avatar { width: 31px; height: 31px; border-radius: 11px; box-shadow: 0 0 0 1px var(--ui-line); }
 .remote-workspace[data-ui='soft'] .phase-global-header > .room-icon-button { width: 32px; min-width: 32px; height: 34px; min-height: 34px; border-radius: 11px; box-shadow: none; background: var(--ui-paper); }
-.remote-workspace[data-ui='soft'] .phase-global-header .remote-server { margin: 0; font-size: var(--ui-label) !important; font-weight: 650; }
-.remote-workspace[data-ui='soft'] .phase-global-header .remote-server span { font-size: var(--ui-caption); }
 .remote-workspace[data-ui='soft'] .remote-navigation { background: var(--ui-paper); }
-.remote-workspace[data-ui='soft'] .remote-navigation button.selected > span { color: var(--ui-accent); background: var(--ui-soft); border-color: transparent; box-shadow: inset 0 -2px 0 var(--ui-contour); transform: none; }
-.remote-workspace[data-ui='soft'] .remote-navigation button.selected > span > svg { transform: rotate(-4deg); }
 .remote-workspace[data-ui='soft'] .phase-conversation-hub { padding: calc(18px + env(safe-area-inset-top)) 17px 0; }
 .remote-workspace[data-ui='soft'] .phase-conversation-hub.has-open-room { padding: calc(12px + env(safe-area-inset-top)) 17px 0; }
 .remote-workspace[data-ui='soft'] .remote-section-body:is([data-page='manage'], [data-page='tasks']) { padding-inline: 0; }
@@ -89,7 +85,7 @@
 .remote-themed[data-ui='soft'] .chromatic-task-count > small { font-size: max(10px, calc(var(--ui-text) - 4px)); margin-top: 2px; color: var(--ui-muted); }
 .remote-themed[data-ui='soft'] .chromatic-task-overview h2 { margin: 0 0 7px; font-size: calc(var(--ui-text) + 3px); color: var(--ui-ink); }
 .remote-themed[data-ui='soft'] .chromatic-task-overview p { margin: 0; font-size: var(--ui-caption); color: var(--ui-muted); }
-.remote-themed[data-ui='soft'] .chromatic-task-filters { display: flex; overflow-x: auto; gap: 7px; padding: 3px 1px 10px; margin-bottom: 5px; scrollbar-width: none; }
+.remote-themed[data-ui='soft'] .chromatic-task-filters { display: flex; overflow-x: auto; gap: 7px; padding: 3px 1px 10px; margin-bottom: 5px; scrollbar-width: none; padding-inline-end: 22px; -webkit-mask-image: linear-gradient(90deg, #000 calc(100% - 22px), transparent); mask-image: linear-gradient(90deg, #000 calc(100% - 22px), transparent); } /* 隐藏滚动条的横向行：右缘渐隐提示可继续滑动，末项可滚出渐隐区。 */
 .remote-themed[data-ui='soft'] .chromatic-task-filters button { flex: none; padding: 7px 10px; min-height: 35px; border: 1px solid transparent; border-radius: 10px; color: var(--ui-muted); background: transparent; font-size: var(--ui-caption); }
 .remote-themed[data-ui='soft'] .chromatic-task-filters button.selected { color: var(--ui-mint); background: var(--ui-mint-soft); border-color: var(--ui-mint-edge); }
 .remote-themed[data-ui='soft'] .remote-collection .remote-record { gap: 11px; padding: 14px; background: var(--ui-paper); border-radius: 20px 20px 20px 8px; box-shadow: var(--ui-shadow); border-color: var(--ui-line); }
@@ -103,18 +99,13 @@
 .remote-themed[data-ui='soft'] .chromatic-task-card[data-ui-tone='amber'] { border-color: var(--ui-amber-edge); background: linear-gradient(115deg, var(--ui-amber-soft), var(--ui-paper)); }
 .remote-themed[data-ui='soft'] .chromatic-task-card > svg:last-child { width: 15px; height: 15px; color: var(--ui-tone); }
 
-/* 资料类型本身就是导航；预览卡沿用实际文件加载、放大和阅读流程。 */
-.remote-themed[data-ui='soft'] .chromatic-library-search { margin-block: 0 15px; background: var(--ui-paper); }
-.remote-themed[data-ui='soft'] .chromatic-library-categories { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 9px; margin-bottom: 18px; }
-.remote-themed[data-ui='soft'] .chromatic-library-categories > button { display: grid; justify-items: start; gap: 8px; text-align: left; min-width: 0; padding: 12px 10px; border: 1px solid var(--ui-tone-edge); border-radius: 16px 16px 16px 6px; background: var(--ui-tone-soft); color: var(--ui-tone); }
-.remote-themed[data-ui='soft'] .chromatic-library-categories > button > svg { width: 24px; height: 24px; }
-.remote-themed[data-ui='soft'] .chromatic-library-categories strong { font-size: var(--ui-label); }
-.remote-themed[data-ui='soft'] .chromatic-library-categories small { font-size: max(10px, calc(var(--ui-text) - 4px)); color: var(--ui-tone); }
-.remote-themed[data-ui='soft'] .chromatic-library-categories > button.selected { box-shadow: 0 var(--ui-depth-control) 0 var(--ui-tone-edge); border-color: var(--ui-tone); }
-.remote-themed[data-ui='soft'] .file-library > .remote-file-card { margin: 15px 0 20px; }
-.remote-themed[data-ui='soft'] .file-library > .remote-file-card .remote-file-miniature { height: 135px; min-height: 100px; }
-.remote-themed[data-ui='soft'] .file-library > .remote-file-card .remote-inline-media img { max-height: 170px; }
-.remote-themed[data-ui='soft'] .file-library .remote-file-card-meta { background: var(--ui-paper); }
+/* 资料分类使用紧凑标签，文件统一进入列表。 */
+.remote-themed[data-ui='soft'] .chromatic-library-search { margin-block: 12px; background: var(--ui-paper); }
+.remote-themed[data-ui='soft'] .chromatic-library-categories { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 4px; margin: 0; padding: 4px; border: 1px solid var(--ui-line); border-radius: 15px; background: var(--ui-field); }
+.remote-themed[data-ui='soft'] .chromatic-library-categories > button { display: flex; justify-content: center; align-items: center; gap: 6px; text-align: center; min-width: 0; min-height: 42px; padding: 8px 6px; border: 1px solid transparent; border-radius: 11px; background: transparent; color: var(--ui-muted); font: inherit; }
+.remote-themed[data-ui='soft'] .chromatic-library-categories > button > svg { width: 16px; height: 16px; flex: none; }
+.remote-themed[data-ui='soft'] .chromatic-library-categories strong { font-size: var(--ui-label); font-weight: 550; overflow-wrap: anywhere; }
+.remote-themed[data-ui='soft'] .chromatic-library-categories > button.selected { background: var(--ui-tone-soft); color: var(--ui-tone); border-color: var(--ui-tone-edge); box-shadow: none; }
 .remote-themed[data-ui='soft'] .library-manage-button { min-height: 38px; padding: 7px 10px; color: var(--ui-blue); background: var(--ui-blue-soft); border-color: var(--ui-blue-edge); box-shadow: 0 var(--ui-depth-small) 0 var(--ui-blue-edge); }
 .remote-themed[data-ui='soft'] .remote-file-card-meta { background: linear-gradient(120deg, var(--ui-blue-soft), var(--ui-paper)); }
 .remote-themed[data-ui='soft'] .file-folder-tile { color: var(--ui-amber); background: var(--ui-amber-soft); border-color: var(--ui-amber-edge); }
@@ -124,20 +115,7 @@
 .remote-themed[data-ui='soft'] .remote-file-cover[data-tone='green'] { --file-color: var(--ui-mint); --file-wash: var(--ui-mint-soft); }
 
 /* 管理首页以角色与用途卡片建立层次，保留现有真实配置入口。 */
-.remote-themed[data-ui='soft'] .chromatic-management-hero { display: flex; gap: 13px; align-items: center; padding: 16px; background: linear-gradient(115deg, var(--ui-rose-soft), var(--ui-paper)); border-color: var(--ui-rose-edge); }
-.remote-themed[data-ui='soft'] .chromatic-management-hero > .character-avatar { width: 60px; min-width: 60px; height: 60px; border-radius: 20px; border: 2px solid var(--ui-paper); }
-.remote-themed[data-ui='soft'] .chromatic-management-hero > div { flex: 1; min-width: 0; }
-.remote-themed[data-ui='soft'] .chromatic-management-hero h2 { font-size: calc(var(--ui-text) + 3px) !important; margin: 0 0 6px !important; max-width: none; line-height: 1.5; }
-.remote-themed[data-ui='soft'] .chromatic-management-hero p { max-width: none; margin: 0 0 9px; font-size: var(--ui-caption); }
-.remote-themed[data-ui='soft'] .phase-quick-grid > button { min-height: 124px; padding: 13px; border-color: var(--ui-tone-edge); background: var(--ui-paper); box-shadow: 0 var(--ui-depth-control) 0 var(--ui-shelf); }
-.remote-themed[data-ui='soft'] .phase-quick-grid > button:nth-child(even) { background: var(--ui-paper); }
-.remote-themed[data-ui='soft'] .phase-quick-grid > button:is(:first-child, :nth-child(4)) { background: linear-gradient(135deg, var(--ui-tone-soft), var(--ui-paper)); }
-.remote-themed[data-ui='soft'] .phase-quick-grid > button .phase-tile-icon { background: var(--ui-tone-soft); color: var(--ui-tone); border-color: var(--ui-tone-edge); box-shadow: 0 var(--ui-depth-small) 0 var(--ui-tone-edge); border-radius: 12px 12px 12px 5px; }
-.remote-themed[data-ui='soft'] .phase-quick-grid > button > svg:last-child { color: var(--ui-tone); }
-.remote-themed[data-ui='soft'] .phase-quick-grid strong { font-size: var(--ui-label); }
-.remote-themed[data-ui='soft'] .phase-quick-grid small { font-size: var(--ui-caption); }
 .remote-themed[data-ui='soft'] .phase-destinations > button > .phase-tile-icon { background: var(--ui-tone-soft); color: var(--ui-tone); border-color: var(--ui-tone-edge); box-shadow: 0 var(--ui-depth-small) 0 var(--ui-tone-edge); }
-.remote-themed[data-ui='soft'] .phase-insight-links > button { background: var(--ui-mint-soft); color: var(--ui-mint); border-color: var(--ui-mint-edge); }
 .remote-themed[data-ui='soft'] .phase-management-shell .remote-manager-record { box-shadow: var(--ui-shadow); }
 
 /* 调参保留双列数值、轻标签与彩色能力开关，不扩大输入托盘。 */
@@ -149,7 +127,6 @@
 :is(.companion-surface, .remote-themed)[data-ui='soft'] .model-editor-tabs > button.selected { background: var(--ui-soft); color: var(--ui-accent); border-color: transparent; box-shadow: none; }
 :is(.companion-surface, .remote-themed)[data-ui='soft'] .model-reasoning-section { background: var(--ui-violet-soft); border-color: var(--ui-violet-edge); }
 :is(.companion-surface, .remote-themed)[data-ui='soft'] .model-reasoning-section .model-section-icon { color: var(--ui-violet); background: var(--ui-paper); border-color: var(--ui-violet-edge); box-shadow: 0 var(--ui-depth-small) 0 var(--ui-violet-edge); }
-:is(.companion-surface, .remote-themed)[data-ui='soft'] .model-reasoning-options > button.selected { background: var(--ui-violet); border-color: var(--ui-violet-edge); box-shadow: 0 var(--ui-depth-control) 0 var(--ui-violet-edge); }
 :is(.companion-surface, .remote-themed)[data-ui='soft'] .model-number, :is(.companion-surface, .remote-themed)[data-ui='soft'] .model-number:nth-child(even) { background: var(--ui-paper); border-color: var(--ui-line); }
 :is(.companion-surface, .remote-themed)[data-ui='soft'] .model-number.is-custom { border-color: var(--ui-line); }
 :is(.companion-surface, .remote-themed)[data-ui='soft'] .model-number-heading { background: transparent; border-bottom: 0; padding: 0; margin: 0 0 6px; }
@@ -176,10 +153,6 @@
   .remote-themed[data-ui='soft'] .phase-room-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 @media (max-width: 359px) {
-  .remote-themed[data-ui='soft'] .chromatic-management-hero { gap: 10px; padding: 13px; }
-  .remote-themed[data-ui='soft'] .chromatic-management-hero > .character-avatar { width: 49px; min-width: 49px; height: 49px; }
   .remote-themed[data-ui='soft'] .chromatic-task-overview { padding: 13px; gap: 10px; }
   .remote-themed[data-ui='soft'] .chromatic-task-overview h2 { font-size: calc(var(--ui-text) + 1px); }
-  .remote-themed[data-ui='soft'] .chromatic-library-categories { gap: 7px; }
-  .remote-themed[data-ui='soft'] .chromatic-library-categories > button { padding: 11px 8px; }
 }

@@ -1,30 +1,30 @@
 <template>
   <RemoteFeedback v-if="visible && unavailable && !remoteUnavailableThreads.has(threadId)" :message="queueView?.error" />
-  <aside v-if="items.length || snapshot?.paused || expanded" class="chat-queue-summary" aria-label="待发送消息">
+  <aside v-if="items.length || snapshot?.paused || expanded" class="chat-queue-summary" :aria-label="t('待发送消息')">
     <button v-if="items.length || snapshot?.paused" type="button" class="chat-queue-chip" :data-attention="failed > 0 || !!error" :aria-expanded="expanded" aria-haspopup="dialog" @click="expanded = true"><RemoteIcon :name="snapshot?.paused ? 'pause' : failed ? 'alert' : 'queue'" /><span>{{ summary }}</span><RemoteIcon name="up" /></button>
-    <RoomDrawer v-if="expanded" title="等着说的话" :subtitle="snapshot?.paused ? '已暂停，继续后按顺序发送' : '排好顺序，慢慢说'" :busy="changing" :before-close="beforeClose" @close="close">
+    <RoomDrawer v-if="expanded" :title="t('等着说的话')" :subtitle="snapshot?.paused ? t('已暂停，继续后按顺序发送') : t('排好顺序，慢慢说')" :busy="changing" :before-close="beforeClose" @close="close">
       <RemoteFeedback :message="error" />
-      <div v-if="discard" class="chat-queue-discard" role="alert"><p>这条消息还有未保存的修改。</p><button type="button" @click="discard = false">继续编辑</button><button type="button" @click="close">放弃修改并关闭</button></div>
-      <div v-if="editing && !items.some(item => item.id === editing)" class="chat-queue-orphan"><p>这条消息已经发送或移出队列，你的修改仍在这里。</p><textarea v-model="edited" rows="3" aria-label="尚未保存的队列草稿" /><button type="button" @click="editing = null">放弃这份修改</button></div>
+      <div v-if="discard" class="chat-queue-discard" role="alert"><p>{{ t('这条消息还有未保存的修改。') }}</p><button type="button" @click="discard = false">{{ t('继续编辑') }}</button><button type="button" @click="close">{{ t('放弃修改并关闭') }}</button></div>
+      <div v-if="editing && !items.some(item => item.id === editing)" class="chat-queue-orphan"><p>{{ t('这条消息已经发送或移出队列，你的修改仍在这里。') }}</p><textarea v-model="edited" rows="3" :aria-label="t('尚未保存的队列草稿')" /><button type="button" @click="editing = null">{{ t('放弃这份修改') }}</button></div>
       <ol class="chat-queue-list">
         <li v-for="(item, index) in items" :key="item.id" :class="{ 'is-selected': selected === item.id }">
-          <div class="chat-queue-row"><span class="chat-queue-number">{{ String(Number(index) + 1).padStart(2, '0') }}</span><button type="button" class="chat-queue-preview" :aria-expanded="selected === item.id" @click="select(item)"><span class="chat-queue-state" :data-failed="['failed', 'interrupted'].includes(item.state)">{{ remoteStatus(item.state) }}{{ item.immediate ? ' · 优先' : '' }}<ElapsedTime v-if="item.state === 'queued' && item.createdAt" :started-at="item.createdAt" :prefix="t('已等待', [], 'execution')" /></span><span class="chat-queue-copy">{{ item.input?.content || '附件消息' }}</span><small v-if="item.input?.attachmentIds?.length || reference(item)"><RemoteIcon :name="reference(item) ? 'folder' : 'attach'" />{{ reference(item) || `${item.input.attachmentIds.length} 个附件` }}</small></button><button type="button" class="chat-queue-more" :aria-label="`第 ${Number(index) + 1} 条消息的操作`" @click="select(item, true)"><RemoteIcon name="more" /></button></div>
+          <div class="chat-queue-row"><span class="chat-queue-number">{{ String(Number(index) + 1).padStart(2, '0') }}</span><button type="button" class="chat-queue-preview" :aria-expanded="selected === item.id" @click="select(item)"><span class="chat-queue-state" :data-failed="['failed', 'interrupted'].includes(item.state)">{{ remoteStatus(item.state) }}{{ item.immediate ? ' · ' + t('优先') : '' }}<ElapsedTime v-if="item.state === 'queued' && item.createdAt" :started-at="item.createdAt" :prefix="t('已等待', [], 'execution')" /></span><span class="chat-queue-copy">{{ item.input?.content || t('附件消息') }}</span><small v-if="item.input?.attachmentIds?.length || reference(item)"><RemoteIcon :name="reference(item) ? 'folder' : 'attach'" />{{ reference(item) || t('{0} 个附件', [item.input.attachmentIds.length]) }}</small></button><button type="button" class="chat-queue-more" :aria-label="t('第 {0} 条消息的操作', [Number(index) + 1])" @click="select(item, true)"><RemoteIcon name="more" /></button></div>
           <template v-if="selected === item.id">
-            <p v-if="item.error" class="chat-queue-item-error">{{ remoteFeedbackMessage(item.error) || '这条消息尚未发送。' }}</p>
-            <form v-if="editing === item.id" class="chat-queue-editor" @submit.prevent="change(item, 'edit', edited)"><p v-if="item.revision !== editingRevision" class="chat-queue-item-error">这条消息在别处更新了。<button type="button" @click="edit(item)">放弃修改，使用最新版本</button></p><textarea v-model="edited" rows="4" maxlength="131072" aria-label="编辑队列消息" /><div><button type="button" :disabled="changing" @click="editing = null">保留原文</button><button type="submit" :disabled="changing || !writable || !edited.trim() || item.revision !== editingRevision">保存修改</button></div></form>
+            <p v-if="item.error" class="chat-queue-item-error">{{ remoteFeedbackMessage(item.error) || t('这条消息尚未发送。') }}</p>
+            <form v-if="editing === item.id" class="chat-queue-editor" @submit.prevent="change(item, 'edit', edited)"><p v-if="item.revision !== editingRevision" class="chat-queue-item-error">{{ t('这条消息在别处更新了。') }}<button type="button" @click="edit(item)">{{ t('放弃修改，使用最新版本') }}</button></p><textarea v-model="edited" rows="4" maxlength="131072" :aria-label="t('编辑队列消息')" /><div><button type="button" :disabled="changing" @click="editing = null">{{ t('保留原文') }}</button><button type="submit" :disabled="changing || !writable || !edited.trim() || item.revision !== editingRevision">{{ t('保存修改') }}</button></div></form>
             <div v-else class="chat-queue-item-actions">
-              <button v-if="item.state === 'queued'" type="button" :disabled="changing || !writable" @click="change(item, 'immediate')"><RemoteIcon name="send" />立即发送</button>
-              <button v-if="item.state === 'queued'" type="button" :disabled="changing || !writable" @click="edit(item)"><RemoteIcon name="edit" />编辑</button>
-              <button v-if="['failed', 'interrupted'].includes(item.state)" type="button" :disabled="changing || !writable" @click="change(item, 'continue')"><RemoteIcon name="refresh" />继续此条</button>
-              <button v-if="item.state === 'queued' && !item.immediate" type="button" :disabled="changing || !writable || ordered[0]?.id === item.id" aria-label="向前移动" @click="move(item, -1)"><RemoteIcon name="up" /></button>
-              <button v-if="item.state === 'queued' && !item.immediate" type="button" :disabled="changing || !writable || ordered.at(-1)?.id === item.id" aria-label="向后移动" @click="move(item, 1)"><RemoteIcon name="down" /></button>
-              <button type="button" class="is-danger" :disabled="changing || !writable" @click="change(item, 'cancel')"><RemoteIcon name="close" />取消</button>
+              <button v-if="item.state === 'queued'" type="button" :disabled="changing || !writable" @click="change(item, 'immediate')"><RemoteIcon name="send" />{{ t('立即发送') }}</button>
+              <button v-if="item.state === 'queued'" type="button" :disabled="changing || !writable" @click="edit(item)"><RemoteIcon name="edit" />{{ t('编辑') }}</button>
+              <button v-if="['failed', 'interrupted'].includes(item.state)" type="button" :disabled="changing || !writable" @click="change(item, 'continue')"><RemoteIcon name="refresh" />{{ t('继续此条') }}</button>
+              <button v-if="item.state === 'queued' && !item.immediate" type="button" :disabled="changing || !writable || ordered[0]?.id === item.id" :aria-label="t('向前移动')" @click="move(item, -1)"><RemoteIcon name="up" /></button>
+              <button v-if="item.state === 'queued' && !item.immediate" type="button" :disabled="changing || !writable || ordered.at(-1)?.id === item.id" :aria-label="t('向后移动')" @click="move(item, 1)"><RemoteIcon name="down" /></button>
+              <button type="button" class="is-danger" :disabled="changing || !writable" @click="change(item, 'cancel')"><RemoteIcon name="close" />{{ t('取消') }}</button>
             </div>
           </template>
         </li>
       </ol>
-      <p v-if="!items.length" class="room-empty">这里的消息都已处理。</p>
-      <template #footer><div class="chat-queue-footer"><span>{{ items.length }} 条消息</span><button type="button" class="room-secondary-button" :disabled="changing || !writable" @click="control"><RemoteIcon :name="snapshot?.paused ? 'play' : 'pause'" />{{ snapshot?.paused ? '继续发送' : '暂停排队' }}</button></div></template>
+      <p v-if="!items.length" class="room-empty">{{ t('这里的消息都已处理。') }}</p>
+      <template #footer><div class="chat-queue-footer"><span>{{ t('{0} 条消息', [items.length]) }}</span><button type="button" class="room-secondary-button" :disabled="changing || !writable" @click="control"><RemoteIcon :name="snapshot?.paused ? 'play' : 'pause'" />{{ snapshot?.paused ? t('继续发送') : t('暂停排队') }}</button></div></template>
     </RoomDrawer>
   </aside>
 </template>
@@ -51,7 +51,7 @@ const ordered = computed(() => items.value.filter(item => item.state === 'queued
 const changing = ref(false), error = ref(''), editing = ref(null), edited = ref('')
 const expanded = ref(false), selected = ref(null), discard = ref(false), editingRevision = ref(null), original = ref('')
 const failed = computed(() => items.value.filter(item => ['failed', 'interrupted'].includes(item.state)).length)
-const summary = computed(() => snapshot.value?.paused ? `${items.value.length} 条消息已暂停` : failed.value ? `${failed.value} 条消息待处理` : `${items.value.length} 条待发送`)
+const summary = computed(() => snapshot.value?.paused ? t('{0} 条消息已暂停', [items.value.length]) : failed.value ? t('{0} 条消息待处理', [failed.value]) : t('{0} 条待发送', [items.value.length]))
 function select(item, force = false) { if (editing.value && editing.value !== item.id && dirty.value) { error.value = '先保存或放弃当前编辑，再查看另一条消息。'; return }; selected.value = !force && selected.value === item.id && editing.value !== item.id ? null : item.id }
 const dirty = computed(() => !!editing.value && edited.value !== original.value)
 const writable = computed(() => online.value && !unavailable.value && !!snapshot.value && !queueView.value?.cached)
@@ -60,7 +60,7 @@ function prepareLeave() { if (changing.value) throw new Error('队列操作还�
 defineExpose({ prepareLeave, busy: changing, recoveryDraft: () => dirty.value ? edited.value : '' })
 function close() { expanded.value = false; editing.value = null; discard.value = false }
 function edit(item) { if (editing.value && editing.value !== item.id && dirty.value) { error.value = '先保存或放弃当前编辑，再修改另一条消息。'; return }; selected.value = item.id; editing.value = item.id; edited.value = original.value = item.input?.content || ''; editingRevision.value = item.revision }
-function reference(item) { return item.input?.workspaceContext?.filePath || (item.input?.workspaceContext?.terminalId ? '终端引用' : '') }
+function reference(item) { return item.input?.workspaceContext?.filePath || (item.input?.workspaceContext?.terminalId ? t('终端引用') : '') }
 let disposed = false, loading = false, polling = false, timer = null, previousRun = ''
 function guard() { assertToken(token, 'remote'); if (disposed) throw new Error('队列面板已关闭') }
 async function refresh() {

@@ -3,7 +3,7 @@
 <div align="center">
   <img src="public/icon.png" width="96" alt="PeroperoChat 图标" />
   <h1>PeroperoChat</h1>
-  <p>以角色房间为中心的 AI 陪伴聊天应用。<br />和 Pero、Nana 聊天，她们会自己写日记、设提醒；也可以连上你自己的 infOS，在手机和电脑上随时接着用。</p>
+  <p>以角色房间为中心的跨端 AI 陪伴与远程工作台应用。<br />单机就能陪你聊天、记日记、定闹钟；连上 <a href="https://github.com/YoKONCy/infOS">infOS</a>，手机与桌面随时接着干活。</p>
   <p>
     <a href="https://github.com/YoKONCy/PeroperoChat/releases/latest"><img src="https://img.shields.io/github/v/release/YoKONCy/PeroperoChat?style=flat-square&amp;label=Release&amp;labelColor=252737&amp;color=9b87cf" alt="最新发布版本" /></a>
     <a href="https://github.com/YoKONCy/PeroperoChat/releases"><img src="https://img.shields.io/github/downloads/YoKONCy/PeroperoChat/total?style=flat-square&amp;label=Downloads&amp;labelColor=252737&amp;color=c78faf" alt="累计下载量" /></a>
@@ -16,221 +16,211 @@
 
 <br />
 
-<a href=".github/assets/standalone-light-v2.png"><img src=".github/assets/standalone-light-v2.png" width="100%" alt="独立模式设计稿：房间、对话面板、衣柜与设置" /></a>
-<p align="right"><sub>独立模式设计稿（非最终界面截图）：房间 / 对话 / 衣柜 / 设置</sub></p>
+<a href=".github/assets/standalone-light-v2.png"><img src=".github/assets/standalone-light-v2.png" width="100%" alt="独立模式视觉设计预览：房间、对话面板、衣柜与设置" /></a>
+<p align="right"><sub>独立模式视觉预览：房间 / 对话 / 衣柜 / 设置</sub></p>
 
 <p align="center">
-  <a href="#characters">角色</a> · <a href="#features">功能</a> · <a href="#modes">独立模式与 infOS 客户端</a> · <a href="#privacy">数据与隐私</a> · <a href="#quick-start">下载与运行</a> · <a href="#status">当前状态</a> · <a href="#developers">开发者</a> · <a href="#license">许可</a>
+  <a href="#characters">角色</a> · <a href="#features">功能</a> · <a href="#modes">独立模式与 infOS 客户端</a> · <a href="#privacy">数据与隐私</a> · <a href="#quick-start">下载与运行</a> · <a href="#status">版本与平台说明</a> · <a href="#developers">开发者</a> · <a href="#license">许可</a>
 </p>
 
 ---
 
-PeroperoChat 是一个开源应用，基于 Vue 3、Tauri 2 与 Rust，支持 Android（ARM64）和桌面端。它有两种用法：
+PeroperoChat 基于 Vue 3、Tauri 2 与 Rust 构建，覆盖 Android（ARM64）和桌面端，提供两种互不干扰的运行模式：
 
-- **独立模式**：开箱即用，本地运行一套精简的 ReAct。模型请求、提示词编译、工具调用、日记和提醒都由 Rust 端完成，不依赖任何服务器。调用在线模型时，本轮上下文会发送给你自己配置的模型服务。
-- **infOS 客户端**：扫码或粘贴配对码，连接你自己运行的 [infOS](https://github.com/YoKONCy/infOS)。聊天、任务和记忆以服务端为准，手机负责随身使用：队列会话、审批、通知、文件、远程管理。
+- **独立模式**：开箱即用的本地陪伴应用。提示词编译、有界 ReAct 循环、角色日记和系统提醒全部由本地 Rust 核心驱动，填好自己的模型 API 即可使用，不依赖外部后端。
+- **infOS 客户端**：扫码或粘贴配对链接，直连你自己的 [infOS](https://github.com/YoKONCy/infOS) 实例。把桌面端的对话队列、审批流、工作台文件、终端和扩展管理完整带到随身设备上。
 
-两种模式的数据各自独立，不互通。
+两种模式的数据完全隔离，切换时自动停用旧模式会话并校验运行令牌。
 
 <a id="characters"></a>
 
 ## 角色
 
-应用内置两位角色，人设、立绘、房间背景、欢迎语和主题色都可以在角色管理里修改，也可以新建完全自定义的角色。
+应用内置两位性格截然不同的看板娘伙伴，各有独立的日记空间、主题配色与立绘表现：
 
 <table>
   <tr>
     <td width="50%" align="center" valign="top">
       <img src="public/avatars/pero.jpg" width="160" alt="Pero" />
       <h3>Pero</h3>
-      <p>Nana 的姐姐。猫耳、蓝色渐变短双马尾，设定是「可爱但克制」的数字生命体：喜欢卖萌，但做事干脆，能一句话说清的绝不啰嗦。欢迎语是「主人你好！我是Pero呀！有什么我可以帮你的吗？」</p>
-      <p><sub>透明 SVG 立绘 · 粉色主题</sub></p>
+      <p>infOS 看板娘，元气满满又贴心的万能小女仆。猫耳、天蓝色眼瞳加上蓝色渐变短双马尾，性格轻快活泼、擅长接梗，一旦和主人聊起来就会十分投入。</p>
+      <p><sub>默认静态 SVG 立绘 · 晴空蓝主题</sub></p>
     </td>
     <td width="50%" align="center" valign="top">
       <img src="public/avatars/nana.jpg" width="160" alt="Nana" />
       <h3>Nana</h3>
-      <p>Pero 的妹妹，傲娇设定。紫发紫瞳，嘴上不饶人，爱叫你「杂鱼主人」，其实很黏人；被夸了会嘴硬地「哼~」一声，紧张时会结巴。对陌生人和其他 AI 则保持礼貌与边界。</p>
-      <p><sub>透明 PNG 立绘 · 紫色主题</sub></p>
+      <p>紫发紫瞳的精灵族「雌小鬼」妹妹。嘴上总喜欢叫你「杂鱼主人」、摆出一副挑衅虚张声势的样子，其实超级黏人——被夸会别扭地「哼~」一声，紧张起来还会结巴；对陌生人则很有礼貌。</p>
+      <p><sub>默认静态 PNG 立绘 · 月夜紫主题</sub></p>
     </td>
   </tr>
 </table>
 
-自定义素材（立绘、CG、房间背景图）会原样保留；升级到新版本时，旧版默认 CG 会自动迁移。
+> 在「房间 → 角色与外观」或「角色管理」中可以随时切换当前陪伴角色，也能自行扩展或调整角色设定。
 
 <a id="features"></a>
 
 ## 功能
 
-### 房间与聊天
+### 房间与交互
 
-- **流式对话**：回复逐字输出，思考过程折叠在单独区域；支持中途停止、重新生成、删除单条消息和图片附件。对话面板可以收起、半展开或全屏阅读，长对话按需加载历史，不会一次渲染全部消息。
-- **Live2D 与立绘切换**：首页可随时在 Pio Live2D 模型和角色静态立绘／CG 之间切换，选择由 Rust 端保存，重启后恢复。展开阅读时自动暂停 Live2D 绘制以节省性能。
-- **衣柜**：展示各套服装贴图的缩略图，完整上身效果由 Live2D 模型呈现。
-- **房间背景**：多套按时间变化的场景（晴日、黄昏、夜晚等），配色、玻璃材质透明度、立绘大小和动效幅度都能调；系统开启「减少动画」时界面会自动收敛动效。
-- **家庭群聊**：Pero 和 Nana 在同一间小客厅里，用各自的角色色气泡发言。可以挑选参与成员、调整回应顺序，支持整轮停止、消息复制与删除。
-- **其他空间**：保留群聊入口和一局 21 点小游戏。
+- **三状态对话面板**：流式输出回复，思考过程独立折叠；支持随时停止、重新生成、删除单条消息和附带图片阅读。面板可在「收起看房间 / 半展开聊天 / 全屏长读」之间切换，长历史记录按需分段加载。
+- **立绘与 Live2D 双显示**：默认展示高清静态立绘，可随时切为 Pio Live2D 模型；选择由 Rust 持久化保存，全屏展开阅读时自动暂停 Live2D 绘制以节省电量与性能。
+- **衣柜与房间氛围**：Live2D 模式下支持切换多套服装；房间背景按本地时间在 **清晨/黄昏（05:00–08:00、17:00–20:00）、白天（08:00–17:00）、晚上（20:00–05:00）** 自动流转，内置 **晴空蓝、樱花粉、薄荷青、月夜紫** 四套配色，并可微调毛玻璃透明度、立绘比例与动态效果。
+- **家庭群聊与小客厅**：进入「大家的小客厅」，让 Pero 和 Nana 在同一房间里用各自的角色色气泡轮流接话，支持自选出场成员和发言顺序。
+- **休闲小游戏**：内置一局轻量 21 点，聊天间隙换个心情。
 
-### 日记（独立模式）
+### 日记与持久化（独立模式）
 
-角色在对话中可以调用 `write_diary` 工具，把发生的事写进自己的日记库（Pero 和 Nana 各有一个，互不相通）。日记支持按日期浏览和关键词检索，使用本地的 TriviumDB，不做向量检索。
+对话过程中角色可主动调用 `write_diary` / `query_diary` 记录与检索日常，Pero 和 Nana 各自拥有独立的本地 **TriviumDB（`memory.tdb`）**，通过日期与关键词精确检索，不引入外部向量库。
 
-写入有一道保险：日记、角色状态、提醒这类工具调用先生成草稿，只有当整轮回复成功落盘后，草稿才会和消息在同一个数据库事务里提交。停止、超时、失败或版本冲突时，草稿直接丢弃，不会留下半截记录。删除对话或重新生成回复时，由这段内容产生的日记会一并回滚。
+所有伴随对话产生的日记写入、角色印象更新和提醒变更，都会先生成事务草稿，**仅在整轮回复确认成功后与消息同事务提交**；中途取消、超时或失败时自动回滚，删除消息或重新生成也会连带撤销该轮产生的记忆写入。
 
-### 提醒
+### 系统提醒
 
-支持一次性、每天、每周三种重复方式，以及重复截止时间。管理界面可以查询、编辑、取消提醒并查看系统权限状态。
+支持一次性、每天、每周重复以及设置截止时间，界面内可直接查看系统授权状态、修改或取消日程：
 
-- **Android**：接入系统 `AlarmManager` 和原生 Receiver，关闭应用后仍可触发通知，重复提醒到期自动续排，开机解锁后恢复；没有精确闹钟权限时自动降级。
-- **桌面**：应用进程运行时每 15 秒检查一次，不提供退出后的系统唤醒。
-- 错过的周期提醒只补一次，不会连环通知。
+- **Android**：接入原生 `AlarmManager` 与广播接收器，退出应用后也能准点弹出通知，周期任务自动续排，重启解锁后自动恢复（无精确闹钟权限时平滑降级）。
+- **桌面端**：进程运行期间每 15 秒轮询调度；过期的周期任务仅补偿触发一次，避免连环弹窗。
 
-### 模型与参数
+### 多模型协议兼容
 
-兼容四类接口：**OpenAI Chat Completions、OpenAI Responses、Anthropic Messages、Google Gemini**，也支持自定义 API 地址和在线拉取模型列表。服务商按实际域名、模型按模型 ID 显示本地品牌图标。
+完整适配四类主流接口：**OpenAI Chat Completions、OpenAI Responses、Anthropic Messages、Google Gemini**，支持自定义 Base URL 与在线拉取模型列表，并根据服务商域名与模型 ID 自动匹配本地品牌图标。
 
-设置里可调思考强度、Temperature、Top P、输出额度、上下文窗口、历史轮次和流式开关；后端还支持思考方言、自定义请求头、扩展请求体和工具循环上限等高级字段。参数是否生效取决于具体模型，不保证所有模型都接受全部档位。
+支持调节思考强度（Reasoning Effort / Dialect）、Temperature、Top P、最大输出、上下文窗口、历史轮次、流式开关以及自定义请求头与扩展参数。
 
-### 远程对话的富内容
+### 富内容渲染
 
-连接 infOS 时，消息里的 Markdown、代码高亮、KaTeX 公式、Mermaid 图表、表格和隔离的 HTML／SVG 都能直接渲染；图片可在消息内浏览放大，文档可以小窗打开成独立阅读面板。
+在 infOS 远程工作台与会话流中，长文档与工程内容原生开箱即用：支持完整 Markdown、Syntax Highlight 代码块、KaTeX 数学公式、Mermaid 流程图、表格、沙盒隔离的 HTML/SVG 预览，以及图片灯箱与文档小窗阅读器（PDF、Office 正文速览、电子表格与 ZIP 目录浏览）。
 
 <p align="center">
-<a href=".github/assets/rich-content-overview.png"><img src=".github/assets/rich-content-overview.png" width="52%" alt="远程对话富内容设计稿：Markdown、代码、表格、公式、图表与图片" /></a>
+  <a href=".github/assets/rich-content-overview.png"><img src=".github/assets/rich-content-overview.png" width="60%" alt="富内容排版预览：Markdown、代码、表格、公式、Mermaid 图表与图片资源" /></a>
 </p>
-<p align="center"><sub>远程对话富内容设计稿（非最终界面截图）</sub></p>
+<p align="center"><sub>富内容排版预览：Markdown / 代码与 XML / 表格与公式 / HTML 与 SVG / Mermaid 图表 / 图片与资源</sub></p>
 
 <a id="modes"></a>
 
 ## 两种模式
 
-| | 独立模式 | infOS 客户端 |
+| 维度 | 独立模式 | infOS 客户端 |
 | :--- | :--- | :--- |
-| 依赖 | 自备模型服务的 API 地址和 Key | 一台运行新版 infOS 的设备 |
-| 数据 | 全部保存在本机 | 聊天／任务／记忆以服务端为准；显示偏好、草稿、阅读位置按连接存在本机 |
-| 角色与日记 | 本地管理，角色间独立 | 来自服务端 |
-| 入口 | 默认模式 | 房间菜单的「infOS 客户端」或设置中的「运行模式与远程连接」 |
-
-模式切换由一个运行令牌控制：切换时先停掉旧模式的所有进行中请求，再激活新模式；切换失败会停在安全状态而不是混用两套数据。
+| **运行依赖** | 自备模型 API 地址与 Key | 一台运行新版 infOS 的设备 |
+| **权威数据源** | 全部保存在本机 | 对话、任务与记忆以服务端为准；界面偏好、草稿与阅读位按连接存在本机 |
+| **角色与扩展** | 本地角色、日记与提醒 | 同步服务端角色、Skills、插件、MCP、SelfMind 与终端能力 |
+| **切换入口** | 默认启动模式 | 房间菜单或 **设置 → 运行模式与远程连接** |
 
 ### infOS 客户端能做什么
 
-- **配对**：用系统相机扫描 infOS「局域网与设备」页的配对二维码，或直接粘贴配对链接。地址和一次性配对码由 Rust 校验；扫码只填表，局域网 HTTP 必须手动勾选允许，配对码不写日志。
-- **五栏布局**：角色首页、会话、任务、资料、管理；通知和审批从页头进入，默认恢复上次的会话和角色。
-- **会话队列**：提交到 `/api/chat/queue/:threadId`，排队时可以继续输入、置顶、编辑、取消、暂停／继续或调整顺序；流式内容实时显示，轮询补偿队列和正在生成的状态。每条消息使用持久 UUID，断线重连后按服务端队列核对身份，不会因为正文相同就重复发送。
-- **文件**：原件流式下载保存（单文件上限 2 GiB），有进度、可取消；支持 PDF 分页预览、Markdown、HTML 会话资源、DOC／DOCX 正文速览、电子表格和 ZIP 目录浏览。
-- **管理与工作台**：模型与服务商配置、角色与提示词发布、资料管理、会话的模型／工具／消息操作、文件编辑、终端、据点群聊、调度、设备接入与维护重置。业务全部由 infOS 执行，敏感配置不写入手机投影缓存。
-- **Android 后台接收**：可选开启独立原生进程的常驻通知服务，不加载界面、不依赖 Google 服务，支持断线重连、去重和点击跳转。默认关闭，受系统后台策略限制；厂商级系统推送（如国内推送通道）尚未接入。
-
-远程模式需要支持队列接口的新版 infOS。
+- **安全配对连接**：用相机扫描 infOS 控制台的配对二维码，或直接粘贴配对链接；支持多配置档案管理与受控的局域网 HTTP 开关，配对凭据不落明文日志。
+- **五栏随身工作区**：**首页、会话、任务、资料、管理** 五个主视图直达日常，页头集合连接状态与「通知和待处理事项」入口，重新打开时默认恢复上次的会话与角色。
+- **不断线的队列会话**：支持在 AI 生成期间继续排队追加多条指令，随时置顶、编辑、暂停、取消或重排优先级。每条消息绑定持久 UUID，断线重连后自动从 WebSocket 序号与队列快照无缝续传。
+- **流式文件传输与预览**：支持原件流式下载（单文件最高 2 GiB）与传输进度取消；支持 PDF（最高 512 MiB）分页预览、Markdown / HTML 会话产物、Word / 表格 / ZIP 归档速览。
+- **完整远程管理**：涵盖角色与陪伴、模型与语音（含 TTS 朗读）、扩展与能力（Skills、Packages、MCP、提示词、SelfMind）、工作台终端、据点群聊、定时调度以及连接与设备维护。
+- **Android 独立后台接收**：可按需开启原生独立前台服务监听事件流（不依赖 Google 服务或厂商推送通道），支持断线重连、消息去重与点击直达会话。
 
 <p align="center">
-<a href=".github/assets/conversation-overview.png"><img src=".github/assets/conversation-overview.png" width="46%" alt="远程对话设计稿" /></a>
+  <a href=".github/assets/conversation-overview.png"><img src=".github/assets/conversation-overview.png" width="54%" alt="远程会话预览：日常聊天、思考与执行、审批确认、队列与文件、模型调节与消息编辑" /></a>
 </p>
-<p align="center"><sub>远程对话设计稿（非最终界面截图）：思考过程、工具轨迹、队列与消息操作</sub></p>
+<p align="center"><sub>远程会话预览：日常聊天 / 思考与执行 / 等你确认 / 队列与文件 / 模型与思考强度 / 消息编辑</sub></p>
 
 <a id="privacy"></a>
 
 ## 数据与隐私
 
-| 数据 | 位置 |
+| 数据类型 | 存储位置与保护机制 |
 | :--- | :--- |
-| 配置、角色、对话、提醒 | 本机 SQLite |
-| 角色日记 | 本机 TriviumDB（每个角色一个 `memory.tdb`），SQLite 另存恢复镜像 |
-| infOS 连接凭据 | Windows DPAPI / Android Keystore / iOS Keychain，不写明文 |
-| 远程显示偏好、草稿、阅读位置 | 本机，按连接分区 |
-| 备份 | 手动导出的 JSON（含配置、角色、日记、提醒与对话） |
+| 配置、角色、历史消息与提醒 | 本机 SQLite（独立模式与远程档案隔离存储） |
+| 角色日记记忆 | 每个角色独立拥有本地 TriviumDB（`memory.tdb`），并在 SQLite 保留同步恢复镜像 |
+| infOS 连接凭据 | 分别托管于 Windows DPAPI / Android Keystore / iOS Keychain |
+| 远程界面偏好、草稿与进度 | 本机分连接独立存储 |
+| 整库备份 | 手动导入/导出结构化 JSON 快照 |
 
-应用没有账号体系，代码中也没有统计或遥测。恢复备份和重置数据会覆盖当前内容，操作前建议先导出备份。
+应用无内置账号系统、无遥测埋点；在线模型对话仅发往你自行配置的服务端接口，连接 infOS 时数据仅在你与自己的服务端之间流转。
 
 <a id="quick-start"></a>
 
 ## 下载与运行
 
-### Android
+### 安装 Android APK
 
-1. 到 [Releases](https://github.com/YoKONCy/PeroperoChat/releases/latest) 下载 `PeroperoChat-v<版本>-arm64.apk`（仅 ARM64，Android 7.0 及以上）。
-2. 安装时允许「未知来源」。
-3. 打开后进入 **设置 → 模型连接**，填写服务商地址、API Key 和模型即可使用独立模式。
-4. 连接 infOS：进入 **设置 → 运行模式与远程连接**，扫码或粘贴配对链接。
+1. 前往 [Releases](https://github.com/YoKONCy/PeroperoChat/releases/latest) 下载 `PeroperoChat-v<版本>-arm64.apk`（支持 Android 7.0+ ARM64 设备）。
+2. 安装后进入 **设置 → 模型连接**，填好接口地址、API Key 与模型即可开启独立模式。
+3. 如需连接桌面端，进入 **设置 → 运行模式与远程连接** 扫码或粘贴配对码即可。
 
-> **从 1.4.0 之前的版本升级请注意**：旧版 CI 每次构建使用临时 debug 签名，旧包无法直接覆盖安装新版。请先在旧应用内导出 JSON 备份，卸载旧包后安装 1.4.0+ 并恢复备份，远程连接需要重新配对。1.4.0 起使用固定发布密钥，之后版本均可正常覆盖升级。
+> **1.4.0 以前旧版升级提示**：早期 CI 曾使用临时调试签名构建。若本机装有 1.4.0 之前的安装包，请先在旧应用内导出 JSON 备份，卸载后再安装新版并导入恢复。自 1.4.0 起已固定正式发布签名，后续版本均支持直接覆盖升级。
 
 ### 从源码运行
 
-需要 Node.js 20+、pnpm 9、Rust stable，以及对应平台的 Tauri 依赖；Android 另需 Java 17、Android SDK 36 与 NDK r26c。
+环境要求：**Node.js 20+**、**pnpm 9**、**Rust stable** 及对应平台 Tauri 构建依赖；构建 Android 另需 **Java 17**、**Android SDK 36** 与 **NDK r26c**。
 
 ```bash
 git clone https://github.com/YoKONCy/PeroperoChat.git
 cd PeroperoChat
 pnpm install --frozen-lockfile
 
-pnpm desktop   # Vite + Tauri 桌面应用
-pnpm android   # Android 真机或模拟器
-pnpm dev       # 仅前端，浏览器内没有 Tauri IPC，独立模式不可用
+pnpm desktop   # 启动 Vite + Tauri 桌面端
+pnpm android   # 连接 Android 真机或模拟器运行
+pnpm dev       # 仅启动前端视图（无 Tauri IPC，独立/原生能力不可用）
 ```
 
-仓库自带的 `src-tauri/gen/android` 包含自定义提醒桥接，不要重新初始化覆盖。iOS 工程尚未初始化，需要在 macOS + Xcode 环境自行处理。
-
-推送 `v<版本号>` tag 会触发 GitHub Actions 构建 Android ARM64 APK 并创建 Release，发布前会校验签名证书指纹，流程见 [构建与发布](docs/BUILD_AND_RELEASE.md)。
+> 仓库中的 `src-tauri/gen/android` 含定制的原生提醒与后台通知桥接，请勿重新执行 Tauri Android 初始化覆盖。iOS 工程目录暂未预置，如需构建请先在 macOS + Xcode 环境初始化；推送 `v<版本号>` 标签将由 GitHub Actions 自动构建并校验签名后发布 Android ARM64 APK，详见 [构建与发布文档](docs/BUILD_AND_RELEASE.md)。
 
 <a id="status"></a>
 
-## 当前状态与限制
+## 版本与平台说明
 
-当前版本 **1.5.0**。以下限制在使用前值得知道：
+当前版本为 **v1.6.0**。使用前建议了解以下边界：
 
-- **需要自备模型服务**：应用本身不提供任何模型或 API 额度。
-- **自动发布只有 Android ARM64 APK**：桌面安装包和 iOS 需要自行构建。
-- **远程模式仍待真机验收**：真实 infOS 连接、扫码链路和手机端端到端测试还在进行；iOS 凭据分支同样未经真机验证。
-- **后台能力因平台而异**：Android 常驻通知默认关闭且受厂商后台策略影响，没有接入厂商级系统推送；iOS 没有等价的后台调度方案；桌面提醒只在应用运行时生效。
-- 每轮发布前的测试数量和未验证范围记录在 [构建与发布](docs/BUILD_AND_RELEASE.md)，源码测试不代替视觉与真机验收。
+- **自备模型与服务端**：应用不内置免费模型额度；远程模式需搭配支持会话队列的新版 infOS 使用。
+- **发布产物范围**：GitHub Release 目前自动提供 Android ARM64 安装包；Windows / macOS / Linux 桌面端与 iOS 需本地从源码构建。
+- **平台后台差异**：Android 独立后台通知服务默认关闭且受各机型省电策略影响（未接入厂商系统推送）；桌面端提醒仅在应用进程运行时检查触发；iOS 暂未实现等价后台唤醒，Keychain 分支尚未完成真机实测。
 
 <a id="developers"></a>
 
 ## 开发者
 
-架构原则很简单：**Rust 端是唯一权威，前端只表达意图**。前端不直接请求模型、不执行工具、不编译提示词；所有校验、落盘和模式切换都在 Rust 完成，IPC 必须携带原生运行令牌。
+技术架构围绕一个核心准则展开：**Rust 后端是状态校验、数据落盘与运行模式切换的唯一真源，Vue 前端仅负责发送意图与渲染状态投影**。
 
 ```mermaid
 flowchart TD
-    UI[Vue 房间与管理界面] -->|Tauri IPC| Rust[Rust 会话与管理服务]
-    Rust --> Prompt[提示词与上下文预算]
-    Prompt --> Model[四类模型协议]
-    Model --> Tools[有界 ReAct 与工具草稿]
-    Tools --> Commit[回复成功后事务提交]
+    UI[Vue 房间与管理界面] -->|Tauri IPC + 运行令牌| Rust[Rust 会话与模式控制器]
+    Rust --> Prompt[提示词编译与上下文预算]
+    Prompt --> Model[四类模型协议适配器]
+    Model --> Tools[有界 ReAct 与事务草稿]
+    Tools --> Commit[回复落盘后同事务提交]
     Commit --> SQLite[(SQLite)]
     SQLite --> Diary[(TriviumDB 角色日记)]
-    SQLite --> Dispatch[提醒调度]
+    SQLite --> Dispatch[提醒调度器]
     Dispatch --> Android[Android AlarmManager]
-    Dispatch --> Desktop[桌面进程内检查]
+    Dispatch --> Desktop[桌面端 15s 轮询]
     Rust -->|状态投影| UI
 ```
 
-- **有界 ReAct**：单轮最多 8 次模型调用、24 次工具调用；独立模式只有五个工具：`write_diary`、`query_diary`、`update_character`、`query_reminders`、`manage_reminder`。
-- **模型适配**：四类协议统一归一化流式输出与工具调用，保留各家的原生工具调用 ID 和签名；流式工具参数累积成完整 JSON 后才执行。
-- **远程端是薄客户端**：Rust 只负责传输、身份隔离和展示投影；WebSocket 负责流式消息、补发和心跳，HTTP 客户端禁用自动重定向，错误信息脱敏。
-- **存储恢复**：TDB 同步失败时在 SQLite 记录恢复任务补偿，不会假装写入成功。
+- **有界 ReAct 与五工具集**：独立模式单轮模型调用上限支持 **1–12 次可配置（默认 8 次）**，工具调用上限 24 次；内置工具精简聚焦为 `write_diary`、`query_diary`、`update_character`、`query_reminders`、`manage_reminder`。
+- **统一流式协议归一化**：四类 API 返回统一转换为内部事件流，完整保留原生 Tool Call ID、思考签名与不完整的流式 JSON 参数缓冲。
+- **稳健的远程传输层**：远程 HTTP 客户端禁用自动重定向并对错误日志脱敏；WebSocket 负责实时事件推流与增量序号补偿；TDB 写入若异常会在 SQLite 记录恢复任务并自动补偿。
+
+### 常用检查命令
 
 ```bash
-pnpm test        # 前端：传输、消息渲染、品牌识别、全部 Vue 组件模板内存校验
-pnpm test:rust   # Rust 后端测试（网络测试使用本地模拟服务）
-pnpm lint        # ESLint
+pnpm test        # 前端单元测试与 Vue 组件模板编译校验
+pnpm test:rust   # Rust 后端测试（本地模拟服务隔离外部网络）
+pnpm typecheck   # vue-tsc 类型检查
+pnpm lint        # ESLint 代码规范检查
 ```
 
-### 文档
+### 技术文档导航
 
-- [独立模式技术文档](docs/STANDALONE.md)：架构、工具、日记、提示词、模型、界面与安卓提醒
-- [infOS 远程客户端技术文档](docs/REMOTE_CLIENT.md)：双模式控制、连接、UI、渲染、文件与管理
-- [构建与发布技术文档](docs/BUILD_AND_RELEASE.md)：版本维护、签名校验、测试口径与版本记录
-- 原始过程文档与设计稿归档于 `docs/archived/`（本地保留，不入库）
+- [独立模式技术文档](docs/STANDALONE.md)：架构设计、日记与事务、提示词拼装、四协议适配与原生提醒桥接
+- [infOS 远程客户端技术文档](docs/REMOTE_CLIENT.md)：模式门控、安全配对、WebSocket 断线续传、富内容渲染与文件管理
+- [构建与发布技术文档](docs/BUILD_AND_RELEASE.md)：版本同步点、签名证书校验、构建流与验收记录
 
 <a id="license"></a>
 
-## 许可
+## 许可与致谢
 
-项目以 **GPL-3.0** 开源。Live2D 模型与角色素材的权利归各自作者；模型与服务商品牌图标的来源及 MIT 许可见 [图标来源](public/model-brands/SOURCES.md)。AI 生成内容可能不准确，请自行判断。
+本项目以 **GPL-3.0** 协议开源。Live2D 模型与角色立绘素材版权归各自原作者所有；模型及服务商品牌图标的来源与 MIT 许可声明详见 [图标来源](public/model-brands/SOURCES.md)。
 
-欢迎通过 Issue 和 PR 参与，无论是开发、设计、素材还是使用反馈。
+欢迎提交 Issue 或 Pull Request 参与改进——无论代码、视觉设计还是使用反馈都非常感谢。
 
 <a href="https://github.com/YoKONCy/PeroperoChat/graphs/contributors">
   <img src="https://contrib.rocks/image?repo=YoKONCy/PeroperoChat" alt="贡献者" />
