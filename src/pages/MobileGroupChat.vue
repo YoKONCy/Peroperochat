@@ -24,15 +24,15 @@
             <p>{{ enabledMembers.length ? '日常小事、突然的灵感，都可以说给大家听。' : '打开成员设置，邀请伙伴参与回应。' }}</p>
           </div>
 
-          <article v-for="message in displayedMessages" :key="message.id" v-memo="[message.content, message.reasoning, message.usage, message.toolTimeline, message.status, message.error, message.name, message.timestamp, selectedId === message.id, busy, agents[message.agentId]?.avatar, agents[message.agentId]?.name]" class="group-message" :class="{ 'is-user': message.role === 'user' }" :data-speaker="message.agentId === 'nana' ? 'nana' : 'pero'">
+          <article v-for="message in displayedMessages" :key="message.id" :data-chat-message="message.id" v-memo="[message.content, message.reasoning, message.usage, message.toolTimeline, message.status, message.error, message.name, message.timestamp, selectedId === message.id, busy, agents[message.agentId]?.avatar, agents[message.agentId]?.name]" class="group-message" :class="{ 'is-user': message.role === 'user' }" :data-speaker="message.agentId === 'nana' ? 'nana' : 'pero'">
             <CharacterAvatar v-if="message.role !== 'user'" class="group-message-avatar" :src="agents[message.agentId]?.avatar" :label="speakerName(message)" />
             <div class="group-message-column">
               <div class="group-byline"><strong>{{ speakerName(message) }}</strong><time>{{ formatTime(message.timestamp) }}</time><button class="room-icon-button" :aria-label="`操作${speakerName(message)}的消息`" :aria-expanded="selectedId === message.id" @click="selectedId = selectedId === message.id ? null : message.id"><RoomIcon name="more" /></button></div>
               <div class="group-bubble">
-                <ToolTimeline v-if="message.role === 'assistant' && message.toolTimeline?.length" :items="message.toolTimeline" />
-                <MessageReasoning v-if="message.reasoning" :source="message.reasoning" :running="message.status === 'pending'" :generation="message.usage?.presentation" />
+                <ToolTimeline v-if="message.role === 'assistant' && message.toolTimeline?.length" :items="message.toolTimeline" @resize="chatScroll.refresh()" />
+                <MessageReasoning v-if="message.reasoning" :source="message.reasoning" :running="message.status === 'pending'" :generation="message.usage?.presentation" @resize="chatScroll.refresh()" />
                 <div v-if="message.content === '__loading__'" class="group-typing" aria-label="正在思考"><i /><i /><i /></div>
-                <div v-else class="markdown-body" v-html="roomMarkdown(message.content)" />
+                <JournalMessage v-else :source="messageText(message.content)" :pending="message.status === 'pending'" @resize="chatScroll.refresh()" />
                 <p v-if="message.error && visibleMessage(message.content) !== message.error" class="group-message-error">{{ message.error }}</p>
                 <small v-if="['cancelled', 'interrupted'].includes(message.status)" class="group-message-status">{{ message.status === 'cancelled' ? '已停止' : '上次回复中断了' }}</small>
               </div>
@@ -90,8 +90,12 @@ import { AGENTS as agents, activeAgentId } from '../stores/agents'
 import { useLocalConversation } from '../stores/conversations'
 import { localInvoke } from '../services/localChat'
 import MessageReasoning from '../components/companion/MessageReasoning.vue'
-import { roomMarkdown } from '../utils/roomMarkdown'
-import { visibleMessage } from '../utils/messageContent'
+import JournalMessage from '../components/companion/JournalMessage.vue'
+import { useMeasuredTextarea } from '../composables/useMeasuredTextarea'
+import { useChatScroll } from '../composables/useChatScroll'
+
+
+import { messageText, visibleMessage } from '../utils/messageContent'
 
 const router = useRouter()
 const { viewportStyle } = useRoomViewport()
@@ -101,6 +105,9 @@ const { messages, isLoading, processingAgentId, activityText, startedAt } = conv
 const members = ref([]), memberDraft = ref([]), showMembers = ref(false), savingMembers = ref(false), membersReady = ref(false)
 const pageLoading = ref(false), submitting = ref(false), deleting = ref(false), loadError = ref(''), actionError = ref(''), membersError = ref('')
 const input = ref(''), textarea = ref(null), chatList = ref(null), displayCount = ref(80), following = ref(true), selectedId = ref(null)
+const resizeInput = useMeasuredTextarea(textarea, () => input.value)
+const chatScroll = useChatScroll(chatList, following)
+
 const busy = computed(() => isLoading.value || submitting.value || deleting.value)
 const enabledMembers = computed(() => members.value.filter(member => member.enabled))
 const processingAgent = computed(() => agents[processingAgentId.value])
@@ -143,11 +150,6 @@ async function saveMembers() {
     if (!disposed) { members.value = result; showMembers.value = false }
   } catch (error) { if (!disposed) membersError.value = error.message || '成员设置没有保存成功，请重试' }
   finally { if (!disposed) savingMembers.value = false }
-}
-function resizeInput() {
-  if (!textarea.value) return
-  textarea.value.style.height = 'auto'
-  textarea.value.style.height = `${Math.min(textarea.value.scrollHeight, 112)}px`
 }
 function handleComposerKey(event) {
   if (event.key !== 'Enter' || event.shiftKey || event.isComposing || event.keyCode === 229) return
@@ -193,23 +195,21 @@ async function copyMessage(message) {
   if (!disposed) ElMessage.success('已复制')
 }
 function onScroll() {
-  if (chatList.value) following.value = chatList.value.scrollHeight - chatList.value.scrollTop - chatList.value.clientHeight < 72
+  chatScroll.capture()
 }
 async function scrollToLatest(force = false) {
   if (!force && !following.value) return
   await nextTick()
-  if (disposed || (!force && !following.value)) return
-  if (chatList.value) chatList.value.scrollTop = chatList.value.scrollHeight
-  if (force) following.value = true
+  if (!disposed) chatScroll.refresh(force)
 }
 async function loadMore() {
   if (!chatList.value) return
-  const before = chatList.value.scrollHeight, top = chatList.value.scrollTop
-  following.value = false; displayCount.value += 80
+  chatScroll.hold()
+  displayCount.value += 80
   await nextTick()
-  if (!disposed && chatList.value) chatList.value.scrollTop = top + chatList.value.scrollHeight - before
+  if (!disposed) chatScroll.refresh()
 }
-watch(() => [messages.value.at(-1)?.id, messages.value.at(-1)?.content, messages.value.at(-1)?.reasoning, isLoading.value], () => scrollToLatest())
+watch(() => [messages.value.at(-1)?.id, messages.value.at(-1)?.content, messages.value.at(-1)?.reasoning, isLoading.value], () => chatScroll.refresh())
 function resumeConversation() {
   if (document.hidden || disposed) return
   conversation.load().catch(error => { if (!disposed) console.warn('恢复家庭群聊失败：', error) })
@@ -235,7 +235,7 @@ onBeforeUnmount(() => { disposed = true; loadVersion++; document.removeEventList
 .roster-edit svg { width: 12px; height: 12px; }
 .group-error { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex: none; margin: 8px max(14px, calc((100% - 760px) / 2)) 0; }
 .group-error .room-icon-button { width: 28px; height: 28px; }
-.group-timeline { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; scrollbar-width: thin; scrollbar-color: var(--room-line) transparent; }
+.group-timeline { flex: 1; min-height: 0; overflow-y: auto; overflow-anchor: none; overscroll-behavior: contain; scrollbar-width: thin; scrollbar-color: var(--room-line) transparent; }
 .group-messages { width: min(100%, 760px); margin: 0 auto; padding: 22px 16px 12px; }
 .group-earlier { display: flex; align-items: center; gap: 5px; margin: 0 auto 16px; font-size: 11px; }
 .group-earlier svg { width: 14px; height: 14px; }

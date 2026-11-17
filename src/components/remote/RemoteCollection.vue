@@ -1,5 +1,5 @@
 <template>
-  <section class="remote-collection" :class="{ 'file-library': kind === 'library' && source === 'files', 'library-list-first': kind === 'library' }">
+  <section class="remote-collection" :data-source="kind === 'library' ? source : undefined" :class="{ 'file-library': kind === 'library' && source === 'files', 'library-list-first': kind === 'library' }">
     <header class="remote-section-heading"><div><span v-if="kind !== 'library'" class="remote-eyebrow">{{ t(eyebrow) }}</span><h1>{{ t(title) }}</h1></div><button v-if="kind === 'library'" type="button" class="room-icon-button" :aria-label="t(managementEntry.label)" :title="t(managementEntry.label)" :disabled="source === 'files' && (!threadId || !agentId)" @click="$emit('manage', managementEntry.section)"><RoomIcon :name="managementEntry.icon" /></button><button v-if="kind === 'tasks'" class="room-icon-button" :aria-label="t('新建远程任务')" :disabled="remoteState.connection !== 'online' || !agentId" @click="$emit('create-task')"><RoomIcon name="plus" /></button><button class="room-icon-button" :aria-label="t('刷新列表')" :disabled="loading" @click="reload"><RoomIcon name="refresh" /></button></header>
     <template v-if="kind === 'tasks'">
       <section class="chromatic-task-overview" data-ui-tone="mint"><div class="chromatic-task-count"><strong>{{ runningCount }}</strong><small>{{ t('执行中') }}</small></div><div><h2>{{ t('小事，一件件做好。') }}</h2><p>{{ t('当前列表，共 {0} 项', [rows.length]) }}</p></div></section>
@@ -21,7 +21,8 @@
     <p v-else-if="error && !rows.length && (kind !== 'inbox' || !notices.length)" class="remote-empty"><RoomIcon name="refresh" /><strong>{{ t('暂时没能载入') }}</strong><span>{{ t('稍后点右上角刷新，再试一次。') }}</span></p>
     <p v-else-if="!rows.length && kind === 'library' && source === 'memories'" class="remote-empty"><RoomIcon :name="memoryStatus === 'archived' ? 'archive' : 'memory'" /><strong>{{ t(memoryStatus === 'archived' ? '还没有归档的记忆' : '这里还没有记忆', [], 'memory-actions') }}</strong></p>
     <p v-else-if="!rows.length && (kind !== 'inbox' || !notices.length)" class="remote-empty"><RoomIcon :name="kind === 'inbox' ? 'check' : 'document'" /><strong>{{ kind === 'inbox' ? t('暂时没有需要处理的事项') : t('这里还没有内容') }}</strong><span v-if="kind !== 'library'">{{ kind === 'tasks' ? t('角色执行的任务会出现在这里。') : t('新的审批和问题会在这里汇合。') }}</span></p>
-    <div class="remote-record-list"><button v-for="row in rows" :key="`${row.category}:${row.id || row.requestId || row.path}`" class="remote-record" :class="{ 'chromatic-task-card': kind === 'tasks' }" :data-ui-tone="rowTone(row)" @click="open(row)"><RemoteFileCover v-if="row.category === 'files' && row.type !== 'directory'" :name="row.name" /><span v-else class="remote-record-symbol"><RoomIcon :name="row.category === 'pending' ? 'help' : row.category === 'approval' ? 'shield' : row.type === 'directory' ? 'folder' : kind === 'tasks' ? row.status === 'completed' ? 'check' : 'tasks' : source === 'memories' ? 'memory' : 'document'" /></span><span class="chromatic-record-copy"><small v-if="kind !== 'tasks' && kind !== 'library'">{{ t(category(row)) }}</small><strong>{{ row.title || row.question || row.name || row.summary || row.event?.summary || (row.category === 'memories' ? row.narrative?.slice(0, 88) : '') || t('查看详情') }}</strong><em v-if="recordSummary(row)">{{ recordSummary(row) }}</em><small v-if="row.status" class="chromatic-record-state">{{ t(remoteStatus(row.status)) }}</small></span><RoomIcon name="arrow" /></button></div>
+    <h2 v-if="kind === 'library' && rows.length" class="journal-heading">{{ t(({ files: '会话文件', memories: '伙伴记下的事', documents: '手记与文档' })[source]) }}</h2>
+    <div class="remote-record-list"><button v-for="row in rows" :key="`${row.category}:${row.id || row.requestId || row.path}`" class="remote-record" :class="{ 'chromatic-task-card': kind === 'tasks' }" :data-ui-tone="rowTone(row)" @click="open(row)"><RemoteFileCover v-if="row.category === 'files' && row.type !== 'directory'" :name="row.name" /><span v-else class="remote-record-symbol"><RoomIcon :name="row.category === 'pending' ? 'help' : row.category === 'approval' ? 'shield' : row.type === 'directory' ? 'folder' : kind === 'tasks' ? row.status === 'completed' ? 'check' : 'tasks' : source === 'memories' ? 'memory' : 'document'" /></span><span class="chromatic-record-copy"><small v-if="kind !== 'tasks' && kind !== 'library'">{{ t(category(row)) }}</small><strong>{{ row.title || row.question || row.name || row.summary || row.event?.summary || (row.category === 'memories' ? row.narrative?.slice(0, 88) : '') || t('查看详情') }}</strong><small v-if="kind === 'library' && libraryMeta(row)" class="journal-record-meta">{{ libraryMeta(row) }}</small><em v-if="recordSummary(row)">{{ recordSummary(row) }}</em><small v-if="row.status" class="chromatic-record-state">{{ t(remoteStatus(row.status)) }}</small></span><RoomIcon name="arrow" /></button></div>
     <div v-if="kind !== 'inbox' && (kind === 'tasks' || source !== 'files') && (page > 1 || hasMore)" class="remote-pagination"><button :disabled="loading || page <= 1" @click="page--">{{ t('上一页') }}</button><span>{{ t('第 {0} 页', [page]) }}</span><button :disabled="loading || !hasMore" @click="page++">{{ t('下一页') }}</button></div>
   </section>
 </template>
@@ -32,7 +33,8 @@ import { computed, ref, watch, onMounted, onBeforeUnmount } from 'vue'
 import RoomIcon from './RemoteIcon.vue'
 import RemoteFilePath from './RemoteFilePath.vue'
 import '../../styles/remote-files.css'
-import { t } from '../../i18n/remote'
+import { t, remoteDate } from '../../i18n/remote'
+import { formatFileSize } from '../../services/remoteDocuments'
 import RemoteFileCover from './RemoteFileCover.vue'
 import { readRemote, remoteViews, remotePendingRequests, refreshRemotePendingRequests, remoteNotifications, remoteState, refreshRemoteNotifications, acknowledgeRemoteNotification } from '../../stores/remote'
 import { currentToken, assertToken, sameToken } from '../../stores/mode'
@@ -62,6 +64,15 @@ const rows = computed(() => {
 })
 const hasMore = computed(() => { const data = views.value[0]?.data; return typeof data?.total === 'number' ? page.value * 30 < data.total : rows.value.length >= 30 })
 const runningCount = computed(() => rows.value.filter(row => ['running', 'dispatching'].includes(row.status)).length)
+function libraryMeta(row) {
+  const size = row.sizeBytes ?? row.size
+  const stamp = row.updatedAt || row.eventAt || row.createdAt
+  return [
+    row.category === 'files' && typeof size === 'number' && row.type !== 'directory' ? formatFileSize(size) : '',
+    row.agentId ? remoteState.agents.find(agent => agent.id === row.agentId)?.name : '',
+    stamp ? remoteDate(stamp, { year: 'numeric', month: 'short', day: 'numeric' }) : '',
+  ].filter(Boolean).join(' · ')
+}
 function rowTone(row) {
   if (props.kind === 'tasks') return ['waiting_input', 'paused', 'blocked'].includes(row.status) ? 'amber' : row.status === 'failed' ? 'danger' : 'mint'
   return ({ memories: 'violet', documents: 'amber', approval: 'amber', question: 'rose', pending: 'amber' })[row.category] || (row.type === 'directory' ? 'amber' : 'blue')

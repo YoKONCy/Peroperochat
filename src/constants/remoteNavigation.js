@@ -3,7 +3,7 @@
 export const remoteManagementGroups = [
   { id: 'companions', title: '角色与陪伴', description: '角色资料、提示词与联系节奏', icon: 'people', tone: 'rose', items: [
     { id: 'agents', label: '角色资料', description: '称呼、人设与互动', icon: 'profile' },
-    { id: 'selfmind', label: 'SelfMind 引导', description: '自定义回复前的思考指引', icon: 'brain' },
+    { id: 'selfmind', label: '回复前的叮嘱', description: '让伙伴先想想你在意的事', icon: 'brain' },
     { id: 'prompts', label: '提示词', description: '编辑、整理与发布', icon: 'document' },
     { id: 'proactive', label: '主动陪伴', description: '联系的节奏', icon: 'heart' },
   ] },
@@ -13,7 +13,7 @@ export const remoteManagementGroups = [
     { id: 'assignments', label: '模型分工', description: '默认模型、角色覆盖与视觉', icon: 'route' },
     { id: 'voice', label: '语音', description: '识别与朗读', icon: 'audio' },
   ] },
-  { id: 'extensions', title: '扩展与能力', description: 'Skills、插件与外部工具', icon: 'tools', tone: 'mint', items: [
+  { id: 'extensions', title: '扩展与能力', description: '技能、插件与外部工具', icon: 'tools', tone: 'mint', items: [
     { id: 'skills', label: '技能', description: '指引、依赖与服务端导入', icon: 'document' },
     { id: 'packages', label: '插件', description: '安装、授权、启停与版本回退', icon: 'tools' },
     { id: 'mcp', label: 'MCP 服务', description: '外部服务与连接状态', icon: 'connection' },

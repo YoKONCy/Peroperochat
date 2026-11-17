@@ -20,19 +20,19 @@
       <div v-if="!messages.length" class="chat-intro">
         <CharacterAvatar class="intro-avatar" :src="agent.avatar" :label="agent.name" /><p>想和 {{ agent.name }} 聊点什么？</p>
       </div>
-      <article v-for="{ message, index } in visibleMessages" :id="`room-message-${message.id}`" :key="message.id" v-memo="[index, message.content, message.reasoning, message.usage, message.toolTimeline, message.status, message.error, selectedId === message.id, jumpedId === message.id, freshId === message.id, agent.name, agent.avatar, busy]" class="room-message" :class="[message.role, { 'is-selected': selectedId === message.id, 'is-jumped': jumpedId === message.id, 'is-new': freshId === message.id }]">
+      <article v-for="{ message, index } in visibleMessages" :id="`room-message-${message.id}`" :key="message.id" :data-chat-message="message.id" v-memo="[index, message.content, message.reasoning, message.usage, message.toolTimeline, message.status, message.error, selectedId === message.id, jumpedId === message.id, freshId === message.id, agent.name, agent.avatar, busy]" class="room-message" :class="[message.role, { 'is-selected': selectedId === message.id, 'is-jumped': jumpedId === message.id, 'is-new': freshId === message.id }]">
         <div class="message-byline"><CharacterAvatar v-if="message.role !== 'user'" class="message-avatar" :src="agent.avatar" :label="agent.name" /><span class="message-speaker">{{ message.role === 'user' ? '你' : agent.name }}</span><time>{{ formatTime(message.timestamp) }}</time></div>
         <div class="message-body" @contextmenu.prevent="selectedId = message.id" @pointerdown="startPress($event, message.id)" @pointermove="movePress" @pointerup="clearPress" @pointercancel="clearPress">
           <ToolTimeline v-if="message.role === 'assistant' && message.toolTimeline?.length" :items="message.toolTimeline" @resize="imageLoaded" />
-          <MessageReasoning v-if="message.reasoning" :source="message.reasoning" :running="message.status === 'pending'" :generation="message.usage?.presentation" />
+          <MessageReasoning v-if="message.reasoning" :source="message.reasoning" :running="message.status === 'pending'" :generation="message.usage?.presentation" @resize="imageLoaded" />
           <div v-if="message.content === '__loading__'" class="typing-indicator" aria-label="正在思考"><i /><i /><i /></div>
           <template v-else-if="Array.isArray(message.content)">
             <template v-for="(part, partIndex) in message.content" :key="partIndex">
-              <div v-if="part.type === 'text'" class="markdown-body" v-html="renderMarkdown(part.text)" />
+              <JournalMessage v-if="part.type === 'text'" :source="part.text" :pending="message.status === 'pending'" @resize="imageLoaded" />
               <button v-else-if="part.type === 'image_url'" class="message-attachment" aria-label="查看对话图片" @click="$emit('preview-image', safeImage(part.image_url?.url))"><img :src="safeImage(part.image_url?.url)" alt="对话附件" loading="lazy" @load="imageLoaded" /></button>
             </template>
           </template>
-          <div v-else class="markdown-body" v-html="renderMarkdown(message.content)" />
+          <JournalMessage v-else :source="message.content" :pending="message.status === 'pending'" @resize="imageLoaded" />
           <p v-if="message.error && visibleMessage(message.content) !== message.error" class="message-error">{{ message.error }}</p>
           <span v-if="['cancelled', 'interrupted'].includes(message.status)" class="message-status">{{ message.status === 'cancelled' ? '已停止' : '上次回复中断了' }}</span>
         </div>
@@ -67,8 +67,11 @@ import MessageReasoning from './MessageReasoning.vue'
 import RoomAccent from './RoomAccent.vue'
 import ToolTimeline from './ToolTimeline.vue'
 import CharacterAvatar from './CharacterAvatar.vue'
-import { roomMarkdown } from '../../utils/roomMarkdown'
-import { createTextRenderCache } from '../../utils/textRenderCache'
+import JournalMessage from './JournalMessage.vue'
+import { useMeasuredTextarea } from '../../composables/useMeasuredTextarea'
+import { useChatScroll } from '../../composables/useChatScroll'
+
+
 import { visibleMessage } from '../../utils/messageContent'
 
 const props = defineProps({
@@ -83,8 +86,10 @@ const list = ref(null)
 const selectedId = ref(null)
 const visibleCount = ref(24)
 const historyMounted = ref(false)
-const renderMarkdown = createTextRenderCache(roomMarkdown)
+
 const following = ref(true)
+const resizeInput = useMeasuredTextarea(input, () => props.modelValue)
+const chatScroll = useChatScroll(list, following, () => props.mode !== 'rest')
 const jumpedId = ref(null)
 const freshId = ref(null)
 const visibleMessages = computed(() => {
@@ -106,9 +111,6 @@ let freshTimer = null
 let suppressClickUntil = 0
 let disposed = false
 let dockObserver = null
-let scrollFrame = null
-let inputFrame = null
-let forceScroll = false
 let lastDockSize = 0
 
 // 房间模式按实际输入栏、最近回复与底部安全区占位定位人物，避免固定高度估算造成悬空。
@@ -140,15 +142,6 @@ function finishDrag(event) {
 }
 function collapse() { input.value?.blur(); selectedId.value = null; emit('update:mode', 'rest') }
 function updateInput(event) { emit('update:modelValue', event.target.value) }
-function scheduleInputResize() {
-  if (inputFrame !== null) return
-  inputFrame = requestAnimationFrame(() => { inputFrame = null; if (!disposed) resizeInput() })
-}
-function resizeInput() {
-  if (!input.value) return
-  input.value.style.height = 'auto'
-  input.value.style.height = `${Math.min(input.value.scrollHeight, 112)}px`
-}
 function handleEnter(event) {
   if (event.key !== 'Enter' || event.shiftKey || event.isComposing || event.keyCode === 229) return
   event.preventDefault(); submit()
@@ -164,30 +157,18 @@ function movePress(event) { if (pressOrigin && Math.hypot(event.clientX - pressO
 function clearPress() { clearTimeout(pressTimer); pressTimer = null; pressOrigin = null }
 function action(name, value) { selectedId.value = null; emit(name, value) }
 function onScroll() {
-  if (!list.value || props.mode === 'rest') return
-  following.value = list.value.scrollHeight - list.value.scrollTop - list.value.clientHeight < 72
+  chatScroll.capture()
 }
 function scrollToLatest(force = false) {
-  if (props.mode === 'rest' || !force && !following.value) return
-  forceScroll ||= force
-  if (scrollFrame !== null) return
-  scrollFrame = requestAnimationFrame(async () => {
-    scrollFrame = null
-    const requested = forceScroll; forceScroll = false
-    await nextTick()
-    if (disposed || props.mode === 'rest' || !requested && !following.value) return
-    if (list.value) list.value.scrollTop = list.value.scrollHeight
-    if (requested) following.value = true
-  })
+  if (force || following.value) chatScroll.refresh(force)
 }
 async function showEarlier() {
-  const height = list.value.scrollHeight
-  const position = list.value.scrollTop
+  chatScroll.hold()
   visibleCount.value += 24
   await nextTick()
-  if (list.value) list.value.scrollTop = position + list.value.scrollHeight - height
+  if (!disposed) chatScroll.refresh()
 }
-function imageLoaded() { scrollToLatest() }
+function imageLoaded() { chatScroll.refresh() }
 function formatTime(value) { return new Date(value).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' }) }
 function safeImage(value) { return typeof value === 'string' && /^(https?:\/\/|data:image\/)/i.test(value) ? value : '' }
 async function jumpTo(id) {
@@ -210,17 +191,16 @@ watch(() => props.messages.at(-1)?.id, (id, previousId) => {
   freshId.value = id
   freshTimer = setTimeout(() => { freshId.value = null }, 320)
 })
-watch(() => [props.messages.at(-1)?.id, props.messages.at(-1)?.content, props.messages.at(-1)?.reasoning, props.busy], () => scrollToLatest())
+watch(() => [props.messages.at(-1)?.id, props.messages.at(-1)?.content, props.messages.at(-1)?.reasoning, props.busy], () => chatScroll.refresh())
 watch(() => props.mode, mode => { if (mode !== 'rest') { historyMounted.value = true; scrollToLatest() } else nextTick(reportDockSize) }, { immediate: true })
 watch(() => props.jumpId, jumpTo)
-watch(() => props.modelValue, scheduleInputResize)
 onMounted(() => {
   resizeInput(); reportDockSize()
   if (typeof ResizeObserver !== 'undefined') { dockObserver = new ResizeObserver(reportDockSize); dockObserver.observe(panelElement.value) }
   window.addEventListener('resize', reportDockSize)
   if (props.jumpId) jumpTo(props.jumpId); else scrollToLatest(true)
 })
-onBeforeUnmount(() => { disposed = true; dockObserver?.disconnect(); cancelAnimationFrame(scrollFrame); cancelAnimationFrame(inputFrame); window.removeEventListener('resize', reportDockSize); clearPress(); clearTimeout(jumpTimer); clearTimeout(freshTimer) })
+onBeforeUnmount(() => { disposed = true; dockObserver?.disconnect(); window.removeEventListener('resize', reportDockSize); clearPress(); clearTimeout(jumpTimer); clearTimeout(freshTimer) })
 defineExpose({ focus: () => input.value?.focus({ preventScroll: true }), blur: () => input.value?.blur() })
 </script>
 
@@ -247,7 +227,7 @@ defineExpose({ focus: () => input.value?.focus({ preventScroll: true }), blur: (
 .last-reply > svg:first-child { color: var(--room-accent); }
 .last-reply > span { flex: 1; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
 .last-reply > svg { width: 15px; height: 15px; }
-.chat-messages { flex: 1; overflow-y: auto; min-height: 0; padding: 18px 20px; overscroll-behavior: contain; scrollbar-width: thin; scrollbar-color: var(--room-line) transparent; }
+.chat-messages { flex: 1; overflow-y: auto; overflow-anchor: none; min-height: 0; padding: 18px 20px; overscroll-behavior: contain; scrollbar-width: thin; scrollbar-color: var(--room-line) transparent; }
 .chat-intro { min-height: 150px; display: flex; flex-direction: column; justify-content: center; align-items: center; gap: 10px; color: var(--room-muted); font-size: 13px; line-height: 1.7; text-align: center; }
 .chat-intro p { margin: 0; }
 .intro-avatar { width: 50px; height: 60px; display: grid; place-items: center; background: var(--room-accent-soft); border-radius: 3px 9px 3px 3px; overflow: hidden; color: var(--room-accent); }

@@ -65,13 +65,13 @@ pub struct Appearance {
 }
 impl Default for Appearance {
     fn default() -> Self {
-        Self { display_mode: "illustration".into(), palette: "auto".into(), glass: 80, figure_size: 57, motion: true }
+        Self { display_mode: "illustration".into(), palette: "light".into(), glass: 80, figure_size: 57, motion: true }
     }
 }
 impl Appearance {
     fn validate(&self) -> ChatResult<()> {
         if !matches!(self.display_mode.as_str(), "live2d" | "illustration") ||
-            !matches!(self.palette.as_str(), "auto" | "sky" | "sakura" | "mint" | "violet") ||
+            !matches!(self.palette.as_str(), "light" | "dark" | "auto" | "sky" | "sakura" | "mint" | "violet") ||
             !(60..=94).contains(&self.glass) || !(44..=64).contains(&self.figure_size) {
             return Err(ChatError::new("INVALID_CONFIG", "角色显示或界面参数无效"));
         }

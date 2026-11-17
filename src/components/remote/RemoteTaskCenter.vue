@@ -5,7 +5,17 @@
     <RemoteFeedback v-if="active" :message="error || actionError" />
     <RemoteFeedback v-if="active && unresolved" :message="tr('操作结果待确认')" :action-label="tr('去核对')" @action="$emit('pending')" />
     <p v-if="loading && !items.length" class="room-empty">{{ tr('正在读取任务…') }}</p><p v-else-if="!items.length && !error" class="room-empty">{{ tr(view === 'history' ? '还没有历史任务' : view === 'resident' ? '暂无系统常驻状态' : '现在没有待处理的任务') }}</p>
-    <div class="task-center-cards"><button v-for="task in items" :key="task.id" type="button" class="task-center-card" :data-state="task.status" @click="open(task)"><header><RemoteAvatar :id="task.agentId" :label="agentName(task.agentId)" /><span>{{ agentName(task.agentId) }}</span><i v-if="view === 'history' && !task.readAt" class="task-unread-dot" :aria-label="tr('未读')" /><strong>{{ tr(taskStatusLabels[task.status] || '状态待同步') }}</strong></header><h2>{{ task.title || tr('一项任务') }}</h2><p>{{ task.currentStage || task.lifecycle?.continuation || task.instruction }}</p><div v-if="taskProgress(task.progress) !== null" class="task-progress-line"><progress :value="task.progress" max="100" /><small>{{ task.progress }}%</small></div><footer><span>{{ taskTime(task.createdAt) }}</span><span>{{ tr(task.status === 'waiting_input' ? '查看并回复' : task.status === 'blocked' ? '查看原因' : '查看详情') }}<RemoteIcon name="next" /></span></footer></button></div>
+    <section v-for="group in taskGroups" :key="group.id" class="journal-task-group" :data-group="group.id">
+      <h2 v-if="group.label" class="journal-heading">{{ tr(group.label) }} <small>{{ group.tasks.length }}</small></h2>
+      <div class="task-center-cards">
+        <button v-for="task in group.tasks" :key="task.id" type="button" class="task-center-card" :data-state="task.status" @click="open(task)">
+          <header><RemoteAvatar :id="task.agentId" :label="agentName(task.agentId)" /><span>{{ agentName(task.agentId) }}</span><i v-if="view === 'history' && !task.readAt" class="task-unread-dot" :aria-label="tr('未读')" /><strong>{{ tr(taskStatusLabels[task.status] || '状态待同步') }}</strong></header>
+          <h3>{{ task.title || tr('一项任务') }}</h3><p v-if="task.currentStage || task.lifecycle?.continuation || task.instruction">{{ task.currentStage || task.lifecycle?.continuation || task.instruction }}</p>
+          <div v-if="taskProgress(task.progress) !== null" class="task-progress-line"><progress :value="task.progress" max="100" /><small>{{ task.progress }}%</small></div>
+          <footer><time>{{ taskTime(task.createdAt) }}</time><span>{{ tr(task.status === 'waiting_input' ? '查看并回复' : task.status === 'blocked' ? '查看原因' : '查看详情') }}<RemoteIcon name="next" /></span></footer>
+        </button>
+      </div>
+    </section>
     <RemoteAction v-if="view === 'active' && hasMore" icon="down" :disabled="loading" @click="more">{{ tr('加载更多') }}</RemoteAction>
     <div v-if="view !== 'active' && (page > 1 || hasMore)" class="remote-pagination"><button :disabled="loading || page === 1" @click="goToPage(page - 1)">{{ tr('上一页') }}</button><span>{{ page }}</span><button :disabled="loading || !hasMore" @click="goToPage(page + 1)">{{ tr('下一页') }}</button></div>
     <RoomDrawer v-if="filterOpen" :title="tr('筛选任务')" @close="filterOpen = false">
@@ -52,6 +62,15 @@ const agentOptions = computed(() => [{ value: '', label: tr('全部角色') }, .
 const statusOptions = computed(() => [{ value: '', label: tr('全部状态') }, ...(view.value === 'active' ? activeTaskStatuses : view.value === 'history' ? finishedTaskStatuses : [...activeTaskStatuses, ...finishedTaskStatuses]).map(value => ({ value, label: tr(taskStatusLabels[value]) }))])
 const snapshots = computed(() => queries.value.map(query => remoteViews.get(JSON.stringify(query))?.data))
 const items = computed(() => newestTasks(snapshots.value.flatMap(data => data?.items || [])).filter(task => task.category === (view.value === 'resident' ? 'resident' : 'agent_task') && (view.value !== 'active' || activeTaskStatuses.includes(task.status)) && (view.value !== 'history' || finishedTaskStatuses.includes(task.status))))
+const taskGroups = computed(() => {
+  if (view.value !== 'active') return [{ id: view.value, label: '', tasks: items.value }]
+  const groups = [
+    { id: 'reply', label: '等我回复', tasks: items.value.filter(task => task.status === 'waiting_input') },
+    { id: 'working', label: '伙伴在做', tasks: items.value.filter(task => ['queued', 'running'].includes(task.status)) },
+    { id: 'waiting', label: '暂时停下', tasks: items.value.filter(task => ['waiting', 'paused', 'blocked'].includes(task.status)) },
+  ]
+  return groups.filter(group => group.tasks.length)
+})
 const total = computed(() => view.value === 'active' ? queries.value.filter(query => query.page === 1).reduce((sum, query) => sum + (remoteViews.get(JSON.stringify(query))?.data?.total || 0), 0) : snapshots.value[0]?.total || 0)
 const count = computed(() => {
   const counted = view.value === 'active' ? queries.value.filter(query => query.page === 1) : queries.value

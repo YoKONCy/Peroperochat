@@ -1,0 +1,50 @@
+.rich-prose { min-width:0; font-size:14px; line-height:1.8; overflow-wrap:anywhere }
+.rich-prose h3,.rich-prose h4,.folio h3,.task-docket h3 { color:var(--ink); font-family:var(--display-font); line-height:1.4 }
+.rich-prose h3 { margin:6px 0 8px; font-size:19px }
+.rich-prose h4 { margin:18px 0 5px; font-size:15px }
+.rich-prose p { margin:6px 0 10px }
+.rich-prose strong { color:var(--ink); font-weight:730 }
+.rich-prose em { text-decoration:underline dotted var(--rule); text-underline-offset:3px }
+.rich-prose :is(ol,ul) { padding-inline-start:1.6em; margin:4px 0 12px }
+.rich-prose li::marker { color:var(--accent); font-weight:650 }
+.rich-prose blockquote { margin:12px 0; border-inline-start:3px solid var(--draw-blue); padding:5px 0 5px 12px; color:var(--muted); font-family:var(--display-font) }
+.rich-prose a,.read-note { color:var(--accent); text-underline-offset:3px }
+.read-note { display:inline-flex; align-items:center; gap:4px; min-height:36px; padding:0; font-weight:650; font-size:13px }
+.read-note .icon { width:13px }
+.reading-author { display:flex; align-items:center; flex-wrap:wrap; gap:7px; font-size:12px; color:var(--ink) }
+.reading-author .avatar { width:22px; height:22px }
+.reading-author span { color:var(--muted); font-size:11px }
+.phone[data-page=rich] .reading-author { margin:15px 0 6px }
+.phone[data-page=rich] .tabs { position:sticky; top:0; z-index:1; background:var(--bg) }
+.reading-page { padding:2px 0 12px }
+.sketch-figure { margin:14px 2px }
+.sketch-figure button { display:block; width:100%; padding:3px; background:var(--surface); border:1px solid var(--line); box-shadow:1px 2px var(--soft); cursor:zoom-in }
+.sketch-figure img { display:block; width:100%; height:auto; aspect-ratio:3/2; object-fit:cover }
+.sketch-figure figcaption { padding-top:5px; color:var(--muted); font-size:11px; text-align:center }
+.sketch-detail { display:block; width:100%; height:auto; margin-top:12px }
+.source-link { font-size:13px }
+.route-table { max-width:100%; overflow-x:auto; border-block:1px solid var(--rule) }
+.route-table table { border-collapse:collapse; width:100%; font-size:13px; color:var(--ink); font-variant-numeric:tabular-nums }
+.route-table caption { text-align:start; padding:6px 7px; color:var(--muted); font-size:11px }
+.route-table :is(td,th) { padding:7px; text-align:end; white-space:nowrap }
+.route-table thead { background:var(--soft); color:var(--muted) }
+.route-table th:first-child { text-align:start }
+.route-table tbody tr+tr { border-top:1px solid var(--line) }
+.route-diagram { margin:5px 0 11px; display:grid; justify-items:center; color:var(--accent); font-size:12px }
+.route-diagram>strong { border:1px solid var(--rule); padding:2px 14px; border-radius:3px; color:var(--ink) }
+.route-diagram>div { width:min(230px,95%); display:flex; justify-content:space-between; padding-top:11px; position:relative }
+.route-diagram>div::before { content:""; position:absolute; top:5px; left:14%; right:14%; height:5px; border:1px solid var(--rule); border-bottom:0 }
+.route-diagram>div::after { content:""; position:absolute; top:0; left:50%; height:6px; border-left:1px solid var(--rule) }
+.route-diagram>div span { padding:1px 4px; color:var(--ink) }
+.math-note { margin:12px 0; padding:12px; border-block:1px solid var(--line); color:var(--accent); overflow-x:auto; font-size:18px }
+.code-note { min-width:0; margin:12px 0; border:1px solid var(--line); border-radius:5px; background:var(--surface); overflow:hidden }
+.code-note header { display:flex; align-items:center; justify-content:space-between; padding:2px 9px; background:var(--soft); color:var(--muted); font-size:11px; border-bottom:1px solid var(--line) }
+.code-note header button { min-height:32px; color:var(--accent); font-weight:650 }
+.code-note header button[aria-pressed=true] { text-decoration:underline; text-underline-offset:3px }
+.code-note pre { margin:0; padding:12px; max-width:100%; overflow-x:auto; font:12px/1.7 Consolas,monospace; tab-size:2 }
+.code-note pre.wrapped { white-space:pre-wrap; overflow-wrap:anywhere }
+.code-note pre code { padding:0; color:var(--ink); background:transparent; font:inherit }
+.syntax-key { color:var(--accent); font-weight:650 } .syntax-num { color:var(--warn) } .syntax-comment { color:var(--muted) }
+.trip-card { padding:12px }
+.trip-card article { border-left:3px solid var(--draw-rose); padding-inline-start:10px }
+.trip-card h4,.trip-card p { margin:0 } .trip-card p { font-size:12px; color:var(--muted) }

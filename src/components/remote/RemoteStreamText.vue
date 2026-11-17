@@ -1,6 +1,6 @@
 <template>
   <div class="remote-stream-tail" :class="{ 'is-receiving': active, 'markdown-body': formatted }" :aria-label="active ? '正在接收的正文' : '未完成的正文'" @click="activateLink">
-    <div v-if="formatted" v-html="html" />
+    <ChatMarkdown v-if="formatted" :html="html" @resize="$emit('resize')" />
     <pre v-else class="remote-rich-raw">{{ source }}</pre>
     <p v-if="failure" class="remote-rich-incomplete" role="alert">{{ failure }}</p>
   </div>
@@ -11,6 +11,7 @@ import { renderRemoteMarkdown } from '../../utils/remoteRichContent'
 import { openRemoteLink } from '../../utils/remoteMarkdown'
 import { resolveRemoteResource } from '../../services/remoteResources'
 import { currentToken } from '../../stores/mode'
+import ChatMarkdown from '../ChatMarkdown.vue'
 const props = defineProps({ source: { type: String, default: '' }, active: Boolean, formatted: { type: Boolean, default: true }, context: Object })
 const emit = defineEmits(['resize', 'resource'])
 const failure = ref('')

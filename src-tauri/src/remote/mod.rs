@@ -332,6 +332,12 @@ fn validate_queue(data:&Value,thread:&str)->ChatResult<()> {
     Ok(())
 }
 
+fn queue_input_matches(message:&Value,thread:&str,generation:Option<u64>,request_id:&str)->bool {
+    if message["role"]!="user" || message["threadId"]!=thread {return false;}
+    if message["pairId"]==format!("queue_{request_id}") {return true;}
+    generation.is_some_and(|generation| message["publicationId"]==format!("conversation:{thread}:{generation}:{request_id}:input"))
+}
+
 fn validate_frame(value:&Value)->ChatResult<()> {
     if value["protocolVersion"]!=1 || !value["surfaceId"].is_string() || !value["generation"].is_string() || !value["operationId"].is_string()
         || value["sequence"].as_u64().is_none() || value["revision"].as_u64().is_none() || !value["operation"]["type"].is_string() {
@@ -582,8 +588,8 @@ pub async fn remote_reconcile_request(app:AppHandle,token:Token,request_id:Strin
             let projection=perform(&session,operations::Query::Conversation {id:thread.into(),before_cursor:None,page_size:60}.route()?).await?;
             validate_token(&app,&token)?;
             if projection["protocolVersion"]!=1 || projection["threadId"]!=thread {return Err(ChatError::new("REMOTE_PROTOCOL","队列核对返回了其他会话"));}
-            let pair=format!("queue_{request_id}");
-            accepted=projection["messages"].as_array().is_some_and(|messages|messages.iter().any(|message|message["role"]=="user" && message["threadId"]==thread && message["pairId"]==pair));
+            let generation=input["expectedGeneration"].as_u64().or_else(||projection["threadGeneration"].as_u64());
+            accepted=projection["messages"].as_array().is_some_and(|messages|messages.iter().any(|message|queue_input_matches(message,thread,generation,&request_id)));
         }
         if accepted {
             match cache::confirm(&app,&token,&request_id,Ok(json!({"threadId":thread,"queueItemId":request_id,"accepted":true}))) {
@@ -621,6 +627,22 @@ pub async fn remote_reconcile_request(app:AppHandle,token:Token,request_id:Strin
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn queue_input_identity_confirms_main_publication_and_side_pair() {
+        let main=json!({"threadId":"main-a","role":"user","pairId":null,"publicationId":"conversation:main-a:3:request-a:input"});
+        assert!(queue_input_matches(&main,"main-a",Some(3),"request-a"));
+        assert!(!queue_input_matches(&main,"main-a",Some(2),"request-a"));
+        assert!(!queue_input_matches(&main,"main-b",Some(3),"request-a"));
+        assert!(!queue_input_matches(&main,"main-a",Some(3),"request-b"));
+        assert!(!queue_input_matches(&main,"main-a",None,"request-a"));
+        let mut assistant=main.clone();
+        assistant["role"]=json!("assistant");
+        assert!(!queue_input_matches(&assistant,"main-a",Some(3),"request-a"));
+        let side=json!({"threadId":"side-a","role":"user","pairId":"queue_request-a"});
+        assert!(queue_input_matches(&side,"side-a",None,"request-a"));
+        assert!(!queue_input_matches(&side,"side-a",None,"request-b"));
+    }
     #[test]
     fn queued_chat_keeps_generation_and_legacy_retry_fingerprints() {
         let old = json!({"requestId":"request-a","threadId":"main","agentId":"pero","content":"原消息","attachmentIds":[],"imageMode":null,"workspaceContext":null,"generationType":null});

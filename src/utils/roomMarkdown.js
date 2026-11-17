@@ -13,5 +13,12 @@ export function roomMarkdown(content) {
     link.target = '_blank'
     link.rel = 'noopener noreferrer'
   }
+  for (const table of fragment.content.querySelectorAll('table')) {
+    const wrapper = document.createElement('div')
+    wrapper.className = 'journal-table'
+    wrapper.tabIndex = 0
+    table.replaceWith(wrapper)
+    wrapper.append(table)
+  }
   return fragment.innerHTML
 }

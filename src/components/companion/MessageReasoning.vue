@@ -1,9 +1,10 @@
-<template><SoftDisclosure class="expression-reasoning" :data-effort="effort" @resize="$emit('resize')"><template #summary><span class="expression-thought-symbol"><ReasoningIcon :level="effort" :running="running" /></span><strong>{{ tr(running ? '正在思考' : '思考过程') }}<small v-if="effort !== 'unknown'" class="expression-effort-label">{{ tr(reasoningLabels[effort]) }}</small></strong><RoomIcon class="soft-fold-chevron" name="down" /></template><div class="expression-reasoning-body markdown-body" v-html="render(source)" /></SoftDisclosure></template>
+<template><SoftDisclosure class="expression-reasoning" :data-effort="effort" @resize="$emit('resize')"><template #summary><span class="expression-thought-symbol"><ReasoningIcon :level="effort" :running="running" /></span><strong>{{ tr(running ? '正在思考' : '思考过程') }}<small v-if="effort !== 'unknown'" class="expression-effort-label">{{ tr(reasoningLabels[effort]) }}</small></strong><RoomIcon class="soft-fold-chevron" name="down" /></template><ChatMarkdown class="expression-reasoning-body markdown-body" :html="render(source)" @resize="$emit('resize')" /></SoftDisclosure></template>
 <script setup>
 import { computed } from 'vue'
 import ReasoningIcon from './ReasoningIcon.vue'
 import SoftDisclosure from './SoftDisclosure.vue'
 import RoomIcon from './RoomIcon.vue'
+import ChatMarkdown from '../ChatMarkdown.vue'
 import { roomMarkdown } from '../../utils/roomMarkdown'
 import { recordedReasoning, reasoningLabels } from '../../utils/reasoningAppearance'
 import { createTextRenderCache } from '../../utils/textRenderCache'

@@ -1,4 +1,6 @@
 // 柔软可爱风的内置图标；仅接受这里的受信任矢量，不执行角色包中的代码。
+import { journalIcon } from './journalIcons'
+
 const paths = {
   'tool-lock': '<rect class="icon-wash" x="4" y="10" width="16" height="12" rx="4"/><rect x="4" y="10" width="16" height="12" rx="4"/><path d="M8 10V7a4 4 0 0 1 8 0v3m-4 5v3"/>',
   'tool-off': '<circle class="icon-wash" cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="9"/><path d="m6 6 12 12"/>',
@@ -38,5 +40,6 @@ const paths = {
   wifi: '<path d="M2 8a16 16 0 0 1 20 0M6 12a10 10 0 0 1 12 0m-8 4a4 4 0 0 1 4 0"/><circle cx="12" cy="20" r="1" fill="currentColor"/>',
   battery: '<rect x="2" y="6" width="18" height="12" rx="3"/><path d="M23 10v4"/><rect x="5" y="9" width="12" height="6" rx="1" fill="currentColor" stroke="none"/>',
 }
+const journalAliases = { palette: 'theme', files: 'library', brain: 'mind', tools: 'tool', remote: 'connection', diary: 'notebook', gear: 'settings' }
 const aliases = { 'model-chip': 'model', 'model-thought': 'thought', 'reply-length': 'file', 'context-window': 'model', sampling: 'sun', filter: 'tuning', sliders: 'tuning', files: 'file', document: 'file', arrow: 'next', tools: 'tool', mic: 'mic', voice: 'mic', volume: 'audio' }
-export function softIcon(name) { return paths[aliases[name] || name] || '' }
+export function softIcon(name) { return journalIcon(journalAliases[name] || aliases[name] || name) || paths[aliases[name] || name] || '' }

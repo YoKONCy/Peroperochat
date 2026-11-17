@@ -1,11 +1,11 @@
 <template>
   <section class="remote-home">
-    <div class="remote-home-hero" :class="{ 'avatar-only': !cg || !showCg }">
+    <div class="remote-home-connection"><button @click="$emit('connections')"><strong>{{ profile?.displayName || 'infOS' }}</strong><small><i :class="{ online }" />{{ connectionText }}</small></button><button class="room-icon-button" :aria-label="t('显示偏好')" @click="$emit('appearance')"><RemoteIcon name="settings" /></button></div>
+    <figure class="journal-room-print">
       <button v-if="cg && showCg" class="remote-hero-art" :aria-label="t('展开{0}的 CG', [agent?.name || t('角色')])" @click="$emit('art')"><img :src="cg" :alt="t('{0}的 CG', [agent?.name || t('角色')])" @error="imageFailed = true" /></button>
       <div v-else class="remote-home-avatar"><RemoteAvatar :id="agent?.id" :label="agent?.name" /><RemoteIcon :name="decoration" artwork /></div>
-      <div class="remote-home-connection"><button @click="$emit('connections')"><strong>{{ profile?.displayName || 'infOS' }}</strong><small><i :class="{ online }" />{{ connectionText }}</small></button><button class="room-icon-button" :aria-label="t('显示偏好')" @click="$emit('appearance')"><RemoteIcon name="settings" /></button></div>
-      <div class="remote-home-greeting"><span>{{ agent?.name || t('你的伙伴') }}<RemoteIcon v-if="decoration !== 'none'" :name="decoration" artwork /></span><p>{{ state?.vibe || state?.mood || agent?.description || t('从这里，继续上次的对话。') }}</p></div>
-    </div>
+      <figcaption class="remote-home-greeting"><span>{{ agent?.name || t('你的伙伴') }}<RemoteIcon v-if="decoration !== 'none'" :name="decoration" artwork /></span><p>{{ state?.vibe || state?.mood || agent?.description || t('从这里，继续上次的对话。') }}</p></figcaption>
+    </figure>
     <div class="remote-home-content">
       <button class="remote-resume-card" @click="$emit(selection ? 'resume' : 'threads')"><RemoteIcon class="remote-resume-art" name="chat" /><span class="remote-eyebrow">{{ t(selection ? '继续上次会话' : '开始一段对话') }}</span><h2>{{ selection?.title || t('选择你的伙伴') }}</h2><span class="remote-resume-arrow"><RemoteIcon name="arrow" /></span></button>
       <!-- 待处理事项紧跟主操作，不再排在任务与文件之后。 -->

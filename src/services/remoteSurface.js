@@ -15,6 +15,21 @@ function descriptorView(surface) {
 }
 export function createRemoteSurfaceState() { return { surfaces: new Map(), messages: new Map(), retired: new Map(), deletedMessageIds: new Set(), threadId: null, threadGeneration: 0, needsRefresh: false } }
 
+// 主会话按发布身份确认输入，侧会话沿用消息对身份，送达依据为持久提交身份。
+export function remoteUserSubmissionId(message, threadId, threadGeneration) {
+  if (message?.role !== 'user' || message.threadId !== threadId) return null
+  if (typeof message.pairId === 'string' && message.pairId.startsWith('queue_')) return message.pairId.slice(6) || null
+  const publication = message.publicationId
+  const prefix = `conversation:${threadId}:`
+  if (typeof publication !== 'string' || !publication.startsWith(prefix) || !publication.endsWith(':input')) return null
+  const identity = publication.slice(prefix.length, -6)
+  const separator = identity.indexOf(':')
+  const generation = Number(identity.slice(0, separator))
+  if (separator < 1 || !Number.isSafeInteger(generation) || generation < 1 ||
+      (Number.isSafeInteger(threadGeneration) && generation !== threadGeneration)) return null
+  return identity.slice(separator + 1) || null
+}
+
 export function installRemoteProjection(state, projection, { merge = false } = {}) {
   if (projection?.protocolVersion !== 1 || !Array.isArray(projection.surfaces) || projection.surfaces.length > 500) throw protocolError()
   if (state.threadId && projection.threadId !== state.threadId) throw protocolError()

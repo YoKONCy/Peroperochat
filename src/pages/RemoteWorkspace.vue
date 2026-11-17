@@ -1,5 +1,5 @@
 <template>
-  <main class="remote-workspace remote-themed" data-ui="soft" :class="{ 'is-chat-room': tab === 'chat' || tab === 'conversations' && conversationHub?.roomId }" :data-background="background.active ? 'active' : undefined" :data-keyboard-open="keyboardOpen" :data-remote-theme="theme.mode" :data-decoration="theme.decoration" :data-bubble="theme.bubble" :data-reduce-motion="theme.reduceMotion" :style="[viewportStyle, theme.style]" :inert="drawer || detail || resource ? true : undefined">
+  <main class="remote-workspace remote-themed" data-ui="soft" :class="{ 'is-chat-room': tab === 'chat' || tab === 'conversations' && conversationHub?.roomId }" :data-background="background.active ? 'active' : undefined" :data-keyboard-open="keyboardOpen" :data-remote-theme="theme.mode" :data-journal="theme.mode" :data-decoration="theme.decoration" :data-bubble="theme.bubble" :data-reduce-motion="theme.reduceMotion" :style="[viewportStyle, theme.style]" :inert="drawer || detail || resource ? true : undefined">
     <AppBackgroundLayer :background="background" />
     <header v-if="tab === 'chat'" class="chat-room-header">
       <button type="button" class="chat-header-back" :aria-label="t('返回上一页')" @click="returnFromChat"><RoomIcon name="back" /></button>
@@ -66,9 +66,9 @@
 <Transition name="workspace-page" @before-leave="deactivatePage" @before-enter="activatePage" @after-enter="restorePagePosition">    <div v-if="tab === 'manage'" class="remote-section-body workspace-page" data-page="manage"><RemoteManager ref="manager" :key="`${selection?.agentId || remoteState.activeAgentId}:${selection?.threadId}`" :agent-id="selection?.agentId || remoteState.activeAgentId" :thread-id="selection?.threadId" :initial-section="managementSection" :initial-category="managementCategory" @category-change="managementCategory = $event" @connections="drawer = 'connections'" @section-change="managementSection = $event" @ready="restoreManagementPosition" @pending="showManagementPending" @resource="openResource" @thread="fromReference" @context="useWorkbenchContext" @tasks="changeTab('tasks')" @appearance="drawer = 'appearance'" /></div></Transition>
     <Transition v-for="pageId in ['tasks', 'library', 'inbox']" :key="pageId" name="workspace-page" @before-leave="deactivatePage" @before-enter="activatePage"><section v-if="visitedPages.includes(pageId)" v-show="tab === pageId" class="remote-section-body workspace-page" :data-page="pageId" :inert="tab !== pageId ? true : undefined"><RemoteTaskHub v-if="pageId === 'tasks'" :ref="setTaskHub" :active="tab === 'tasks' && !detail && !drawer && !resource" :agent-id="selection?.agentId || remoteState.activeAgentId" :thread-id="selection?.threadId" @manage="openManagement" @detail="detail = $event" @thread="fromReference" @pending="taskPending" @create-task="drawer = 'dispatch'" /><RemoteCollection v-else :initial-source="pageId === 'library' ? librarySource : 'files'" @source-change="pageId === 'library' && (librarySource = $event)" :active="tab === pageId" :kind="pageId" :agent-id="selection?.agentId || remoteState.activeAgentId" :thread-id="selection?.threadId" @manage="openManagement" @resource="openResource" @detail="detail = $event" @thread="fromReference" @pending="pending = $event; drawer = 'pending'" @create-task="drawer = 'dispatch'" /></section></Transition>
     </div>
-    <nav v-if="!keyboardOpen && tab !== 'chat' && !(tab === 'conversations' && conversationHub?.roomId)" class="remote-navigation" :aria-label="t('远程客户端导航')"><button v-for="item in tabs" :key="item.id" :disabled="navigationPending" :aria-current="(tab === item.id || item.id === 'chat' && tab === 'conversations') ? 'page' : undefined" :class="{ selected: tab === item.id || item.id === 'chat' && tab === 'conversations' }" @click="item.id === 'chat' ? showThreads() : changeTab(item.id)"><RoomIcon v-if="tab === item.id && theme.decoration !== 'none'" class="remote-nav-ornament" :name="theme.decoration" artwork /><span><RoomIcon :name="item.icon" /></span>{{ t(item.label) }}</button></nav>
+    <nav v-if="!keyboardOpen && tab !== 'chat' && !(tab === 'conversations' && conversationHub?.roomId)" class="remote-navigation" :aria-label="t('远程客户端导航')"><button v-for="item in tabs" :key="item.id" :disabled="navigationPending" :aria-current="(tab === item.id || item.id === 'chat' && tab === 'conversations') ? 'page' : undefined" :class="{ selected: tab === item.id || item.id === 'chat' && tab === 'conversations' }" @click="item.id === 'chat' ? showThreads() : changeTab(item.id)"><span><RoomIcon :name="item.icon" /></span>{{ t(item.label) }}</button></nav>
 
-    <RoomDrawer v-if="drawer === 'appearance'" variant="page" :title="t('显示偏好')" :subtitle="t('主题、配色与本机角色外观')" :tone="tone" @close="drawer = null"><RemoteAppearance :display="display" :character="appearance" :agent="agent" :ready="themeReady" :saving="themeSaving" :save-error="themeError" :save-character="saveCharacter" @change="changeDisplay" @save="persistTheme" /></RoomDrawer>
+    <RoomDrawer v-if="drawer === 'appearance'" variant="page" :title="t('显示偏好')" :subtitle="t('界面主题')" :tone="tone" @close="drawer = null"><RemoteAppearance :display="display" :character="appearance" :agent="agent" :ready="themeReady" :saving="themeSaving" :save-error="themeError" :save-character="saveCharacter" @change="changeDisplay" @save="persistTheme" /></RoomDrawer>
     <RoomDrawer v-if="drawer === 'draft-recoveries'" :title="recoveryPreview?.title || t('保留的草稿')" :tone="tone" :busy="recoveryBusy" @close="drawer = null; recoveryPreview = null; recoveryNotice = ''; error = ''">
       <RemoteFeedback :message="error" /><RemoteFeedback :message="recoveryNotice" tone="success" />
       <template v-if="!recoveryPreview"><p class="remote-help">{{ t('原会话已不可用，未发送的内容留在这里。') }}</p><div class="remote-record-list"><button v-for="item in recoveredDrafts" :key="JSON.stringify([item.agentId, item.threadId])" class="remote-record" :disabled="recoveryBusy" @click="openRecoveredDraft(item)"><RoomIcon name="edit" /><span><strong>{{ item.title || t('保留的草稿') }}</strong><small>{{ remoteState.agents.find(agent => agent.id === item.agentId)?.name || t('角色') }}</small></span><RoomIcon name="next" /></button></div><p v-if="!recoveredDrafts.length" class="room-empty">{{ t('没有保留的草稿') }}</p></template>
@@ -138,6 +138,8 @@
 
 <script setup>
 import { computed, ref, reactive, watch, nextTick, onMounted, onBeforeUnmount } from 'vue'
+import { useMeasuredTextarea } from '../composables/useMeasuredTextarea'
+import { findReadingAnchor } from '../utils/chatScroll'
 import { useRouter, useRoute } from 'vue-router'
 import RemoteFeedback from '../components/remote/RemoteFeedback.vue'
 import AppBackgroundLayer from '../components/companion/AppBackgroundLayer.vue'
@@ -177,6 +179,7 @@ import { useRoomViewport } from '../composables/useRoomViewport'
 import { currentToken, assertToken } from '../stores/mode'
 import { remoteClient, remoteConnections } from '../services/remote'
 import { readPresentation, writePresentation } from '../services/remotePresentation'
+import { remoteUserSubmissionId } from '../services/remoteSurface'
 import { uploadRemoteFile } from '../services/remoteMedia'
 import { remoteConversationPageSize, remoteState, remoteViews, remoteExecutions, remoteOutgoingMessages, remoteThreadGenerations, stageRemoteChat, remotePendingRequests, remoteNotifications, remoteUnavailableThreads, focusRemoteThread, suspendRemote, retryRemoteThreadReads, retireRemoteThread, readRemote, sendRemoteChat, performRemote, initializeRemote, reconnectRemote, resumeRemote, reconcileRemotePendingRequests, dismissRemoteRequest, refreshRemoteNotifications, refreshRemotePendingRequests } from '../stores/remote'
 import { remoteItems } from '../utils/remoteMarkdown'
@@ -218,6 +221,7 @@ const draft = ref(''), attachments = ref([]), pages = ref([]), loading = ref(fal
 const error = ref(''), storageError = ref(''), uploading = ref(false), stopping = ref(false), reconnecting = ref(false), creating = ref(false), mutating = ref(false)
 const queuePanel = ref(null), chatStage = ref(null), composerDock = ref(null), copiedMessage = ref(null)
 const transcript = ref(null), composer = ref(null), fileInput = ref(null), atEnd = ref(true), historyWindow = ref(false)
+const resizeComposer = useMeasuredTextarea(composer, () => draft.value)
 const appearance = reactive(defaultCharacterAppearance())
 const cg = computed(() => characterCg(agent.value, appearance))
 const changingInteraction = ref(false), taskTitle = ref(''), taskInstruction = ref(''), dispatching = ref(false)
@@ -251,7 +255,7 @@ const agent = computed(() => {
   const detail = remoteViews.get(JSON.stringify({ kind: 'agent', id }))?.data
   return { id, name: id, ...detail, ...remoteState.agents.find(item => item.id === id) }
 })
-const { display, theme, background, ready: themeReady, saving: themeSaving, error: themeError, restore: restoreTheme, save: persistTheme } = useRemoteTheme(appearance, computed(() => agent.value?.id))
+const { display, theme, background, ready: themeReady, saving: themeSaving, error: themeError, restore: restoreTheme, save: persistTheme } = useRemoteTheme(computed(() => agent.value?.id))
 const tone = computed(() => theme.value.mode === 'dark' ? 'nana' : 'pero')
 const selectedThread = computed(() => remoteViews.get(JSON.stringify({ kind: 'thread', id: selection.value?.threadId }))?.data?.thread || {})
 const interactionMode = computed(() => selection.value ? remoteViews.get(JSON.stringify({ kind: 'thread', id: selection.value.threadId }))?.data?.thread?.interactionMode || 'chat' : 'chat')
@@ -303,13 +307,17 @@ const rows = computed(() => {
     }
   }
   const channel = remoteViews.get(JSON.stringify({ kind: 'thread', id: selection.value?.threadId }))?.data?.thread?.channel
+  const threadId = selection.value?.threadId
+  const threadGeneration = remoteThreadGenerations.get(threadId)
   const output = [...descriptors.values()].filter(surface => !deleted.has(surface.messageId)).map(surface => {
     const message = messages.get(surface.messageId)
-    return { surface, message, outgoing: null, key: message?.role === 'user' && message.pairId ? `user:${message.pairId}` : surface.surfaceId, role: message?.role || 'assistant', owner: isLocalOwnerMessage({ ...message, channel }), timestamp: message?.timestamp, cursor: cursors.get(surface.surfaceId) || null }
+    const submissionId = remoteUserSubmissionId(message, threadId, threadGeneration)
+    return { surface, message, outgoing: null, key: submissionId ? `user:queue_${submissionId}` : surface.surfaceId, role: message?.role || 'assistant', owner: isLocalOwnerMessage({ ...message, channel }), timestamp: message?.timestamp, cursor: cursors.get(surface.surfaceId) || null }
   })
-  const confirmed = new Set([...messages.values()].map(message => message.pairId))
+  const confirmed = new Set([...messages.values()].filter(message => !deleted.has(message.messageId))
+    .map(message => remoteUserSubmissionId(message, threadId, threadGeneration)).filter(Boolean))
   const outgoing = historyWindow.value ? [] : [...remoteOutgoingMessages.values()]
-    .filter(message => message.threadId === selection.value?.threadId && !confirmed.has(`queue_${message.requestId}`))
+    .filter(message => message.threadId === threadId && !confirmed.has(message.requestId))
     .map(message => ({
       key: `user:queue_${message.requestId}`, role: 'user', owner: true, timestamp: message.createdAt, cursor: null,
       outgoing: message, message: null,
@@ -350,7 +358,7 @@ async function saveCharacter(value) {
   Object.assign(appearance, saved.data)
 }
 function changeDisplay({ key, value }) {
-  if (!['theme', 'palette', 'showCg', 'reduceMotion', 'roleStyle', 'fontSize'].includes(key)) return
+  if (!['theme', 'showCg', 'reduceMotion', 'fontSize'].includes(key)) return
   if (key === 'fontSize' && (!Number.isInteger(value) || value < 13 || value > 18)) return
   display[key] = value
   persistTheme()
@@ -403,9 +411,8 @@ function captureReading() {
   const list = transcript.value
   if (!list || !selection.value || suppressScroll || tab.value !== 'chat') return
   const end = list.scrollHeight - list.scrollTop - list.clientHeight < 72
-  const top = list.getBoundingClientRect().top
-  const visible = [...list.querySelectorAll('[data-anchor]')].find(element => element.getBoundingClientRect().bottom > top + 4)
-  reading = { ...reading, atEnd: end && !historyWindow.value, anchor: visible?.dataset.anchor || null, offset: visible ? visible.getBoundingClientRect().top - top : 0, cursor: visible?.dataset.cursor || null }
+  const visible = findReadingAnchor(list, '[data-anchor]')
+  reading = { ...reading, atEnd: end && !historyWindow.value, anchor: visible?.element.dataset.anchor || null, offset: visible?.offset || 0, cursor: visible?.element.dataset.cursor || null }
   atEnd.value = end
 }
 async function persistCurrent() {
@@ -430,7 +437,6 @@ async function prepareModeSwitch() {
 function persistLater() { clearTimeout(draftTimer); draftTimer = setTimeout(() => persistCurrent().catch(() => {}), 280) }
 function retryPersist() { if (remoteUnavailableThreads.has(selection.value?.threadId)) { retirementError.value = null; leaveUnavailableConversation() } else persistCurrent().catch(() => {}) }
 function draftChanged() { reading.editId = crypto.randomUUID(); reading.sendRequestId = null; persistLater(); resizeComposer() }
-function resizeComposer() { if (!composer.value) return; composer.value.style.height = 'auto'; composer.value.style.height = `${Math.min(composer.value.scrollHeight, 112)}px` }
 function onScroll() { if (suppressScroll) return; readingVersion++; captureReading(); clearTimeout(scrollTimer); scrollTimer = setTimeout(() => persistCurrent().catch(() => {}), 450) }
 
 async function restoreScroll(saved = reading) {
@@ -990,7 +996,7 @@ watch(() => [...remoteExecutions.values()].map(item => `${item.requestId}:${item
     }
   }
 })
-watch(() => rows.value.map(row => `${row.surface.surfaceId}:${row.surface.revision}`).join('|'), async () => { if (atEnd.value && !historyWindow.value && !loading.value && tab.value === 'chat') await restoreScroll({ ...reading, atEnd: true }) })
+watch(() => rows.value.map(row => `${row.surface.surfaceId}:${row.surface.revision}`).join('|'), contentResized)
 async function verifySelected() {
   clearTimeout(verificationTimer)
   if (!selection.value || !online.value || disposed || remoteUnavailableThreads.has(selection.value.threadId)) return
@@ -1025,7 +1031,7 @@ watch([() => remoteUnavailableThreads.has(selection.value?.threadId), tab, uploa
   verified.value = false
   if (!navigationPending.value && retirementError.value !== selection.value?.threadId && !uploading.value && !mutating.value && !changingInteraction.value && !dispatching.value && !sending.value && !queuePanel.value?.busy) leaveUnavailableConversation()
 })
-watch([draft, tab], () => nextTick(resizeComposer))
+watch(tab, () => nextTick(resizeComposer))
 watch([tab, drawer, () => selection.value?.threadId], () => { error.value = '' })
 watch(() => route.query.workspace, value => {
   if (routingReady && !approvedNavigations && value !== tab.value) changeTab(typeof value === 'string' ? value : 'home', { fromHistory: true })

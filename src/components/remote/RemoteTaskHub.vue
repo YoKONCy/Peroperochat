@@ -1,7 +1,7 @@
 <template>
   <section class="phase2 phase-task-hub task-list-first">
     <header class="phase-hub-heading">
-      <span><h1>{{ tr('任务与安排') }}</h1></span>
+      <span><h1>{{ tr('任务') }}</h1></span>
       <div v-if="view !== 'reminders'" class="task-heading-actions">
         <button type="button" class="room-icon-button" :disabled="tasks?.loading" :aria-label="tr('刷新')" @click="tasks?.reload()"><RemoteIcon name="refresh" /></button>
         <button type="button" class="room-icon-button" :disabled="!online" :aria-label="tr('新任务')" @click="$emit('create-task')"><RemoteIcon name="plus" /></button>

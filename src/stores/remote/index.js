@@ -1,7 +1,7 @@
 import { reactive, shallowReactive } from 'vue'
 import { remoteClient } from '../../services/remote'
 import { currentToken, assertToken, onModeInvalidated } from '../mode'
-import { applyRemoteFrame, createRemoteSurfaceState, installRemoteProjection } from '../../services/remoteSurface'
+import { applyRemoteFrame, createRemoteSurfaceState, installRemoteProjection, remoteUserSubmissionId } from '../../services/remoteSurface'
 import { remoteFeedbackMessage } from '../../services/remoteFeedback.js'
 import { quietlyRefreshRemoteUserAvatar } from '../../services/remoteUserAvatar'
 import { invalidateAllRemoteAvatars } from '../../services/remoteMedia'
@@ -666,9 +666,11 @@ export async function sendRemoteChat(input, { requestId = crypto.randomUUID() } 
 
 function reconcileOutgoingMessages(snapshot) {
   if (!snapshot?.threadId) return
-  const confirmed = new Set((snapshot?.messages || []).map(message => message.pairId))
+  const deleted = new Set(snapshot.deletedMessageIds || [])
+  const confirmed = new Set((snapshot.messages || []).filter(message => !deleted.has(message.messageId))
+    .map(message => remoteUserSubmissionId(message, snapshot.threadId, snapshot.threadGeneration)).filter(Boolean))
   for (const [id, message] of remoteOutgoingMessages) {
-    if (message.threadId === snapshot.threadId && confirmed.has(`queue_${id}`)) remoteOutgoingMessages.delete(id)
+    if (message.threadId === snapshot.threadId && confirmed.has(id)) remoteOutgoingMessages.delete(id)
   }
 }
 function trackThreadGeneration(threadId, value, reset = false) {

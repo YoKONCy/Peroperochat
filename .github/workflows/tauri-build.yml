@@ -202,14 +202,7 @@ jobs:
             ## PeroperoChat v${{ steps.version.outputs.version }}
 
             ### 本次更新
-            - 按暗色设计稿优化八套配色，区分页面、内嵌区、卡片与浮层，保留角色自定义颜色
-            - 统一聊天、管理、任务、资料和模型配置的暗色材质，减轻厚底边与灰白光晕
-            - 移除聊天输入栏中模型、思考选择入口的多余底板，保留图标、下拉指示与交互反馈
-            - 改善弹层、轻提示与文件操作按钮的暗色对比度，调整按钮按压反馈
-
-            ### 验证情况
-            - 本地前端 122 项、Rust 后端 112 项测试通过；未进行本地应用构建
-            - 暗色配色、窄屏排版与交互效果仍需真机视觉验收
+            [查看 v${{ steps.version.outputs.version }} 更新记录](${{ github.server_url }}/${{ github.repository }}/blob/${{ github.sha }}/docs/BUILD_AND_RELEASE.md#5-版本演进与待联调范围)
 
             ### 下载
             - `PeroperoChat-v${{ steps.version.outputs.version }}-arm64.apk` — Android ARM64 安装包

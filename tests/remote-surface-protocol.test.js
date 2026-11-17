@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { createRemoteSurfaceState, applyRemoteFrame, installRemoteProjection } from '../src/services/remoteSurface.js'
+import { createRemoteSurfaceState, applyRemoteFrame, installRemoteProjection, remoteUserSubmissionId } from '../src/services/remoteSurface.js'
 
 function snapshot(generation, messages, deletedMessageIds = []) {
   return {
@@ -17,6 +17,24 @@ function frame(type, projection) {
     threadGeneration: projection.threadGeneration, operationId: `${type}:1`, sequence: 1, revision: 1,
     operation: { type, snapshot: projection } }
 }
+
+test('主线发布与侧线消息对均按提交身份确认用户输入，失败结算也能确认', () => {
+  const state = createRemoteSurfaceState()
+  const user = { messageId: '1', threadId: 'thread-a', role: 'user', pairId: null,
+    publicationId: 'conversation:thread-a:3:request-a:input', revision: 1, content: '你好呀' }
+  const failure = { messageId: 'execution:failed', threadId: 'thread-a', role: 'assistant',
+    revision: 1, content: '', failureMessage: 'HTTP_400_INVALID_TOOL_SCHEMA' }
+  applyRemoteFrame(state, frame('surface.settled', snapshot(3, [user, failure])))
+  const confirmed = [...state.messages.values()].map(message => remoteUserSubmissionId(message, 'thread-a', 3))
+  assert.deepEqual(confirmed, ['request-a', null])
+  assert.equal(remoteUserSubmissionId({ ...user, pairId: 'queue_side-request', publicationId: null }, 'thread-a', 3), 'side-request')
+  assert.equal(remoteUserSubmissionId({ ...user, publicationId: null }, 'thread-a', 3), null)
+  assert.equal(remoteUserSubmissionId({ ...user, role: 'assistant' }, 'thread-a', 3), null)
+  assert.equal(remoteUserSubmissionId(user, 'thread-b', 3), null)
+  assert.equal(remoteUserSubmissionId(user, 'thread-a', 4), null)
+  assert.equal(remoteUserSubmissionId({ ...user, publicationId: 'conversation:thread-a:x:request-a:input' }, 'thread-a', 3), null)
+  assert.equal(remoteUserSubmissionId({ ...user, publicationId: 'conversation:thread-a:3:request-a:final' }, 'thread-a', 3), null)
+})
 
 test('发布与结算保留消息身份、角色及修订，重复回执不会生成重复记录', () => {
   const state = createRemoteSurfaceState()

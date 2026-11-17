@@ -1,6 +1,6 @@
 <template>
   <section class="remote-manager remote-management-shell phase-management-shell phase2">
-    <header class="remote-manager-heading"><button v-if="section || managementHome?.hasSubpage" class="room-icon-button" :aria-label="t('返回')" :disabled="writing" @click="askLeave"><RemoteIcon name="back" /></button><span><small>{{ t(section ? categoryInfo?.title || areaLabel : '管理', [], 'renewal') }}</small><h1>{{ t(section?.label || categoryInfo?.title || '管理', [], 'renewal') }}</h1></span><button v-if="section && !section.special" class="room-icon-button" :aria-label="t('刷新')" :disabled="busy" @click="requestReload"><RemoteIcon name="refresh" /></button></header>
+    <header class="remote-manager-heading"><button v-if="section || managementHome?.hasSubpage" class="room-icon-button" :aria-label="t('返回')" :disabled="writing" @click="askLeave"><RemoteIcon name="back" /></button><span><small v-if="section || categoryInfo">{{ t(section ? categoryInfo?.title || areaLabel : '管理', [], 'renewal') }}</small><h1>{{ t(section?.label || categoryInfo?.title || '管理', [], 'renewal') }}</h1></span><JournalPortrait v-if="!section && !managementHome?.hasSubpage" :label="t('查看 Pero 手绘')" /><button v-if="section && !section.special" class="room-icon-button" :aria-label="t('刷新')" :disabled="busy" @click="requestReload"><RemoteIcon name="refresh" /></button></header>
     <RemoteFeedback v-if="!selected && !dialog" :message="error" /><RemoteFeedback :message="notice" tone="success" />
     <RemoteUserAvatarSettings v-if="section?.id === 'user'" :disabled="busy || unresolved" @pending="$emit('pending')" />
     <button v-if="section?.id === 'user'" type="button" class="phase-destination-button answer-preferences-entry" :disabled="busy" @click="prefillOnly = false; answerPreferencesOpen = true"><RemoteIcon name="shield" /><span>{{ t('回答偏好', [], 'answer-preferences') }}<small>{{ t('健全模式与回答预填充', [], 'answer-preferences') }}</small></span><RemoteIcon name="next" /></button>
@@ -51,6 +51,7 @@ import RemoteIcon from './RemoteIcon.vue'
 import RemoteAction from './RemoteAction.vue'
 import RemoteAvatar from './RemoteAvatar.vue'
 import RemoteSettingsForm from './RemoteSettingsForm.vue'
+import JournalPortrait from '../companion/JournalPortrait.vue'
 import RemoteManagementHome from './RemoteManagementHome.vue'
 import RemoteInsights from './RemoteInsights.vue'
 import { t, setRemoteLocale, remoteChoiceLabel } from '../../i18n/remote'
@@ -148,7 +149,7 @@ let loadVersion = 0, loadJob = Promise.resolve()
 // 读取可被返回或切换分区取代：先等旧读取在检查点退出，再开始新的读取。
 function runLoad() { const job = loadJob.catch(() => {}).then(() => run(load)); loadJob = job; return job }
 function leave() { loadVersion++; search.value = ''; section.value = null; data.value = null; editor.value = null; selected.value = null; record.value = null; dialog.value = null; commandBody.value = {}; result.value = undefined; configModels.value = []; providerConnections.value = []; error.value = ''; notice.value = ''; commandBaseline.value = ''; resultTitle.value = ''; resultOperation.value = '' }
-async function open(item) { if (item.id === 'task-management') { emit('tasks'); return }; if (writing.value || !mobileSections.has(item.id)) return; leave(); homeCategory.value = remoteManagementGroups.find(group => group.items.some(entry => entry.id === item.id))?.id || null; section.value = ['usage', 'runtime'].includes(item.id) ? { ...item, special: true } : item; page.value = 1; filters.value = { ...item.params }; await runLoad() }
+async function open(item) { if (item.id === 'task-management') { emit('tasks'); return }; if (writing.value || !mobileSections.has(item.id)) return; leave(); section.value = ['usage', 'runtime'].includes(item.id) ? { ...item, special: true } : item; page.value = 1; filters.value = { ...item.params }; await runLoad() }
 async function load() {
   const item = section.value, request = loadVersion
   // 返回或切换分区后，在途读取在下一个检查点退出，不把旧分区数据写回页面。

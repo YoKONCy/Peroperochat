@@ -1,18 +1,19 @@
 <template>
-  <div class="app companion-surface" data-ui="soft" :class="{ 'standalone-design': isStandalone }" :data-background="isStandalone && localBackground.active ? 'active' : undefined" :data-tone="tone" :data-reduce-motion="isStandalone && !displayPreferences.motion" :style="isStandalone ? localStyle : undefined">
+  <div class="app companion-surface" data-ui="soft" :class="{ 'standalone-design': isStandalone }" :data-background="isStandalone && localBackground.active ? 'active' : undefined" :data-tone="tone" :data-journal="isStandalone ? localScheme : undefined" :data-reduce-motion="isStandalone && !displayPreferences.motion" :style="isStandalone ? localStyle : undefined">
     <AppBackgroundLayer v-if="isStandalone && route.path !== '/'" :background="localBackground" />
     <div v-if="contentReady" class="app-mode-content" :inert="transitionVisible ? true : undefined" :aria-hidden="transitionVisible ? true : undefined">
       <router-view v-if="isStandalone" v-slot="{ Component }"><Transition name="app-route" mode="out-in"><component :is="Component" :key="route.path" /></Transition></router-view>
       <RemoteWorkspace v-else-if="isRemote" :key="`${modeState.snapshot.installationId}:${modeState.snapshot.activationEpoch}:${modeState.snapshot.activeTarget.profileId}`" />
     </div>
     <Transition name="mode-curtain"><ModeTransition v-if="transitionVisible" :waiting="transitionWaiting" /></Transition>
-    <FeedbackBubbles :fallback-theme="{ style: localStyle, reduceMotion: !displayPreferences.motion }" />
+    <FeedbackBubbles :fallback-theme="{ mode: localScheme, style: localStyle, reduceMotion: !displayPreferences.motion }" />
   </div>
 </template>
 
 <script setup>
 import { computed, provide, watch } from 'vue'
 import { useRoute } from 'vue-router'
+import { setJournalChrome } from './utils/uiPalette'
 import { activeAgentId } from './stores/agents'
 import { isStandalone, isRemote, modeState } from './stores/mode'
 import { remoteState } from './stores/remote'
@@ -27,6 +28,7 @@ import './styles/companion.css'
 import './styles/controls.css'
 import './styles/standalone.css'
 import './styles/soft/index.css'
+import './styles/journal.css'
 import { useSoftInteractions } from './composables/useSoftInteractions'
 import { appearanceStyle, displayPreferences, LOCAL_APPEARANCE } from './stores/appearance'
 const tone = computed(() => isStandalone.value && activeAgentId.value === 'nana' ? 'nana' : 'pero')
@@ -37,10 +39,12 @@ const contentReady = computed(() => isRemote.value || isStandalone.value && !mod
 const transitionLoading = computed(() => modeState.loading || modeState.restoring || !!modeState.snapshot && ['activating', 'quiescing'].includes(modeState.snapshot.phase) || isRemote.value && (remoteState.initializing && !remoteState.hasReadableData || remoteState.restoringView))
 const transitionNeeded = computed(() => !contentReady.value || modeState.loading || modeState.restoring)
 const { visible: transitionVisible, waiting: transitionWaiting } = useModeTransition(transitionNeeded, transitionLoading)
-const localBackground = useAppBackground(activeAgentId, computed(() => 'light'), 'standalone')
+const localScheme = computed(() => displayPreferences.value.palette === 'dark' ? 'dark' : 'light')
+watch([isStandalone, localScheme], ([local, scheme]) => { if (local) setJournalChrome(scheme) }, { immediate: true })
+const localBackground = useAppBackground(activeAgentId, localScheme, 'standalone')
 provide(APP_BACKGROUND, localBackground)
-const localStyle = computed(() => ({ ...appearanceStyle(activeAgentId.value), ...localBackground.style }))
-provide(LOCAL_APPEARANCE, computed(() => isStandalone.value ? { style: localStyle.value, reduceMotion: !displayPreferences.value.motion } : null))
+const localStyle = computed(() => ({ ...appearanceStyle(), ...localBackground.style }))
+provide(LOCAL_APPEARANCE, computed(() => isStandalone.value ? { mode: localScheme.value, style: localStyle.value, reduceMotion: !displayPreferences.value.motion } : null))
 watch(tone, value => { document.documentElement.dataset.tone = value }, { immediate: true })
 watch(() => [route.fullPath, modeState.snapshot?.activationEpoch, modeState.snapshot?.phase], clearFeedback, { flush: 'sync' })
 </script>
@@ -50,7 +54,7 @@ watch(() => [route.fullPath, modeState.snapshot?.activationEpoch, modeState.snap
 * { box-sizing: border-box }
 /* 整页只允许平移滚动；图片与文档使用各自的内容缩放控件。 */
 html, body { touch-action: pan-x pan-y; }
-body { margin: 0; background-color: var(--room-page); }
+body { margin: 0; background-color: var(--journal-window,var(--room-page)); }
 .mode-curtain-leave-active { transition: opacity .22s ease; pointer-events: none; }
 .mode-curtain-leave-to { opacity: 0; }
 .app-route-enter-active{transition:opacity 170ms ease,transform 210ms cubic-bezier(.2,.75,.25,1)}

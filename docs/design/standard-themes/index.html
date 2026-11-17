@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>PeroperoChat · 伙伴手帐设计稿</title>
+  <link rel="stylesheet" href="studio.css">
+  <link rel="stylesheet" href="mobile.css">
+  <link rel="stylesheet" href="reading.css">
+  <script defer src="icons.js"></script>
+  <script defer src="art.js"></script>
+  <script defer src="system.js"></script>
+  <script defer src="reading.js"></script>
+  <script defer src="screens.js"></script>
+  <script defer src="prototype.js"></script>
+</head>
+<body>
+  <header class="mast"><div class="brand"><span id="brand-icon"></span>PeroperoChat</div><span class="mast-line"></span><span class="mast-title">伙伴手帐</span><span class="mast-end">本地交互预览</span></header>
+  <div class="workbench">
+    <aside class="rail">
+      <div class="rail-tools"><label for="space">运行模式</label><select id="space"><option value="remote">infOS 客户端</option><option value="local">独立空间</option></select></div>
+      <nav id="directory" aria-label="设计稿目录"></nav>
+      <label class="compact-directory">页面<select id="page-choice"></select></label>
+    </aside>
+    <main class="canvas">
+      <header class="canvas-head">
+        <div><span id="section-name"></span><h1 id="page-name"></h1></div>
+        <div class="board-controls">
+          <label class="theme-control" hidden>页面状态<select id="scenario"><option>正常</option></select></label>
+          <label class="theme-control">预览主题<select id="theme-choice"><option value="light">标准浅色</option><option value="dark">标准暗色</option></select></label>
+        </div>
+      </header>
+      <div class="spread">
+        <section class="specimen"><header class="caption"><strong id="primary-name"></strong><span>交互预览</span></header><div id="primary" class="phone"></div></section>
+        <section class="specimen comparison"><header class="caption"><strong id="compare-name"></strong><span>同页对照</span></header><div id="comparison" class="phone" inert aria-hidden="true"></div></section>
+      </div>
+      <footer class="canvas-foot"><span id="page-note"></span><span>示例数据 · 仅在本页生效</span></footer>
+    </main>
+  </div>
+</body>
+</html>

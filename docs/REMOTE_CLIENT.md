@@ -47,7 +47,7 @@ phase / switchId / lastError
 - **平台凭据存储**：连接密钥分别托管于 **Windows DPAPI / Android Keystore / iOS Keychain**，不进入 Vue Store、Web Storage 或业务 JSON 备份；Android 云备份自动排除控制库、远程缓存、加密凭据与提醒调度缓存。
 - **投影缓存配额**：正文投影最多保留 64 键 / 32 MiB（单条超 8 MiB 跳过缓存），对话/队列/任务投影独立拥有 64 MiB 配额；历史分页默认每次 24 条，触发大小预算时自动减半重读。
 - **发送幂等与状态同步**：写请求发送前先落盘不含 `requestId` 的内容指纹，防止同内容未决期间重复创建新请求；重启或切换模式后，遗留的 `sending` 自动转为 `unknown` 等待人工或对账确认。原生错误携带 `outcome`（`not_sent` / `rejected` / `failed` / `unknown`）。
-- **队列回执与断线核对**：聊天消息通过持久客户端 UUID 提交，接收回执以服务端队列快照为准；`remote_reconcile_request` 根据队列 UUID、持久 `pairId` 或 `messageId` 在前台定期同步断线后状态，重发复用同一 UUID 交由服务端队列去重。本机在回执前展示临时发送项并与正式消息关联，Surface 结算帧按代次与删除墓碑过滤延迟数据。
+- **队列回执与断线核对**：聊天消息通过持久客户端 UUID 提交，接收回执以服务端队列快照为准；`remote_reconcile_request` 根据队列 UUID、主线输入的 `publicationId`、侧线的 `pairId` 或持久 `messageId` 在前台定期同步断线后状态，重发复用同一 UUID 交由服务端队列去重。主线输入发布身份为 `conversation:<threadId>:<generation>:<requestId>:input`，原生核对与前端合并均校验所属会话及代次。本机临时发送项在正式用户消息到达后移除，模型失败结算同样确认已落盘输入，Surface 结算帧按代次与删除墓碑过滤延迟数据。
 - **未知状态处理**：`remote_review_request`（保留兼容命名）支持一键忽略未知操作记录，备注可留空，同时兼容读取历史 `reviewed` 状态记录。
 
 ## 2. IPC 与前端服务
@@ -103,9 +103,9 @@ phase / switchId / lastError
 ### 3.1 主题、本地外观与图标资源
 
 - `.remote-themed` 限定 `remote-theme.css` 作用范围，外观状态按连接与角色分别持久化于 `client.sqlite`（`{ kind: 'appearance' }` 与 `{ kind: 'character', agentId }`），不与独立模式状态混淆。
-- 支持 **浅色 / 暗色 / 跟随系统**、**8 套主题配色** 及 **减少动效** 开关。
-- **本机角色定制**：支持导入角色样式 JSON（`schemaVersion: 1`，上限 32 KiB，含 `lightAccent`、`darkAccent`、`secondary`、`bubble`、`decoration`，Rust 严格校验枚举并拒绝外链脚本与任意 CSS）与本地角色 CG（PNG/JPEG/WebP ≤ 2 MiB），仅作用本机界面呈现。
-- **矢量图标安全**：`RemoteIcon.vue` 仅渲染 `src/constants/remoteArtwork.js` 内置的受信任矢量常数，不解析来自远端的任意 SVG 代码。
+- 标准浅色和标准暗色共用手帐排版与图标。infOS 模式可跟随系统，字号、减少动效、角色 CG 与背景仍可单独调整。
+- 可为角色选择本机 CG，支持 PNG、JPEG、WebP，每张上限 2 MiB。外观页的「消息排版示例」可以打开图文、路线对照和代码示例。
+- `RemoteIcon.vue` 使用随客户端打包的手帐图标和内置矢量素材。
 
 ## 4. 增量富内容渲染
 
@@ -166,7 +166,7 @@ flowchart LR
 ### 会话、技能与插件扩展
 
 - **主会话与侧会话**：列表依据 `threadKind` 区分展示，均支持持续对话。主会话经 `threads/latest` 打开并依据 `canReset` 提供重置；侧会话依据 `canDelete` / `canFork` 提供删除与按消息分支创建。发送携带读取到的 `expectedGeneration`，清空主会话后作废在途读票据防止旧投影回流。
-- **Skills 与 SelfMind**：会话级设置从 `/chat/threads/:id/skills` 读取并更新 `enabledSkills`；全局技能目录支持完整说明查看、依赖检查、服务器目录导入与重新扫描。SelfMind 快捷入口直接映射提示词工作区 `components/expression/selfminding`，复用同一校验、草稿保存与发布流程。
+- **Skills 与 SelfMind**：会话级设置从 `/chat/threads/:id/skills` 读取并更新 `enabledSkills`；全局技能目录支持完整说明查看、依赖检查、服务器目录导入与重新扫描。「回复前的叮嘱」直接编辑提示词工作区 `components/expression/selfminding`，复用同一校验、草稿保存与发布流程。
 - **插件包（`/packages`）**：支持上传安装最高 **20 MiB** 的 ZIP 插件包，按版本摘要授权并支持启停、重载、重审、回退与卸载；原生宿主组件负责渲染插件 `integrations` 声明式配置面板与 `tool-groups` 开关，提交保留服务端 `revision`。敏感配置值仅在内存中流转，审计记录只记操作指纹。
 
 ### 管理能力覆盖

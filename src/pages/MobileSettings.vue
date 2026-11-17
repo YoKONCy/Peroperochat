@@ -1,5 +1,6 @@
 <template>
-  <CompanionPage class="settings-page" title="设置" subtitle="模型、偏好与应用数据" @back="goBack">
+  <CompanionPage class="settings-page" title="设置" :show-partner="tab !== 'overview'" @back="goBack">
+    <template v-if="tab === 'overview'" #actions><JournalPortrait label="查看 Pero 手绘" /></template>
     <div class="settings-layout" :class="{ 'settings-layout--overview': tab === 'overview' }">
       <aside v-show="tab !== 'overview'" class="settings-navigation">
         <div class="settings-partner"><CharacterAvatar class="settings-portrait" :src="agent.avatar" :label="agent.name" /><div><CompanionEmblem /><strong>{{ agent.name }}</strong><small>当前伙伴</small></div></div>
@@ -14,12 +15,19 @@
           <p v-if="loading" class="control-hint" role="status">正在读取设置…</p>
 
           <div v-if="tab === 'overview'" class="settings-overview">
-            <button class="settings-overview-profile" @click="router.push('/roles')"><CharacterAvatar :src="agent.avatar" :label="agent.name" /><span><strong>{{ agent.name }}</strong><small>独立模式</small><small>每一位伙伴，都有自己的日常</small></span><RoomIcon name="arrow" /></button>
-            <section class="settings-overview-group"><button v-for="item in categories.filter(item => ['api', 'model', 'user', 'role'].includes(item.id))" :key="item.id" :data-ui-tone="uiSectionTone(item.id)" @click="tab = item.id"><span class="overview-symbol"><RoomIcon :name="item.icon" /></span><span><strong>{{ item.label }}</strong><small>{{ item.description }}</small></span><RoomIcon name="arrow" /></button></section>
-            <section class="settings-overview-group"><button data-ui-tone="violet" @click="tab = 'appearance'"><span class="overview-symbol"><RoomIcon name="palette" /></span><span><strong>显示与主题</strong><small>{{ displayPreferences.displayMode === 'live2d' ? '通用 Pio Live2D' : '静态立绘与 CG' }} · 配色与玻璃材质</small></span><i class="overview-color" /><RoomIcon name="arrow" /></button></section>
-            <section class="settings-overview-group"><button @click="router.push({ path: '/', query: { panel: 'remote' } })"><span class="overview-symbol"><RoomIcon name="remote" /></span><span><strong>运行模式与远程连接</strong><small>独立陪伴 / infOS 客户端</small></span><RoomIcon name="arrow" /></button></section>
-            <section class="settings-overview-group"><button @click="router.push({ path: '/', query: { panel: 'reminders' } })"><span class="overview-symbol"><RoomIcon name="bell" /></span><span><strong>日常提醒</strong><small>时间、待办与通知状态</small></span><RoomIcon name="arrow" /></button><button data-ui-tone="violet" @click="tab = 'memory'"><span class="overview-symbol"><RoomIcon name="diary" /></span><span><strong>日记</strong><small>与 {{ agent.name }} 的点滴记录</small></span><RoomIcon name="arrow" /></button></section>
-            <section class="settings-overview-group"><button data-ui-tone="amber" @click="tab = 'data'"><span class="overview-symbol"><RoomIcon name="document" /></span><span><strong>数据与备份</strong><small>导出、恢复与本地数据管理</small></span><RoomIcon name="arrow" /></button></section>
+            <button class="settings-overview-profile" @click="router.push('/roles')"><CharacterAvatar :src="agent.avatar" :label="agent.name" /><span><strong>{{ agent.name }}</strong><small>独立模式</small></span><RoomIcon name="arrow" /></button>
+            <section class="journal-settings"><h2 class="journal-heading">外观与设备</h2>
+              <button class="journal-setting" @click="tab = 'appearance'"><JournalStationery kind="theme" /><strong>显示与主题</strong><RoomIcon name="next" /></button>
+              <button class="journal-setting" @click="router.push({ path: '/', query: { panel: 'remote' } })"><RoomIcon name="remote" /><strong>连接与模式</strong><RoomIcon name="next" /></button>
+            </section>
+            <section class="journal-settings"><h2 class="journal-heading">角色与模型</h2>
+              <button v-for="item in categories.filter(item => ['api', 'model', 'user', 'role'].includes(item.id))" :key="item.id" class="journal-setting" @click="tab = item.id"><JournalStationery v-if="item.id === 'role'" kind="profile" /><RoomIcon v-else :name="item.icon" /><strong>{{ item.label }}</strong><RoomIcon name="next" /></button>
+            </section>
+            <section class="journal-settings"><h2 class="journal-heading">日常与数据</h2>
+              <button class="journal-setting" @click="router.push({ path: '/', query: { panel: 'reminders' } })"><RoomIcon name="bell" /><strong>日常提醒</strong><RoomIcon name="next" /></button>
+              <button class="journal-setting" @click="tab = 'memory'"><JournalStationery kind="notebook" /><strong>日记</strong><RoomIcon name="next" /></button>
+              <button class="journal-setting" @click="tab = 'data'"><RoomIcon name="document" /><strong>数据与备份</strong><RoomIcon name="next" /></button>
+            </section>
           </div>
           <RoomAppearanceSettings v-if="tab === 'appearance'" />
           <form v-if="tab === 'api'" @submit.prevent="saveApi">
@@ -72,6 +80,8 @@
 </template>
 
 <script setup>
+import JournalPortrait from '../components/companion/JournalPortrait.vue'
+import JournalStationery from '../components/companion/JournalStationery.vue'
 import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref } from 'vue'
 import { onBeforeRouteLeave, useRouter } from 'vue-router'
 import { appMessageBox as ElMessageBox } from '../services/appMessageBox'
@@ -87,10 +97,10 @@ import ReasoningIcon from '../components/companion/ReasoningIcon.vue'
 import { reasoningLevel } from '../utils/reasoningAppearance'
 import RoomSwitch from '../components/companion/RoomSwitch.vue'
 import RemoteModelNumber from '../components/remote/RemoteModelNumber.vue'
-import { uiSectionTone } from '../utils/uiPalette'
+
 import BrandIcon from '../components/companion/BrandIcon.vue'
 import RoomAppearanceSettings from '../components/companion/RoomAppearanceSettings.vue'
-import { displayPreferences } from '../stores/appearance'
+
 import { modelBrandDefinition, resolveModelBrand, resolveProviderBrand } from '../utils/modelBrands'
 import { AGENTS, activeAgentId, agentList } from '../stores/agents'
 import { getApiKey, getConfig, exportAllData, importAllData, resetAll } from '../api'
@@ -102,7 +112,7 @@ const tab = ref(router.currentRoute.value.query.section === 'data' ? 'data' : 'o
 function goBack() { if (tab.value === 'overview') router.push('/'); else tab.value = 'overview' }
 const categories = [
   { id: 'overview', label: '全部设置', icon: 'settings', description: '房间里的显示与使用偏好' },
-  { id: 'appearance', label: '显示与主题', icon: 'palette', description: '角色显示、配色与玻璃材质' },
+  { id: 'appearance', label: '显示与主题', icon: 'palette', description: '角色立绘、界面主题与背景' },
   { id: 'api', label: '模型连接', icon: 'connection', description: '选择聊天使用的服务、协议与模型' },
   { id: 'model', label: '回复偏好', icon: 'sliders', description: '调整回复风格、思考强度与长度' },
   { id: 'user', label: '个人资料', icon: 'profile', description: '让伙伴更了解你' },

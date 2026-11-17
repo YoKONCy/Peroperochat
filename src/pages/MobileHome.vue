@@ -47,7 +47,7 @@
         <button @click="drawer = 'reminders'"><RoomIcon name="bell" /><span><strong>提醒</strong><small>{{ reminderTotal ? `${reminderTotal} 件待办的小事` : '安排时间，查看或取消提醒' }}</small></span><RoomIcon name="arrow" /></button>
         <button @click="drawer = 'profile'"><RoomIcon name="profile" /><span><strong>关于 {{ agent.name }}</strong><small>此刻的心情与角色资料</small></span><RoomIcon name="arrow" /></button>
         <button @click="drawer = 'wardrobe'"><RoomIcon name="hanger" /><span><strong>衣柜</strong><small>更换角色服装</small></span><RoomIcon name="arrow" /></button>
-        <button @click="drawer = 'appearance'"><RoomIcon name="palette" /><span><strong>显示与主题</strong><small>Live2D、静态立绘与玻璃配色</small></span><RoomIcon name="arrow" /></button>
+        <button @click="drawer = 'appearance'"><RoomIcon name="palette" /><span><strong>显示与主题</strong><small>主题、立绘与房间背景</small></span><RoomIcon name="arrow" /></button>
         <button @click="navigate('/settings')"><RoomIcon name="settings" /><span><strong>设置</strong><small>模型连接与聊天偏好</small></span><RoomIcon name="arrow" /></button>
       </div>
     </RoomDrawer>

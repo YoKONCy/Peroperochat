@@ -6,7 +6,7 @@
       <RemoteSelect v-if="facilities.length > 1" v-model="facilityId" :label="t('选择据点')" :options="facilities.map(item => ({ value: String(item.id), label: item.name }))" :disabled="busy" />
       <label class="phase-search"><RemoteIcon name="search" /><input v-model="search" :placeholder="t('查找房间')" :aria-label="t('查找房间')" /></label>
       <h3 class="phase-section-title"><RemoteIcon name="home" />{{ t('房间') }}<button type="button" class="room-text-button" :disabled="busy || uncertain" @click="configure(facilities.length ? 'create' : 'facility')"><RemoteIcon name="plus" />{{ t(facilities.length ? '新房间' : '请先创建一个据点') }}</button></h3>
-      <div class="phase-room-grid"><button v-for="(room, index) in visibleRooms" :key="room.id" class="phase-room-tile" :data-ui-tone="index % 2 ? 'amber' : 'rose'" :disabled="busy" @click="enter(room)"><span class="chromatic-room-thumbnail"><RoomVignette :variant="index % 3" /></span><span class="chromatic-room-copy"><strong>{{ room.name }}</strong><span class="chromatic-room-description">{{ room.description || t('进入群聊') }}</span><span class="phase-room-avatars"><RemoteAvatar v-for="id in (room.agents || []).slice(0, 3)" :key="id" :id="id" :label="agentName(id)" fit="contain" /><small>{{ room.agents?.length ? t('{0} 位角色在场', [room.agents.length]) : t('暂时无人') }}</small></span></span><RemoteIcon name="next" /></button></div>
+      <div class="phase-room-grid"><button v-for="room in visibleRooms" :key="room.id" class="phase-room-tile" data-ui-tone="blue" :disabled="busy" @click="enter(room)"><span class="chromatic-room-thumbnail"><img v-if="roomPicture(room.name)" :src="roomPicture(room.name)" alt="" width="54" height="57" loading="lazy" decoding="async" /><RemoteIcon v-else name="home" /></span><span class="chromatic-room-copy"><strong>{{ room.name }}</strong><span class="chromatic-room-description">{{ room.description || t('进入群聊') }}</span><span class="phase-room-avatars"><RemoteAvatar v-for="id in (room.agents || []).slice(0, 3)" :key="id" :id="id" :label="agentName(id)" fit="contain" /><small>{{ room.agents?.length ? t('{0} 位角色在场', [room.agents.length]) : t('暂时无人') }}</small></span></span><RemoteIcon name="next" /></button></div>
       <p v-if="!visibleRooms.length && !busy" class="phase-empty">{{ t('没有找到对应内容') }}</p><button v-if="!rooms.length && !busy" class="room-secondary-button" @click="configure(facilities.length ? 'create' : 'facility')"><RemoteIcon name="plus" />{{ t('创建房间') }}</button>
       <details class="phase-fold"><summary><RemoteIcon name="shield" />{{ t('设施与管家') }}<RemoteIcon name="down" /></summary><div class="remote-purpose-actions"><RemoteAction icon="plus" :disabled="busy || uncertain" @click="configure('facility')">{{ t('创建设施') }}</RemoteAction><RemoteAction icon="settings" :disabled="busy || uncertain" @click="configure('butler')">{{ t('管家设置') }}</RemoteAction><RemoteAction icon="refresh" :disabled="busy" @click="run(load)">{{ t('刷新') }}</RemoteAction></div></details>
     </template>
@@ -14,12 +14,12 @@
       <header class="phase-room-heading"><button class="room-icon-button" :aria-label="t('返回')" :disabled="busy" @click="exitRoom"><RemoteIcon name="back" /></button><div><small>{{ selectedFacility?.name }} · {{ t('{0} 位角色在场', [members.length]) }}</small><h2>{{ current.name }}</h2></div><button class="room-icon-button" :aria-label="t('房间里的大家')" @click="operation = 'members'"><RemoteIcon name="people" /></button></header>
       <button v-if="environment.length" class="phase-room-environment" @click="configure('environment')"><RemoteIcon name="sun" /><span v-for="item in environment.slice(0, 2)" :key="item[0]">{{ item[1] }}</span><RemoteIcon name="down" /></button>
       <RemoteFeedback v-if="active" :message="uncertain ? t('发送结果待确认') : ''" :action-label="t('去核对')" @action="$emit('pending')" />
-      <div ref="history" class="phase-room-history" @scroll.passive="savePosition">
+      <div ref="history" class="phase-room-history" style="overflow-anchor: none" @scroll.passive="savePosition">
         <p v-if="loadingRoom && !projection" class="phase-empty" role="status">{{ t('正在读取…') }}</p>
         <p v-else-if="!rows.length" class="phase-empty">{{ t(members.length ? '这里还没有消息' : '先邀请角色进来，就能一起聊天。') }}<button v-if="!members.length" class="room-text-button" @click="configure('member')">{{ t('邀请角色') }}</button></p>
-        <article v-for="row in rows" :key="row.message.messageId" class="phase-group-message" :class="{ mine: row.message.role === 'user', system: row.message.role === 'system' }"><RemoteAvatar v-if="row.message.role === 'assistant'" :id="row.message.senderId" :label="agentName(row.message.senderId)" fit="contain" /><RemoteUserAvatar v-if="isLocalOwnerMessage({ ...row.message, channel: 'group', platform: 'stronghold' })" /><div><header><strong>{{ row.message.role === 'user' ? t('你') : agentName(row.message.senderId) }}</strong><time>{{ time(row.message.timestamp) }}</time><button v-if="row.message.role === 'user'" class="room-icon-button" :aria-label="t('删除这轮群聊')" :disabled="busy || uncertain" @click="deleting = row.message.messageId; configure('delete_message')"><RemoteIcon name="more" /></button></header><div class="phase-group-bubble"><RemoteSurface v-if="row.surface" :surface="row.surface" :disabled="!online || !active" @resource="$emit('resource', $event)" @updated="refreshProjection" @resize="followLatest" /><RemoteRichText v-else :source="row.message.content || ''" :node-id="'room-message-' + row.message.messageId" @resource="$emit('resource', $event)" /></div></div></article>
+        <article v-for="row in rows" :key="row.message.messageId" :data-chat-message="row.message.messageId" class="phase-group-message" :class="{ mine: row.message.role === 'user', system: row.message.role === 'system' }"><RemoteAvatar v-if="row.message.role === 'assistant'" :id="row.message.senderId" :label="agentName(row.message.senderId)" fit="contain" /><RemoteUserAvatar v-if="isLocalOwnerMessage({ ...row.message, channel: 'group', platform: 'stronghold' })" /><div><header><strong>{{ row.message.role === 'user' ? t('你') : agentName(row.message.senderId) }}</strong><time>{{ time(row.message.timestamp) }}</time><button v-if="row.message.role === 'user'" class="room-icon-button" :aria-label="t('删除这轮群聊')" :disabled="busy || uncertain" @click="deleting = row.message.messageId; configure('delete_message')"><RemoteIcon name="more" /></button></header><div class="phase-group-bubble"><RemoteSurface v-if="row.surface" :surface="row.surface" :disabled="!online || !active" @resource="$emit('resource', $event)" @updated="refreshProjection" @resize="followLatest" /><RemoteRichText v-else :source="row.message.content || ''" :node-id="'room-message-' + row.message.messageId" @resource="$emit('resource', $event)" @resize="followLatest" /></div></div></article>
         <div v-if="round" class="phase-group-round"><details><summary><span class="phase-dot" /><span>{{ roundLabel }}</span><small>{{ round.agents.filter(agent => ['completed', 'failed'].includes(agent.status)).length }} / {{ round.agents.length }}</small><RemoteIcon name="down" /></summary><div v-for="agent in round.agents" :key="agent.id" class="phase-round-member"><RemoteAvatar :id="agent.id" :label="agentName(agent.id)" /><span>{{ agentName(agent.id) }}</span><small>{{ t(agent.status === 'queued' ? '准备接话' : agent.status === 'tool' ? '正在使用工具' : agent.status === 'completed' ? '接话结束' : agent.status === 'failed' ? '回复失败' : '正在回复') }}</small></div></details></div>
-        <article v-for="agent in draftReplies" :key="agent.id" class="phase-group-message"><RemoteAvatar :id="agent.id" :label="agentName(agent.id)" /><div><header><strong>{{ agentName(agent.id) }}</strong><small>{{ t(agent.status === 'failed' ? '回复失败' : agent.status === 'completed' ? '接话结束' : '正在回复') }}</small></header><div class="phase-group-bubble"><RemoteStreamText :source="agent.draft" :active="agent.status === 'streaming'" @resource="$emit('resource', $event)" @resize="followLatest" /></div></div></article>
+        <article v-for="agent in draftReplies" :key="agent.id" :data-chat-message="`draft:${agent.id}`" class="phase-group-message"><RemoteAvatar :id="agent.id" :label="agentName(agent.id)" /><div><header><strong>{{ agentName(agent.id) }}</strong><small>{{ t(agent.status === 'failed' ? '回复失败' : agent.status === 'completed' ? '接话结束' : '正在回复') }}</small></header><div class="phase-group-bubble"><RemoteStreamText :source="agent.draft" :active="agent.status === 'streaming'" @resource="$emit('resource', $event)" @resize="followLatest" /></div></div></article>
       </div>
       <button v-if="!atEnd" class="phase-room-latest" @click="jumpLatest"><RemoteIcon name="down" />{{ t('回到最新') }}</button>
       <form class="phase-group-composer" @submit.prevent="send"><div class="phase-mention-row"><span>{{ t('这次想问') }}</span><button v-for="item in mentionOptions" :key="item.value" type="button" :class="{ selected: mention === item.value }" :aria-pressed="mention === item.value" :disabled="busy || loadingRoom" @click="mention = item.value; queueSave()"><RemoteAvatar v-if="!['', '@all'].includes(item.value)" :id="item.value" :label="item.label" />{{ item.label }}</button></div><div class="phase-compose-line"><textarea ref="composer" v-model="message" rows="1" maxlength="16000" :placeholder="t('和大家说点什么…')" :aria-label="t('群聊')" :disabled="busy || loadingRoom || !online" @input="editDraft" /><button class="room-primary-button" type="submit" :aria-label="t('发送')" :disabled="busy || loadingRoom || !online || uncertain || !enabledMembers.length || !message.trim()"><RemoteIcon name="send" /></button></div></form>
@@ -32,7 +32,9 @@
   </section>
 </template>
 <script setup>
-import { computed, ref, watch, nextTick, onMounted, onBeforeUnmount } from 'vue'
+import { computed, inject, ref, watch, nextTick, onMounted, onBeforeUnmount } from 'vue'
+import { useMeasuredTextarea } from '../../composables/useMeasuredTextarea'
+import { useChatScroll } from '../../composables/useChatScroll'
 import RemoteFeedback from './RemoteFeedback.vue'
 import RemoteIcon from './RemoteIcon.vue'
 import RemoteAvatar from './RemoteAvatar.vue'
@@ -44,7 +46,7 @@ import RemoteStreamText from './RemoteStreamText.vue'
 import RemoteAction from './RemoteAction.vue'
 import RemoteSelect from './RemoteSelect.vue'
 import RemoteFormSections from './RemoteFormSections.vue'
-import RoomVignette from './RoomVignette.vue'
+import { REMOTE_THEME } from '../../services/remoteTheme'
 import RoomDrawer from '../companion/RoomDrawer.vue'
 import { field, inferFields } from '../../services/remoteManagement'
 import { readPresentation, writePresentation } from '../../services/remotePresentation'
@@ -56,10 +58,18 @@ const props = defineProps({ agentId: String, active: { type: Boolean, default: t
 const emit = defineEmits(['pending', 'resource', 'room-change'])
 const { token, read, write, run, guard, busy, writing, error, unresolved } = useRemoteManagement()
 const rooms = ref([]), facilities = ref([]), current = ref(null), projection = ref(null), facilityId = ref(''), search = ref(''), message = ref(''), mention = ref(''), operation = ref(null), form = ref(/** @type {import('../../types/ui').DataRecord} */ ({})), baseline = ref('{}'), deleting = ref(''), discardOperation = ref(false), loadingRoom = ref(false), notice = ref(''), storageError = ref(''), history = ref(null), composer = ref(null), atEnd = ref(true), round = ref(null)
+const resizeComposer = useMeasuredTextarea(composer, () => message.value, 100)
+const chatScroll = useChatScroll(history, atEnd, () => props.active && !loadingRoom.value)
 let disposed = false, timer = null, saveTimer = null, reading = false, roomVersion = 0, projectionRequest = 0, draftRequestId = null, stopEvents = null, frame = null, events = [], decide = null, refreshing = false
 const online = computed(() => remoteState.connection === 'online')
 const selectedFacility = computed(() => facilities.value.find(item => String(item.id) === facilityId.value))
 const visibleRooms = computed(() => rooms.value.filter(room => (!facilityId.value || String(room.facilityId) === facilityId.value) && `${room.name} ${room.description || ''}`.toLowerCase().includes(search.value.toLowerCase())))
+const theme = inject(REMOTE_THEME, null)
+const roomPictures = { '客厅': ['sunlit-room.png', 'pero-night-room.png'], '卧室': ['nana-day-room.png', 'moonlit-room.png'], '书房': ['pero-twilight-room.png', 'nana-twilight-room.png'] }
+function roomPicture(name) {
+  if (!Object.hasOwn(roomPictures, name)) return ''
+  return '/companion/' + roomPictures[name][theme?.value.mode === 'dark' ? 1 : 0]
+}
 const presentAgentIds = computed(() => [...new Set(visibleRooms.value.flatMap(room => room.agents || []))].slice(0, 4))
 const members = computed(() => projection.value?.members || [])
 const enabledMembers = computed(() => members.value.filter(member => remoteState.agents.some(agent => agent.id === member.agentId && agent.isEnabled !== false)))
@@ -78,9 +88,9 @@ function time(value) { return remoteDate(value, { hour: '2-digit', minute: '2-di
 function snapshot() { return { draft: message.value, mention: mention.value, offset: Math.max(0, history.value?.scrollTop || 0), atEnd: atEnd.value, sendRequestId: draftRequestId } }
 async function persistDraft() { clearTimeout(saveTimer); if (!current.value || loadingRoom.value) return; const id = String(current.value.id), value = snapshot(); try { await writePresentation({ kind: 'room', roomId: id }, value, token); if (!disposed) storageError.value = '' } catch (failure) { if (!disposed) { storageError.value = failure.message; throw failure } } }
 function queueSave() { clearTimeout(saveTimer); saveTimer = setTimeout(() => persistDraft().catch(() => {}), 300) }
-function editDraft() { draftRequestId = null; queueSave(); if (composer.value) { composer.value.style.height = 'auto'; composer.value.style.height = `${Math.min(100, composer.value.scrollHeight)}px` } }
-function savePosition() { if (history.value) { atEnd.value = history.value.scrollHeight - history.value.scrollTop - history.value.clientHeight < 64; queueSave() } }
-async function followLatest() { if (!atEnd.value) return; await nextTick(); if (history.value && atEnd.value) history.value.scrollTop = history.value.scrollHeight }
+function editDraft() { draftRequestId = null; queueSave(); resizeComposer() }
+function savePosition() { if (history.value) { chatScroll.capture(); queueSave() } }
+function followLatest() { chatScroll.refresh() }
 function jumpLatest() { atEnd.value = true; followLatest() }
 function cancelDiscard() { discardOperation.value = false; decide?.(false); decide = null }
 async function prepareLeave() { if (writing.value) throw new Error(t('正在处理，请稍后再试。')); if (hasChanges.value) { discardOperation.value = true; const approved = await new Promise(resolve => { decide = resolve }); decide = null; if (!approved) throw Object.assign(new Error(''), { code: 'UI_CANCELLED' }) }; await persistDraft() }

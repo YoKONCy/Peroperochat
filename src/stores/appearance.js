@@ -1,9 +1,9 @@
 import { computed, ref, shallowRef } from 'vue'
 import { localInvoke } from '../services/localChat'
 import { onModeInvalidated, currentToken, assertToken } from './mode'
-import { uiPaletteVariables } from '../utils/uiPalette'
+import { journalVariables } from '../utils/uiPalette'
 
-const defaults = { displayMode: 'illustration', palette: 'auto', glass: 80, figureSize: 57, motion: true }
+const defaults = { displayMode: 'illustration', palette: 'light', glass: 80, figureSize: 57, motion: true }
 export const appearance = shallowRef(null)
 export const appearanceBusy = ref(false)
 export const appearanceError = ref('')
@@ -16,7 +16,7 @@ export async function loadAppearance() {
   if (loading) return loading
   const version = generation
   const task = localInvoke('local_appearance').then(value => {
-    if (version === generation) { appearance.value = value; appearanceError.value = '' }
+    if (version === generation) { appearance.value = { ...value, palette: value.palette === 'dark' ? 'dark' : 'light' }; appearanceError.value = '' }
     return value
   }).catch(error => { if (version === generation) appearanceError.value = error.message; throw error })
   loading = task
@@ -38,15 +38,8 @@ export async function saveAppearance(patch) {
   finally { if (version === generation) appearanceBusy.value = false }
 }
 
-export const appearancePalettes = {
-  sky: { label: '晴空蓝', accent: '#467fc5', wash: '#eaf4ff', ink: '#2b3c56' },
-  sakura: { label: '樱花粉', accent: '#b85d85', wash: '#fff0f5', ink: '#53384b' },
-  mint: { label: '薄荷青', accent: '#398b7b', wash: '#eaf8f2', ink: '#2c4945' },
-  violet: { label: '月夜紫', accent: '#8967ba', wash: '#f3edfc', ink: '#443756' },
-}
-export function appearanceStyle(agentId) {
+export function appearanceStyle() {
   const value = displayPreferences.value
-  const palette = appearancePalettes[value.palette === 'auto' ? agentId === 'nana' ? 'violet' : 'sky' : value.palette] || appearancePalettes.sky
-  return { ...uiPaletteVariables(palette.accent), '--local-accent': palette.accent, '--local-wash': palette.wash, '--local-ink': palette.ink, '--local-glass': value.glass / 100, '--figure-ratio': value.figureSize / 100 }
+  return { ...journalVariables(value.palette), '--local-glass': value.glass / 100, '--figure-ratio': value.figureSize / 100 }
 }
 export const LOCAL_APPEARANCE = Symbol('独立模式显示主题')

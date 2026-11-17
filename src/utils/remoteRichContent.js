@@ -28,7 +28,7 @@ function stateLine(line, state) {
 const scanState = () => ({ fence: '', math: '', depth: 0 })
 // 与 infOS 保持相同原则：只扫描新增完整行，最近一段保留为活跃尾部。
 export class RemoteMarkdownSegmenter {
-  constructor() { this.reset() }
+  constructor(local = false) { this.local = local; this.reset() }
   reset() { this.source = ''; this.lineStart = 0; this.searched = 0; this.cutoff = 0; this.boundary = 0; this.state = scanState(); this.blocks = []; this.committed = false }
   update(source, committed = false) {
     if (source === this.source && committed === this.committed) return this.result || []
@@ -38,7 +38,7 @@ export class RemoteMarkdownSegmenter {
       // 结束时仍不把未闭合围栏、公式或 HTML 当成完整结构执行。
       const state = scanState(); let offset = 0, safe = 0
       for (const line of source.match(/[^\n]*\n|[^\n]+$/g) || []) { stateLine(line, state); offset += line.length; if (!state.fence && !state.math && !state.depth) safe = offset }
-      const parts = stableParts(source.slice(0, safe))
+      const parts = stableParts(source.slice(0, safe), 0, this.local)
       if (safe < source.length) parts.push({ id: `raw:${safe}`, kind: 'raw', source: source.slice(safe) })
       this.result = parts; return parts
     }
@@ -46,7 +46,7 @@ export class RemoteMarkdownSegmenter {
     while ((newline = source.indexOf('\n', this.searched)) !== -1) {
       const end = newline + 1, line = source.slice(this.lineStart, end)
       if (stateLine(line, this.state)) {
-        if (this.boundary > this.cutoff) { this.blocks.push(...stableParts(source.slice(this.cutoff, this.boundary), this.cutoff)); this.cutoff = this.boundary }
+        if (this.boundary > this.cutoff) { this.blocks.push(...stableParts(source.slice(this.cutoff, this.boundary), this.cutoff, this.local)); this.cutoff = this.boundary }
         this.boundary = end
       }
       this.lineStart = end; this.searched = end
@@ -59,7 +59,7 @@ export class RemoteMarkdownSegmenter {
 }
 function unwrap(source) { return source.match(/^\s*```(?:markdown|md)\s*\n([\s\S]*?)\n?```\s*$/i)?.[1] ?? source }
 /** @returns {{ id: string; kind: string; source: string; language?: string; name?: string; format?: string; streaming?: boolean }[]} */
-function stableParts(source, start = 0) {
+function stableParts(source, start = 0, local = false) {
   let offset = start
   return lexer.lexer(unwrap(source)).map(token => {
     const id = `block:${offset}`; offset += token.raw.length
@@ -70,9 +70,9 @@ function stableParts(source, start = 0) {
       const kind = ['mermaid', 'flowchart', 'graph'].includes(language) ? 'diagram' : ['html', 'htm', 'svg'].includes(language) && /<(?:html|body|main|div|svg|section|article|!doctype)\b/i.test(token.text) ? 'web' : ['peromath', 'math', 'latex'].includes(language) ? 'formula' : 'code'
       return { id, kind, source: token.text, language }
     }
-    if (token.type === 'html' && /<(?:html|body|main|div|svg|section|article|!doctype)\b/i.test(token.raw)) return { id, kind: 'web', source: token.raw }
+    if (!local && token.type === 'html' && /<(?:html|body|main|div|svg|section|article|!doctype)\b/i.test(token.raw)) return { id, kind: 'web', source: token.raw }
     const link = token.type === 'paragraph' && token.raw.trim().match(/^!?\[([^\]\n]*)\]\((?:<([^>\n]+)>|([^\s]+))(?:\s+"[^"]*")?\)$/)
-    if (link && (isResourceReference(link[2] || link[3]) || token.raw.trim().startsWith('!['))) return { id, kind: 'resource', source: link[2] || link[3], name: link[1] }
+    if (!local && link && (isResourceReference(link[2] || link[3]) || token.raw.trim().startsWith('!['))) return { id, kind: 'resource', source: link[2] || link[3], name: link[1] }
     const math = token.raw.trim().match(/^(?:\$\$|\\\[)\s*([\s\S]*?)\s*(?:\$\$|\\\])$/)
     // 保留块的语义，让流式拆分后的标题、列表仍有完整的阅读节奏。
     return { id, kind: math ? 'formula' : 'markdown', format: token.type, source: math ? math[1] : token.raw }

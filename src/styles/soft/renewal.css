@@ -134,15 +134,7 @@
 .remote-themed.remote-themed[data-ui='soft'] .remote-rich-caption { font-size: var(--renewal-caption); }
 .remote-themed.remote-themed[data-ui='soft'] .remote-rich-caption > i { background: transparent; border: 0; padding: 0; border-radius: 0; box-shadow: none; }
 .remote-themed.remote-themed[data-ui='soft'] .remote-rich-code { padding: 13px; font-size: max(12px, calc(var(--ui-text) - 1px)); line-height: 1.75; background: var(--ui-inset); }
-/* 浅色主题下代码块底色为浅色，原有语法配色是为深色底设计的，几乎看不清；这里换成深色文字配色（浅底对比度均不低于 4.5:1），深色主题保持原样。 */
-.remote-themed.remote-themed[data-ui='soft'][data-remote-theme]:not([data-remote-theme='dark']) .remote-rich-code { color: var(--ink); color-scheme: light; }
-.remote-themed.remote-themed[data-ui='soft'][data-remote-theme]:not([data-remote-theme='dark']) .remote-rich-code :is(.hljs-keyword, .hljs-selector-tag, .hljs-meta) { color: #7a3fb0; }
-.remote-themed.remote-themed[data-ui='soft'][data-remote-theme]:not([data-remote-theme='dark']) .remote-rich-code :is(.hljs-string, .hljs-attribute, .hljs-addition) { color: #2c7a57; }
-.remote-themed.remote-themed[data-ui='soft'][data-remote-theme]:not([data-remote-theme='dark']) .remote-rich-code :is(.hljs-title, .hljs-name, .hljs-type) { color: #22629b; }
-.remote-themed.remote-themed[data-ui='soft'][data-remote-theme]:not([data-remote-theme='dark']) .remote-rich-code :is(.hljs-number, .hljs-literal, .hljs-built_in, .hljs-symbol) { color: #9a5512; }
-.remote-themed.remote-themed[data-ui='soft'][data-remote-theme]:not([data-remote-theme='dark']) .remote-rich-code :is(.hljs-comment, .hljs-quote) { color: #687083; }
-.remote-themed.remote-themed[data-ui='soft'][data-remote-theme]:not([data-remote-theme='dark']) .remote-rich-code :is(.hljs-variable, .hljs-params, .hljs-property) { color: inherit; }
-.remote-themed.remote-themed[data-ui='soft'][data-remote-theme]:not([data-remote-theme='dark']) .remote-rich-code .hljs-deletion { color: #a1384f; }
+
 .remote-themed.remote-themed[data-ui='soft'] .markdown-body table { border-radius: 10px; font-size: .92em; }
 .remote-themed.remote-themed[data-ui='soft'] .markdown-body th { background: var(--ui-soft); padding: 9px 12px; }
 .remote-themed.remote-themed[data-ui='soft'] .markdown-body td { padding: 9px 12px; }
