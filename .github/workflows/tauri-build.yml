@@ -4,6 +4,11 @@ on:
   push:
     tags: [ '*' ]
   workflow_dispatch:
+    inputs:
+      release_tag:
+        description: 使用现有版本标签的源码重新打包（例如 v1.6.1）
+        type: string
+        required: false
 
 permissions:
   contents: write
@@ -17,6 +22,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.release_tag && format('refs/tags/{0}', inputs.release_tag) || github.sha }}
 
       - name: Install system dependencies
         run: |
@@ -128,6 +135,8 @@ jobs:
 
       - name: Read version from tauri.conf.json
         id: version
+        env:
+          RELEASE_TAG: ${{ inputs.release_tag || (github.ref_type == 'tag' && github.ref_name) || '' }}
         run: |
           set -euo pipefail
           VERSION=$(jq -er '.version' src-tauri/tauri.conf.json)
@@ -135,12 +144,39 @@ jobs:
             echo "::error::应用版本元数据不一致。"
             exit 1
           fi
-          if [ "$GITHUB_REF_TYPE" = tag ] && [ "$GITHUB_REF_NAME" != "v$VERSION" ]; then
+          if [ -n "$RELEASE_TAG" ] && [ "$RELEASE_TAG" != "v$VERSION" ]; then
             echo "::error::发布标签与应用版本不一致。"
             exit 1
           fi
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "source_sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
           echo "发布版本：$VERSION"
+
+      - name: 配置 Gradle 的 Maven Central 镜像
+        run: |
+          init_dir="${GRADLE_USER_HOME:-$HOME/.gradle}/init.d"
+          mkdir -p "$init_dir"
+          cat > "$init_dir/central-mirror.gradle" <<'GRADLE'
+          def centralMirror = 'https://maven-central.storage-download.googleapis.com/maven2/'
+
+          // buildSrc 单独解析 Kotlin 插件。先查中央仓库镜像，再由插件门户提供专属插件。
+          gradle.beforeSettings { settings ->
+              settings.pluginManagement.repositories {
+                  maven { url = centralMirror }
+                  gradlePluginPortal()
+              }
+          }
+
+          // 在项目脚本声明 mavenCentral() 前注册镜像，Android 组件仍优先从 Google Maven 解析。
+          gradle.projectsLoaded { build ->
+              build.rootProject.allprojects { project ->
+                  [project.buildscript.repositories, project.repositories].each { repos ->
+                      repos.google()
+                      repos.maven { url = centralMirror }
+                  }
+              }
+          }
+          GRADLE
 
       - name: Build Android APK (aarch64 only, split per ABI)
         run: pnpm tauri android build --apk --split-per-abi --target aarch64
@@ -197,12 +233,12 @@ jobs:
           name: PeroperoChat v${{ steps.version.outputs.version }}
           # 手动触发时 ref_name 是分支名，发布标签统一使用应用版本。
           tag_name: v${{ steps.version.outputs.version }}
-          target_commitish: ${{ github.sha }}
+          target_commitish: ${{ steps.version.outputs.source_sha }}
           body: |
             ## PeroperoChat v${{ steps.version.outputs.version }}
 
             ### 本次更新
-            [查看 v${{ steps.version.outputs.version }} 更新记录](${{ github.server_url }}/${{ github.repository }}/blob/${{ github.sha }}/docs/BUILD_AND_RELEASE.md#5-版本演进与待联调范围)
+            [查看 v${{ steps.version.outputs.version }} 更新记录](${{ github.server_url }}/${{ github.repository }}/blob/${{ steps.version.outputs.source_sha }}/docs/BUILD_AND_RELEASE.md#5-版本演进与待联调范围)
 
             ### 下载
             - `PeroperoChat-v${{ steps.version.outputs.version }}-arm64.apk` — Android ARM64 安装包
