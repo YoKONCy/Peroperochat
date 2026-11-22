@@ -246,8 +246,8 @@ onBeforeUnmount(() => { disposed = true; loadVersion++; document.removeEventList
 .empty-portraits > svg { position: absolute; right: -2px; bottom: 4px; width: 30px; height: 28px; color: var(--room-accent); }
 .group-empty h2 { font-size: 16px; font-weight: 600; color: var(--room-ink); margin: 13px 0 9px; }
 .group-empty p { font-size: 12px; line-height: 1.8; margin: 0; }
-.group-message { --speaker-accent: #418ec6; --speaker-soft: #e9f3fb; --speaker-line: #dce6f0; display: flex; align-items: flex-start; gap: 9px; margin-bottom: 22px; }
-.group-message[data-speaker='nana'] { --speaker-accent: #986ab9; --speaker-soft: #f2eaf9; --speaker-line: #e8dff1; }
+.group-message { --speaker-accent: var(--ui-blue); --speaker-soft: var(--ui-blue-soft); --speaker-line: var(--ui-blue-edge); display: flex; align-items: flex-start; gap: 9px; margin-bottom: 22px; }
+.group-message[data-speaker='nana'] { --speaker-accent: var(--ui-violet); --speaker-soft: var(--ui-violet-soft); --speaker-line: var(--ui-violet-edge); }
 .group-message-avatar { width: 32px; height: 40px; border-radius: 3px 10px 3px 3px; border-bottom: 2px solid var(--speaker-accent); margin-top: 6px; }
 .group-message-column { min-width: 0; max-width: calc(100% - 56px); }
 .group-byline { display: flex; align-items: center; gap: 8px; min-height: 24px; margin: 0 0 4px; }

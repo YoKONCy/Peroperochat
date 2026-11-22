@@ -1,7 +1,7 @@
 import { computed, ref, shallowRef } from 'vue'
 import { localInvoke } from '../services/localChat'
 import { onModeInvalidated, currentToken, assertToken } from './mode'
-import { journalVariables } from '../utils/uiPalette'
+import { roomThemes, themeVariables } from '../utils/uiPalette'
 
 const defaults = { displayMode: 'illustration', palette: 'light', glass: 80, figureSize: 57, motion: true }
 export const appearance = shallowRef(null)
@@ -40,6 +40,6 @@ export async function saveAppearance(patch) {
 
 export function appearanceStyle() {
   const value = displayPreferences.value
-  return { ...journalVariables(value.palette), '--local-glass': value.glass / 100, '--figure-ratio': value.figureSize / 100 }
+  return { ...themeVariables(value.palette, roomThemes), '--local-glass': value.glass / 100, '--figure-ratio': value.figureSize / 100 }
 }
 export const LOCAL_APPEARANCE = Symbol('独立模式显示主题')

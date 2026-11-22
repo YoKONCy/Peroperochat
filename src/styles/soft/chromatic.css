@@ -147,8 +147,8 @@
 .standalone-design[data-ui='soft'] .room-menu-list > button:nth-child(3n+1) { --ui-tone: var(--ui-rose); --ui-tone-soft: var(--ui-rose-soft); --ui-tone-edge: var(--ui-rose-edge); }
 .standalone-design[data-ui='soft'] .room-menu-list > button:nth-child(3n+2) { --ui-tone: var(--ui-violet); --ui-tone-soft: var(--ui-violet-soft); --ui-tone-edge: var(--ui-violet-edge); }
 .standalone-design[data-ui='soft'] .room-menu-list > button:nth-child(3n) { --ui-tone: var(--ui-mint); --ui-tone-soft: var(--ui-mint-soft); --ui-tone-edge: var(--ui-mint-edge); }
-.standalone-design[data-ui='soft'] .room-quick-actions button:nth-child(2) > span { color: var(--ui-rose); border-color: var(--ui-rose-edge); background: var(--ui-rose-soft); }
-.standalone-design[data-ui='soft'] .room-quick-actions button:nth-child(3) > span { color: var(--ui-violet); border-color: var(--ui-violet-edge); background: var(--ui-violet-soft); }
+.standalone-design[data-ui='soft'] .room-quick-actions button:nth-child(2) > span { color: var(--ui-rose); }
+.standalone-design[data-ui='soft'] .room-quick-actions button:nth-child(3) > span { color: var(--ui-violet); }
 @media (min-width: 700px) {
   .remote-themed[data-ui='soft'] .phase-room-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }

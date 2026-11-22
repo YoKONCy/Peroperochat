@@ -9,7 +9,7 @@
     <div v-if="scope.kind === 'character'" class="background-inherit"><span>{{ tr('沿用应用设置') }}</span><RoomSwitch :model-value="draft.inherit" :label="tr('沿用应用设置')" :disabled="busy || loading || !original" @update:model-value="changeInheritance" /></div>
     <fieldset :disabled="busy || loading || !original || scope.kind === 'character' && draft.inherit">
       <div class="background-preview-wrap">
-        <div class="background-preview companion-surface remote-themed" data-ui="soft" :data-remote-theme="previewScheme" :data-journal="previewScheme" :data-background="previewActive ? 'active' : undefined" :style="previewStyle" @pointerdown="startDrag" @pointermove="moveDrag" @pointerup="endDrag" @pointercancel="endDrag" @lostpointercapture="drag = null">
+        <div class="background-preview companion-surface" :class="localPreview ? 'standalone-design' : 'remote-themed'" data-ui="soft" :data-remote-theme="localPreview ? undefined : previewScheme" :data-journal="localPreview ? undefined : previewScheme" :data-local-theme="localPreview ? previewScheme : undefined" :data-background="previewActive ? 'active' : undefined" :style="previewStyle" @pointerdown="startDrag" @pointermove="moveDrag" @pointerup="endDrag" @pointercancel="endDrag" @lostpointercapture="drag = null">
           <div class="background-preview-clip">
           <div v-if="previewImage" class="background-preview-image" aria-hidden="true"><img :src="previewImage" alt="" /><i /></div>
           <div class="background-preview-ui"><header><span>{{ agent?.name || 'PeroperoChat' }}</span><RoomIcon name="bow" /></header><template v-if="previewPage === 'chat'"><div class="preview-message-user">{{ tr('今天也想慢慢来。') }}</div><div class="preview-message-assistant"><strong>{{ agent?.name || 'PeroperoChat' }}</strong><p>{{ tr('好呀，把时间留给喜欢的事。') }}</p></div><div class="preview-input"><RoomIcon name="plus" /><span>{{ tr('说说你的想法…') }}</span><RoomIcon name="send" /></div></template><template v-else><div class="preview-card-grid"><div data-ui-tone="rose"><RoomIcon name="profile" /><strong>{{ tr('角色') }}</strong></div><div data-ui-tone="blue"><RoomIcon name="model" /><strong>{{ tr('模型') }}</strong></div></div><div class="preview-management-row"><RoomIcon name="palette" /><span>{{ tr('显示与主题') }}</span><RoomIcon name="arrow" /></div></template></div>
@@ -36,7 +36,7 @@
 import { inputValue } from '../../utils/domEvents'
 import { computed, inject, onBeforeUnmount, onMounted, reactive, ref, shallowRef, watch } from 'vue'
 import { APP_BACKGROUND, backgroundPresets, backgroundVariables, defaultBackgroundSettings } from '../../services/appBackground'
-import { journalVariables } from '../../utils/uiPalette'
+import { journalThemes, roomThemes, themeVariables } from '../../utils/uiPalette'
 import { t } from '../../i18n/remote'
 import { appMessage } from '../../services/appFeedback'
 import RoomIcon from './RoomIcon.vue'
@@ -44,6 +44,7 @@ import RoomSwitch from './RoomSwitch.vue'
 import FeedbackMessage from '../FeedbackMessage.vue'
 const props = defineProps({ agent: Object, roomImage: String })
 const background = inject(APP_BACKGROUND, null)
+const localPreview = background?.expectedMode === 'standalone'
 const tr = (key, values) => t(key, values, 'background')
 const scope = ref(/** @type {import('../../types/ui').BackgroundScope} */ ({ kind: 'app' })), original = ref(null), globalOriginal = ref(null), draft = reactive(defaultBackgroundSettings())
 const loading = ref(true), busy = ref(false), error = ref(''), fileInput = ref(null), pendingImage = shallowRef(null), removed = ref(false), temporaryUrl = ref(''), switchTo = ref(null)
@@ -55,7 +56,7 @@ const previewSettings = computed(() => scope.value.kind === 'character' && draft
 const previewImage = computed(() => (draft.inherit && scope.value.kind === 'character' ? globalOriginal.value?.url : temporaryUrl.value || (!removed.value ? original.value?.url : '') || (scope.value.kind === 'character' ? globalOriginal.value?.url : '')) || (background?.expectedMode === 'standalone' ? props.roomImage || '' : ''))
 const previewActive = computed(() => previewSettings.value.enabled && (!!previewImage.value || background?.expectedMode === 'standalone'))
 const previewStyle = computed(() => ({
-  ...journalVariables(previewScheme.value), ...backgroundVariables(previewSettings.value[previewScheme.value], previewScheme.value)
+  ...themeVariables(previewScheme.value, localPreview ? roomThemes : journalThemes), ...backgroundVariables(previewSettings.value[previewScheme.value], previewScheme.value)
 }))
 const commonControls = [{ key:'brightness',label:'背景明暗',min:.6,max:1.4,step:.02 },{ key:'blur',label:'背景模糊',min:0,max:24,step:1 },{ key:'surfaceOpacity',label:'界面通透度',min:0,max:.45,step:.01 }]
 const advancedControls = computed(() => [{key:'opacity',label:'图片显现',min:0,max:1,step:.01},{key:'saturation',label:'饱和度',min:0,max:1.6,step:.02},{key:'contrast',label:'对比度',min:.6,max:1.4,step:.02},{key:'overlayOpacity',label:'背景遮罩',min:0,max:.85,step:.01},{key:'surfaceBlur',label:'玻璃模糊',min:0,max:20,step:1},{key:'positionX',label:'水平位置',min:0,max:100,step:1},{key:'positionY',label:'垂直位置',min:0,max:100,step:1}].filter(item => !(material.value.autoOverlay && item.key === 'overlayOpacity') && !(material.value.reducedTransparency && item.key === 'surfaceBlur')))

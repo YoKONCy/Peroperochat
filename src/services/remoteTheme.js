@@ -1,7 +1,7 @@
 import { computed, reactive, ref, onBeforeUnmount, provide, watch } from 'vue'
 import { currentToken, assertToken } from '../stores/mode'
 import { readPresentation, writePresentation } from './remotePresentation'
-import { journalVariables, setJournalChrome } from '../utils/uiPalette'
+import { journalThemes, themeVariables, setThemeChrome } from '../utils/uiPalette'
 import { APP_BACKGROUND, useAppBackground } from './appBackground'
 
 export const REMOTE_THEME = Symbol('remote-theme')
@@ -14,12 +14,12 @@ export function useRemoteTheme(agentId) {
   const display = reactive({ theme: 'light', palette: 'standard', showCg: true, reduceMotion: false, roleStyle: false, fontSize: 14 })
   let disposed = false, saveVersion = 0
   const mode = computed(() => display.theme === 'system' ? systemDark.value ? 'dark' : 'light' : display.theme)
-  watch(mode, setJournalChrome, { immediate: true })
+  watch(mode, scheme => setThemeChrome(scheme, journalThemes), { immediate: true })
   const background = useAppBackground(agentId, mode, 'remote')
   provide(APP_BACKGROUND, background)
   const theme = computed(() => ({
     mode: mode.value, reduceMotion: display.reduceMotion, backgroundActive: background.active, bubble: 'standard', decoration: 'ribbon',
-    style: { ...journalVariables(mode.value), ...background.style, '--remote-font-size': (display.fontSize || 14) + 'px', '--remote-chat-size': ((display.fontSize || 14) + 1) + 'px' }
+    style: { ...themeVariables(mode.value, journalThemes), ...background.style, '--remote-font-size': (display.fontSize || 14) + 'px', '--remote-chat-size': ((display.fontSize || 14) + 1) + 'px' }
   }))
   provide(REMOTE_THEME, theme)
   function systemChanged(event) { systemDark.value = event.matches }

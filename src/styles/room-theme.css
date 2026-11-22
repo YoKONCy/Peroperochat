@@ -1,0 +1,148 @@
+/* 房间、独立抽屉和预览分别挂载，均从同一套配色取得材质与文字色。 */
+.standalone-design[data-local-theme][data-ui], .journal-reading[data-local-theme] {
+  color-scheme: light;
+  --ui-page: var(--ui-neutral-page);
+  --ui-paper: var(--ui-neutral-paper);
+  --ui-raised: var(--ui-neutral-raised);
+  --ui-field: var(--ui-neutral-inset);
+  --ui-ink: var(--ui-neutral-ink);
+  --ui-muted: var(--ui-neutral-muted);
+  --ui-line: var(--ui-neutral-line);
+  --ui-accent: var(--accent);
+  --ui-secondary: var(--accent-secondary);
+  --ui-soft: var(--tint);
+  --ui-on-accent: var(--ui-neutral-on-accent);
+  --ui-action: var(--ui-accent);
+  --ui-action-top: var(--ui-accent);
+  --ui-glass: color-mix(in srgb, var(--ui-raised) 94%, transparent);
+  --room-glass: var(--ui-glass);
+  --room-ui-edge: var(--ui-line);
+  --room-danger: var(--ui-rose);
+  --danger: var(--ui-rose);
+  --success: var(--ui-mint);
+  --ink: var(--ui-ink);
+  --surface: var(--ui-paper);
+  --panel: var(--ui-raised);
+  --muted: var(--ui-muted);
+  --journal-title: system-ui, "PingFang SC", "Microsoft YaHei UI", sans-serif;
+  --draw-blue: var(--ui-blue);
+  --journal-code-key: var(--ui-violet);
+  --journal-code-string: var(--ui-mint);
+  --journal-code-name: var(--ui-blue);
+  --journal-code-value: var(--ui-amber);
+  --journal-code-comment: var(--ui-muted);
+  --journal-code-delete: var(--ui-rose);
+  color: var(--ui-ink);
+}
+.standalone-design[data-local-theme="dark"][data-ui], .journal-reading[data-local-theme="dark"] {
+  color-scheme: dark;
+  --ui-shadow-ink: #060c1c;
+  --ui-edge: rgb(255 255 255 / 7%);
+  --ui-floating-shadow: 0 7px 22px rgb(4 9 20 / 34%);
+}
+.standalone-design[data-local-theme] .companion-surface:not([data-local-theme]) {
+  color-scheme: inherit;
+  --room-glass: var(--ui-glass);
+  --room-ui-edge: var(--ui-line);
+  --room-danger: var(--ui-rose);
+}
+.standalone-design[data-local-theme][data-background="active"] { --ui-glass: var(--bg-panel-fill); --room-glass: var(--bg-shell-fill); }
+.standalone-design[data-local-theme] .mode-transition { background: radial-gradient(ellipse at 80% 15%, var(--ui-soft), transparent 65%), var(--ui-page); }
+.standalone-design[data-local-theme] :is(.room-primary-button, .composer-send, .group-send, .action-btn.primary, .action-btn.hit) { color: var(--ui-on-accent) !important; }
+.standalone-design[data-local-theme] :is(.composer-send,.group-send):is(:disabled,.is-stop) { color: var(--ui-accent) !important; }
+
+/* 把房间留给角色，顶部轻触入口和侧边快捷栏只占各自需要的宽度。 */
+.standalone-design[data-local-theme] .room-mode-entry {
+  inset-inline-end: auto; width: fit-content; max-width: calc(100% - 36px); min-height: 40px; gap: 7px;
+  padding: 5px 12px 5px 8px; border: 1px solid var(--ui-line); border-radius: 24px;
+  background: var(--room-glass); color: var(--ui-ink); box-shadow: var(--ui-shadow);
+}
+.standalone-design[data-local-theme] .mode-switch-art { width: 26px; height: 26px; }
+.standalone-design[data-local-theme] .room-mode-entry > strong { font-size: var(--ui-label); font-weight: 600; }
+.standalone-design[data-local-theme] .mode-switch-destination { display: none; }
+.standalone-design[data-local-theme] .room-selector { border-radius: 28px; }
+.standalone-design[data-local-theme] .room-selector-status i { background: var(--ui-mint); }
+.standalone-design[data-local-theme] .room-header-actions > button { width: 42px; height: 42px; }
+.standalone-design[data-local-theme] .room-character-speech {
+  background: var(--ui-paper); border-color: var(--ui-line); box-shadow: var(--ui-floating-shadow);
+}
+.standalone-design[data-local-theme] .room-character-speech::before { background: var(--ui-paper); border-color: var(--ui-line); }
+.standalone-design[data-local-theme] .room-quick-actions small { text-shadow: none; }
+@media (max-width: 959px) and (max-height: 540px) {
+  .standalone-design[data-local-theme] .room-quick-actions { flex-direction: row; top: calc(78px + env(safe-area-inset-top)); }
+}
+@media (max-width: 380px) and (max-height: 540px) {
+  .standalone-design[data-local-theme] .room-quick-actions { top: calc(132px + env(safe-area-inset-top)); }
+}
+
+/* 输入栏与气泡共用一套轮廓。粉色和紫色只标记发言者与思考过程。 */
+.standalone-design[data-local-theme] :is(.room-composer,.group-composer) { border-radius: 26px; }
+.standalone-design[data-local-theme] :is(.room-composer,.group-composer):focus-within { border-color: var(--ui-accent); box-shadow: var(--ui-focus); }
+.standalone-design[data-local-theme] .room-chat--rest .room-composer { border-radius: 28px; box-shadow: var(--ui-floating-shadow); }
+.standalone-design[data-local-theme] .chat-handle > span { transform: none; height: 4px; background: var(--ui-line); }
+.standalone-design[data-local-theme] :is(.room-message.user .message-body,.group-message.is-user .group-bubble,.preview-message-user) {
+  background: var(--ui-rose-soft); border-color: var(--ui-rose-edge); box-shadow: none;
+}
+.standalone-design[data-local-theme] :is(.message-actions,.group-message-actions,.journal-search input,.journal-editor input,.journal-editor textarea,.room-persona p) {
+  background: var(--ui-paper); color: var(--ui-ink); border-color: var(--ui-line);
+}
+.standalone-design[data-local-theme] .message-error { color: var(--ui-rose); }
+.standalone-design[data-local-theme][data-ui] :is(.expression-reasoning[data-effort],.tool-timeline) { margin-block: 4px; border-radius: 12px; }
+.standalone-design[data-local-theme][data-ui] :is(.expression-reasoning,.tool-timeline) > summary { min-height: 34px; padding-block: 4px; }
+.standalone-design[data-local-theme] .markdown-body blockquote { border-radius: 3px 12px 12px 3px; }
+
+/* 设置的层级由伙伴名、分组标题和可点击的行表达。 */
+.standalone-design[data-local-theme] .companion-page::before,
+.standalone-design[data-local-theme] .companion-page-header::after,
+.standalone-design[data-local-theme] .room-drawer-header h2::after { content: none; }
+.standalone-design[data-local-theme] .companion-page-header { border-radius: 0; border-bottom: 1px solid var(--ui-line); box-shadow: none; }
+.standalone-design[data-local-theme] .settings-overview { display: grid; gap: 14px; }
+.standalone-design[data-local-theme] .settings-overview-profile {
+  position: relative; isolation: isolate; overflow: hidden; margin: 0;
+  padding: 18px; gap: 14px; border-color: var(--ui-line); border-radius: 22px;
+  background: linear-gradient(115deg, var(--ui-soft), var(--ui-paper) 72%);
+}
+.standalone-design[data-local-theme] .settings-overview-profile > :first-child { flex: none; width: 54px; height: 54px; border-color: var(--ui-paper); box-shadow: 0 0 0 2px var(--ui-blue-edge); }
+.standalone-design[data-local-theme] .settings-overview-profile small { margin: 0 0 3px; }
+.standalone-design[data-local-theme] .profile-ribbon { position: absolute; z-index: -1; right: 34px; bottom: -12px; width: 94px; height: 82px; color: var(--ui-secondary); opacity: .23; transform: rotate(-13deg); }
+.standalone-design[data-local-theme] .room-settings-group { padding: 13px 15px 4px; border: 1px solid var(--ui-line); border-radius: 18px; background: var(--ui-paper); }
+.standalone-design[data-local-theme][data-background="active"] .room-settings-group { background: var(--bg-panel-fill); }
+.room-settings-group h2 { margin: 0 0 3px; color: var(--ui-muted); font-size: var(--ui-label); font-weight: 600; }
+.room-settings-group button {
+  display: grid; grid-template-columns: 25px minmax(0,1fr) 14px; gap: 12px; align-items: center;
+  width: 100%; min-height: 47px; padding: 6px 0; color: var(--ui-ink); border: 0; background: transparent; text-align: start;
+}
+.room-settings-group button + button { border-top: 1px solid var(--ui-line); }
+.room-settings-group button > svg:first-child { justify-self: center; color: var(--ui-accent); }
+.room-settings-group button > svg:last-child { width: 13px; height: 13px; color: var(--ui-muted); }
+.room-settings-group button strong { font-size: var(--ui-text); font-weight: 580; }
+.standalone-design[data-local-theme] .journal-photo {
+  display: grid; place-items: center; width: 44px; height: 44px; padding: 2px; border-radius: 50%;
+  transform: none; background: var(--ui-paper); box-shadow: 0 0 0 2px var(--ui-rose-soft);
+}
+.standalone-design[data-local-theme] .journal-photo::before { content: none; }
+.standalone-design[data-local-theme] .journal-photo i { display: none; }
+.standalone-design[data-local-theme] .journal-photo img { width: 100%; height: 100%; border-radius: 50%; }
+.standalone-design[data-local-theme] .room-drawer-panel { color: var(--ui-ink); border-color: var(--ui-line); background: var(--ui-raised); box-shadow: var(--ui-floating-shadow); }
+.standalone-design[data-local-theme] .room-drawer-header > .room-icon-button { background: var(--ui-field); }
+.standalone-design[data-local-theme] .outfit-name { background: var(--ui-paper); }
+.standalone-design[data-local-theme] .role-editor .el-button--primary { --el-button-text-color: var(--ui-on-accent); }
+.standalone-design[data-local-theme] .room-menu-list > button { margin-bottom: 0; padding: 9px 2px; min-height: 56px; border: 0; border-radius: 0; background: transparent; box-shadow: none; }
+.standalone-design[data-local-theme] .room-menu-list > button + button { border-top: 1px solid var(--ui-line); }
+.standalone-design[data-local-theme] .room-menu-list > button > svg:first-child { width: 30px; height: 30px; padding: 4px; border: 0; background: transparent; box-shadow: none; transform: none; }
+.standalone-design[data-local-theme] .journal-heading { font-family: inherit; letter-spacing: normal; }
+.standalone-design[data-local-theme] .journal-heading::before, .standalone-design[data-local-theme] .journal-heading::after { content: none; }
+.journal-preset > .room-theme-swatch {
+  display: grid; grid-template-columns: 24px 1fr; gap: 3px 6px; align-items: center;
+  height: 48px; border-radius: 10px; padding: 7px 10px;
+}
+.journal-preset .room-theme-swatch svg { grid-row: span 2; color: inherit; width: 21px; height: 21px; }
+.journal-preset .room-theme-swatch b { height: 11px; width: 66%; opacity: 1; border: 1px solid; border-radius: 7px 7px 7px 2px; }
+.journal-preset .room-theme-swatch b:last-child { width: 44%; justify-self: end; border-radius: 7px 7px 2px 7px; }
+.journal-reading[data-local-theme] figure { border-radius: 16px; padding: 0 0 8px; overflow: hidden; box-shadow: none; }
+.journal-reading[data-local-theme] figure img { aspect-ratio: 16/9; object-fit: cover; }
+.journal-reading[data-local-theme] figcaption { padding-inline: 12px; }
+.journal-reading[data-local-theme] .journal-reading-tabs { gap: 4px; padding: 3px; background: var(--ui-field); border: 0; border-radius: 14px; }
+.journal-reading[data-local-theme] .journal-reading-tabs button { flex: 1; padding-inline: 4px; border-radius: 11px; }
+.journal-reading[data-local-theme] .journal-reading-tabs button[aria-pressed="true"] { background: var(--ui-paper); }
+.journal-reading[data-local-theme] .journal-reading-tabs button::after { content: none; }

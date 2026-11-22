@@ -1,5 +1,5 @@
 <template>
-  <div class="app companion-surface" data-ui="soft" :class="{ 'standalone-design': isStandalone }" :data-background="isStandalone && localBackground.active ? 'active' : undefined" :data-tone="tone" :data-journal="isStandalone ? localScheme : undefined" :data-reduce-motion="isStandalone && !displayPreferences.motion" :style="isStandalone ? localStyle : undefined">
+  <div class="app companion-surface" data-ui="soft" :class="{ 'standalone-design': isStandalone }" :data-background="isStandalone && localBackground.active ? 'active' : undefined" :data-tone="tone" :data-local-theme="isStandalone ? localScheme : undefined" :data-reduce-motion="isStandalone && !displayPreferences.motion" :style="isStandalone ? localStyle : undefined">
     <AppBackgroundLayer v-if="isStandalone && route.path !== '/'" :background="localBackground" />
     <div v-if="contentReady" class="app-mode-content" :inert="transitionVisible ? true : undefined" :aria-hidden="transitionVisible ? true : undefined">
       <router-view v-if="isStandalone" v-slot="{ Component }"><Transition name="app-route" mode="out-in"><component :is="Component" :key="route.path" /></Transition></router-view>
@@ -13,7 +13,7 @@
 <script setup>
 import { computed, provide, watch } from 'vue'
 import { useRoute } from 'vue-router'
-import { setJournalChrome } from './utils/uiPalette'
+import { roomThemes, setThemeChrome } from './utils/uiPalette'
 import { activeAgentId } from './stores/agents'
 import { isStandalone, isRemote, modeState } from './stores/mode'
 import { remoteState } from './stores/remote'
@@ -29,6 +29,7 @@ import './styles/controls.css'
 import './styles/standalone.css'
 import './styles/soft/index.css'
 import './styles/journal.css'
+import './styles/room-theme.css'
 import { useSoftInteractions } from './composables/useSoftInteractions'
 import { appearanceStyle, displayPreferences, LOCAL_APPEARANCE } from './stores/appearance'
 const tone = computed(() => isStandalone.value && activeAgentId.value === 'nana' ? 'nana' : 'pero')
@@ -40,7 +41,7 @@ const transitionLoading = computed(() => modeState.loading || modeState.restorin
 const transitionNeeded = computed(() => !contentReady.value || modeState.loading || modeState.restoring)
 const { visible: transitionVisible, waiting: transitionWaiting } = useModeTransition(transitionNeeded, transitionLoading)
 const localScheme = computed(() => displayPreferences.value.palette === 'dark' ? 'dark' : 'light')
-watch([isStandalone, localScheme], ([local, scheme]) => { if (local) setJournalChrome(scheme) }, { immediate: true })
+watch([isStandalone, localScheme], ([local, scheme]) => { if (local) setThemeChrome(scheme, roomThemes) }, { immediate: true })
 const localBackground = useAppBackground(activeAgentId, localScheme, 'standalone')
 provide(APP_BACKGROUND, localBackground)
 const localStyle = computed(() => ({ ...appearanceStyle(), ...localBackground.style }))

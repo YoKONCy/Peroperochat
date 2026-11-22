@@ -6,7 +6,7 @@
       <div class="appearance-renderers" role="group" aria-label="角色显示方式">
         <button v-for="item in renderers" :key="item.id" type="button" :aria-pressed="draft.displayMode === item.id" @click="draft.displayMode = item.id"><RoomIcon :name="item.icon" /><strong>{{ item.name }}</strong><small>{{ item.note }}</small><RoomIcon v-if="draft.displayMode === item.id" class="appearance-check" name="check" /></button>
       </div>
-      <JournalThemePicker :model-value="draft.palette" @update:model-value="draft.palette = $event" />
+      <JournalThemePicker local :model-value="draft.palette" @update:model-value="draft.palette = $event" />
       <label class="appearance-label">静态立绘大小 <output>{{ draft.figureSize }}%</output><input v-model.number="draft.figureSize" type="range" min="44" max="64" :style="{ '--range-progress': `${(draft.figureSize - 44) / 20 * 100}%` }" /></label>
       <label class="appearance-motion"><span><strong>轻量交互动效</strong><small>系统减少动态效果时优先遵循系统设置</small></span><RoomSwitch v-model="draft.motion" label="轻量交互动效" /></label>
       <p class="appearance-note">默认房间随时间变化。可在角色资料里更换立绘和背景。</p>

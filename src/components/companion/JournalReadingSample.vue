@@ -1,17 +1,17 @@
 <template>
   <RoomDrawer :title="translate('消息排版示例')" variant="page" @close="$emit('close')">
-    <article class="journal-reading" :data-journal="scheme" :style="journalVariables(scheme)">
+    <article class="journal-reading" :data-journal="local ? undefined : scheme" :data-local-theme="local ? scheme : undefined" :style="themeVariables(scheme, local ? roomThemes : journalThemes)">
       <nav class="journal-reading-tabs" :aria-label="translate('示例分类')">
         <button v-for="(item, index) in headings" :key="item" type="button" :aria-pressed="page === index" @click="page = index">{{ translate(item) }}</button>
       </nav>
       <template v-if="page === 0">
-        <JournalMessage :source="'### ' + translate('沿河走到柳桥') + '\n\n' + translate('从**东岸步道**走到柳桥。到了桥头，再决定要不要绕去旧书店。')" />
-        <figure><button type="button" :aria-label="translate('放大柳桥速写')" @click="zoom = true"><img :src="bridge" :alt="translate('柳桥与旧书店')" width="800" height="534" /></button><figcaption>{{ translate('柳桥与旧书店') }}</figcaption></figure>
+        <JournalMessage :source="local ? '### 明天一起出门吧\n\n从**小屋**出发，沿河走到柳桥。' : '### ' + translate('沿河走到柳桥') + '\n\n' + translate('从**东岸步道**走到柳桥。到了桥头，再决定要不要绕去旧书店。')" />
+        <figure><button type="button" :aria-label="local ? '放大房间图片' : translate('放大柳桥速写')" @click="zoom = true"><img :src="sampleImage" :alt="sampleTitle" width="800" :height="local ? 450 : 534" /></button><figcaption>{{ sampleTitle }}</figcaption></figure>
         <JournalMessage :source="quote" />
       </template>
       <JournalMessage v-else :key="page" :source="page === 1 ? routes : calculation" />
     </article>
-    <RoomDrawer v-if="zoom" :title="translate('柳桥与旧书店')" @close="zoom = false"><img class="journal-enlargement" :src="bridge" :alt="translate('柳桥与旧书店')" width="800" height="534" /></RoomDrawer>
+    <RoomDrawer v-if="zoom" :title="sampleTitle" @close="zoom = false"><img class="journal-enlargement" :src="sampleImage" :alt="sampleTitle" /></RoomDrawer>
   </RoomDrawer>
 </template>
 <script setup>
@@ -19,10 +19,12 @@ import { computed, ref } from 'vue'
 import RoomDrawer from './RoomDrawer.vue'
 import JournalMessage from './JournalMessage.vue'
 import bridge from '../../assets/journal/willow-bridge.webp'
-import { journalVariables } from '../../utils/uiPalette'
-const props = defineProps({ scheme: String, translate: { type: Function, required: true } })
+import { journalThemes, roomThemes, themeVariables } from '../../utils/uiPalette'
+const props = defineProps({ scheme: String, local: Boolean, translate: { type: Function, required: true } })
 defineEmits(['close'])
-const headings = ['图文手记', '路线对照', '代码与公式']
+const headings = computed(() => [props.local ? '图文消息' : '图文手记', '路线对照', '代码与公式'])
+const sampleImage = computed(() => props.local ? (props.scheme === 'dark' ? '/companion/moonlit-room.png' : '/companion/sunlit-room.png') : bridge)
+const sampleTitle = computed(() => props.local ? (props.scheme === 'dark' ? '月色小屋' : '晴日房间') : props.translate('柳桥与旧书店'))
 const page = ref(0), zoom = ref(false)
 const quote = computed(() => '> ' + props.translate('想歇脚的时候，桥下有一张朝着河面的长椅。') + '\n\n- ' + props.translate('带上水和折叠伞。') + '\n- ' + props.translate('喜欢拍照的话，也带上相机。'))
 const fence = '```'

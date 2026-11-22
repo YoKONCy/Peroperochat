@@ -15,18 +15,18 @@
           <p v-if="loading" class="control-hint" role="status">正在读取设置…</p>
 
           <div v-if="tab === 'overview'" class="settings-overview">
-            <button class="settings-overview-profile" @click="router.push('/roles')"><CharacterAvatar :src="agent.avatar" :label="agent.name" /><span><strong>{{ agent.name }}</strong><small>独立模式</small></span><RoomIcon name="arrow" /></button>
-            <section class="journal-settings"><h2 class="journal-heading">外观与设备</h2>
-              <button class="journal-setting" @click="tab = 'appearance'"><JournalStationery kind="theme" /><strong>显示与主题</strong><RoomIcon name="next" /></button>
-              <button class="journal-setting" @click="router.push({ path: '/', query: { panel: 'remote' } })"><RoomIcon name="remote" /><strong>连接与模式</strong><RoomIcon name="next" /></button>
+            <button class="settings-overview-profile" @click="router.push('/roles')"><CharacterAvatar :src="agent.avatar" :label="agent.name" /><span><small>当前伙伴</small><strong>{{ agent.name }}</strong></span><CompanionEmblem class="profile-ribbon" /><RoomIcon name="arrow" /></button>
+            <section class="room-settings-group"><h2>外观与设备</h2>
+              <button @click="tab = 'appearance'"><RoomIcon name="palette" /><strong>显示与主题</strong><RoomIcon name="next" /></button>
+              <button @click="router.push({ path: '/', query: { panel: 'remote' } })"><RoomIcon name="remote" /><strong>连接与模式</strong><RoomIcon name="next" /></button>
             </section>
-            <section class="journal-settings"><h2 class="journal-heading">角色与模型</h2>
-              <button v-for="item in categories.filter(item => ['api', 'model', 'user', 'role'].includes(item.id))" :key="item.id" class="journal-setting" @click="tab = item.id"><JournalStationery v-if="item.id === 'role'" kind="profile" /><RoomIcon v-else :name="item.icon" /><strong>{{ item.label }}</strong><RoomIcon name="next" /></button>
+            <section class="room-settings-group"><h2>角色与模型</h2>
+              <button v-for="item in categories.filter(item => ['api', 'model', 'user', 'role'].includes(item.id))" :key="item.id" @click="tab = item.id"><RoomIcon :name="item.icon" /><strong>{{ item.label }} <small v-if="dirtySections[item.id]" class="settings-unsaved">未保存</small></strong><RoomIcon name="next" /></button>
             </section>
-            <section class="journal-settings"><h2 class="journal-heading">日常与数据</h2>
-              <button class="journal-setting" @click="router.push({ path: '/', query: { panel: 'reminders' } })"><RoomIcon name="bell" /><strong>日常提醒</strong><RoomIcon name="next" /></button>
-              <button class="journal-setting" @click="tab = 'memory'"><JournalStationery kind="notebook" /><strong>日记</strong><RoomIcon name="next" /></button>
-              <button class="journal-setting" @click="tab = 'data'"><RoomIcon name="document" /><strong>数据与备份</strong><RoomIcon name="next" /></button>
+            <section class="room-settings-group"><h2>日常与数据</h2>
+              <button @click="router.push({ path: '/', query: { panel: 'reminders' } })"><RoomIcon name="bell" /><strong>日常提醒</strong><RoomIcon name="next" /></button>
+              <button @click="tab = 'memory'"><RoomIcon name="diary" /><strong>日记</strong><RoomIcon name="next" /></button>
+              <button @click="tab = 'data'"><RoomIcon name="document" /><strong>数据与备份</strong><RoomIcon name="next" /></button>
             </section>
           </div>
           <RoomAppearanceSettings v-if="tab === 'appearance'" />
@@ -81,7 +81,6 @@
 
 <script setup>
 import JournalPortrait from '../components/companion/JournalPortrait.vue'
-import JournalStationery from '../components/companion/JournalStationery.vue'
 import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref } from 'vue'
 import { onBeforeRouteLeave, useRouter } from 'vue-router'
 import { appMessageBox as ElMessageBox } from '../services/appMessageBox'
@@ -339,6 +338,15 @@ fieldset { border: 0; padding: 0; margin: 0; min-width: 0; }
 .settings-data-list h3 { margin: 0; color: var(--room-ink); font-size: 13px; font-weight: 600; }
 .settings-data-list p { font-size: 11px; line-height: 1.7; color: var(--room-muted); margin: 9px 0 14px; }
 .settings-data-list .settings-danger > div, .settings-data-list .settings-danger h3 { color: var(--room-danger); }
-@media (max-width: 760px) { .settings-layout { grid-template-columns: 1fr; grid-template-rows: auto minmax(0, 1fr); gap: 12px; } .settings-navigation { overflow: visible; } .settings-partner { display: none; } .settings-navigation nav { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 2px 6px; } .settings-navigation nav button { min-height: 37px; gap: 7px; padding: 9px 7px; border: 0; border-bottom: 2px solid transparent; border-radius: 0; font-size: 11px; white-space: nowrap; } .settings-navigation nav button.selected { border-bottom-color: var(--room-accent); background: #ffffff8c; } .settings-navigation nav button > svg { width: 14px; height: 14px; } .settings-navigation nav button i { position: absolute; top: 5px; right: 4px; } .settings-content { padding: 17px 15px; } .settings-content::before { left: 15px; } .settings-section-heading { margin-bottom: 18px; padding-bottom: 14px; } }
-@media (max-width: 340px) { .settings-field-grid { gap: 0 10px; } .settings-navigation nav button { gap: 5px; padding-left: 4px; padding-right: 4px; } .model-discovery { flex-wrap: wrap; } .settings-save > span { max-width: 46%; } }
+@media (max-width: 760px) {
+  .settings-layout { grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(0, 1fr); }
+  .settings-navigation { display: none; }
+  .settings-content { padding: 17px 15px; }
+  .settings-section-heading { margin-bottom: 18px; padding-bottom: 14px; }
+}
+@media (max-width: 340px) {
+  .settings-field-grid { gap: 0 10px; }
+  .model-discovery { flex-wrap: wrap; }
+  .settings-save > span { max-width: 46%; }
+}
 </style>

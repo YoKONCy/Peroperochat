@@ -7,7 +7,8 @@
       <path class="mode-door-travel" d="M16 28h23m-5-5 5 5-5 5" />
       <path class="mode-door-star" d="m43 5 1.5 4.5L49 11l-4.5 1.5L43 17l-1.5-4.5L37 11l4.5-1.5Z" />
     </svg>
-    <span class="mode-switch-copy"><small><i />{{ tr(remote ? '当前：infOS 客户端' : '当前：本机独立运行') }}</small><strong>{{ tr(remote ? '管理连接与切换模式' : '连接电脑上的 infOS') }}</strong><span>{{ tr(remote ? '切换电脑，或回到本机独立空间' : '使用电脑上的角色、对话和文件') }}</span></span>
+    <span v-if="remote" class="mode-switch-copy"><small><i />{{ tr('当前：infOS 客户端') }}</small><strong>{{ tr('管理连接与切换模式') }}</strong><span>{{ tr('切换电脑，或回到本机独立空间') }}</span></span>
+    <strong v-else>{{ tr('连接电脑上的 infOS') }}</strong>
     <span class="mode-switch-destination" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none"><path d="M4 8h15m-4-4 4 4-4 4M20 16H5m4-4-4 4 4 4" /></svg></span>
   </button>
 </template>

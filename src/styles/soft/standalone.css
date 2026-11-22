@@ -7,12 +7,10 @@
 .standalone-design[data-ui='soft'] .room-display-toggle { border-radius: 16px; border-color: var(--ui-line); background: var(--room-glass); }
 .standalone-design[data-ui='soft'] .room-display-toggle button { border-radius: 11px; }
 .standalone-design[data-ui='soft'] .room-display-toggle button[aria-pressed='true'] { color: var(--ui-on-accent); border-color: var(--ui-emphasis); background: var(--ui-action); box-shadow: 0 var(--ui-depth-small) 0 var(--ui-contour); }
-.standalone-design[data-ui='soft'] .room-quick-actions { gap: 12px; }
-.standalone-design[data-ui='soft'] .room-quick-actions button { min-width: 49px; min-height: 61px; padding: 5px 4px 7px; border-radius: 19px 19px 19px 8px; border-color: var(--ui-line); background: var(--room-glass); box-shadow: var(--ui-shadow); }
-.standalone-design[data-ui='soft'] .room-quick-actions button::after { width: 5px; height: 5px; border-radius: 50%; transform: none; border-color: var(--ui-secondary); background: var(--ui-secondary); }
-.standalone-design[data-ui='soft'] .room-quick-actions button > span { color: var(--ui-on-accent); background: var(--ui-action); border: 1px solid var(--ui-emphasis); border-radius: 12px 12px 12px 5px; width: 34px; height: 31px; box-shadow: 0 var(--ui-depth-small) 0 var(--ui-contour); transform: rotate(-5deg); }
-.standalone-design[data-ui='soft'] .room-quick-actions button > span > svg { color: inherit; transform: rotate(5deg); }
-.standalone-design[data-ui='soft'] .room-quick-actions button:nth-child(even) > span { color: var(--ui-emphasis); background: var(--ui-warm); }
+.standalone-design[data-ui='soft'] .room-quick-actions { gap: 2px; padding: 4px; border: 1px solid var(--ui-line); border-radius: 26px; background: var(--room-glass); box-shadow: var(--ui-floating-shadow); }
+.standalone-design[data-ui='soft'] .room-quick-actions button { min-width: 44px; min-height: 49px; gap: 1px; justify-content: center; padding: 4px; border: 0; border-radius: 22px; background: transparent; box-shadow: none; backdrop-filter: none; }
+.standalone-design[data-ui='soft'] .room-quick-actions button::after { content: none; }
+.standalone-design[data-ui='soft'] .room-quick-actions button > span { width: 26px; height: 24px; color: var(--ui-accent); background: transparent; border: 0; box-shadow: none; }
 .standalone-design[data-ui='soft'] .room-quick-actions small { color: var(--ui-ink); font-weight: 550; font-size: 11px; }
 .standalone-design[data-ui='soft'] .room-chat { border-color: var(--ui-contour); border-radius: 27px 27px 0 0; background: linear-gradient(140deg, var(--ui-paper), var(--ui-field)); box-shadow: 0 -4px 0 color-mix(in srgb, var(--ui-paper) 70%, transparent), 0 -8px 24px color-mix(in srgb, var(--ui-ink) 10%, transparent); backdrop-filter: none; }
 .standalone-design[data-ui='soft'] .room-chat--rest { background: transparent; border: 0; box-shadow: none; }
@@ -34,7 +32,7 @@
 .standalone-design[data-ui='soft'] .soft-fold-chevron { margin-left: auto; width: 15px; height: 15px; flex: none; }
 .standalone-design[data-ui='soft'] .room-composer { position: relative; border: 1px solid var(--ui-contour); border-radius: 23px; background: linear-gradient(145deg, var(--ui-glass) 60%, var(--ui-field)); box-shadow: var(--ui-floating-shadow), inset 0 var(--ui-depth-small) 0 var(--ui-edge); padding: 9px 11px; }
 .standalone-design[data-ui='soft'] .room-chat--rest .room-composer { border: 1px solid var(--ui-contour); border-radius: 23px; background: var(--ui-glass); box-shadow: var(--ui-shadow), inset 0 var(--ui-depth-small) 0 var(--ui-edge); }
-.standalone-design[data-ui='soft'] .room-composer::before { content: ''; position: absolute; top: -3px; left: 23px; width: 27px; height: 6px; border-radius: 3px; background: var(--ui-secondary); transform: rotate(-5deg); pointer-events: none; }
+.standalone-design[data-ui='soft'] .room-composer::before { content: none; }
 .standalone-design[data-ui='soft'] .room-composer textarea { font-size: var(--ui-body); line-height: 1.65; }
 .standalone-design[data-ui='soft'] .composer-send, .standalone-design[data-ui='soft'] .group-send { border-radius: 15px; background: linear-gradient(145deg, var(--ui-action-top), var(--ui-action)); border: 1px solid color-mix(in srgb, var(--ui-accent) 78%, var(--ui-ink)); color: var(--ui-on-accent); box-shadow: var(--ui-press-shadow); }
 .standalone-design[data-ui='soft'] .last-reply { border-radius: 18px 18px 6px 18px; border-color: var(--ui-line); background: var(--room-glass); box-shadow: var(--ui-shadow); }

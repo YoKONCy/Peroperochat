@@ -40,7 +40,7 @@
 :is(.standalone-design.companion-surface, .remote-themed)[data-ui='soft'][data-background='active'] .phase-group-composer .phase-compose-line { background: var(--bg-inset-reading-fill); backdrop-filter: none; -webkit-backdrop-filter: none; }
 :is(.standalone-design.companion-surface, .remote-themed)[data-ui='soft'][data-background='active'] :is(.remote-search, .phase-search, .control-input, .remote-field > input, .remote-field > textarea, .remote-field > select, .settings-field > input, .settings-field > textarea, .settings-field > select, .remote-select:not(.remote-select-chip):not(.is-compact)) { background: var(--bg-field-fill); }
 .app.standalone-design[data-ui='soft'][data-background='active'] :is(.last-reply, .reminder-strip, .group-roster) { background: var(--bg-reading-fill); backdrop-filter: none; }
-.app.standalone-design[data-ui='soft'][data-background='active'] .room-quick-actions button { background: var(--bg-shell-fill); backdrop-filter: none; }
+.app.standalone-design[data-ui='soft'][data-background='active'] .room-quick-actions { background: var(--bg-shell-fill); }
 
 /* 正文保留较厚底色。嵌套阅读区只补足可读度，避免越来越白或越来越黑。 */
 :is(.standalone-design.companion-surface, .remote-themed)[data-ui='soft'][data-background='active'] .chat-turn:not(.is-user) > .remote-surface > .remote-rich-text,
