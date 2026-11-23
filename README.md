@@ -5,13 +5,13 @@
   <h1>PeroperoChat</h1>
   <p>以角色房间为中心的跨端 AI 陪伴与远程工作台应用。<br />单机就能陪你聊天、记日记、定闹钟；连上 <a href="https://github.com/YoKONCy/infOS">infOS</a>，手机与桌面随时接着干活。</p>
   <p>
-    <a href="https://github.com/YoKONCy/PeroperoChat/releases/latest"><img src="https://img.shields.io/github/v/release/YoKONCy/PeroperoChat?style=flat-square&amp;label=Release&amp;labelColor=252737&amp;color=9b87cf" alt="最新发布版本" /></a>
-    <a href="https://github.com/YoKONCy/PeroperoChat/releases"><img src="https://img.shields.io/github/downloads/YoKONCy/PeroperoChat/total?style=flat-square&amp;label=Downloads&amp;labelColor=252737&amp;color=c78faf" alt="累计下载量" /></a>
-    <a href="./LICENSE"><img src="https://img.shields.io/github/license/YoKONCy/PeroperoChat?style=flat-square&amp;label=License&amp;labelColor=252737&amp;color=789cce" alt="GPL-3.0 许可证" /></a>
-    <a href="https://github.com/YoKONCy/PeroperoChat/stargazers"><img src="https://img.shields.io/github/stars/YoKONCy/PeroperoChat?style=flat-square&amp;logo=github&amp;labelColor=252737&amp;color=b5a0da" alt="GitHub Stars" /></a>
-    <a href="https://github.com/YoKONCy/PeroperoChat/releases/latest"><img src="https://img.shields.io/badge/Android-ARM64-3ddc84?style=flat-square&amp;logo=android&amp;logoColor=white&amp;labelColor=252737" alt="Android ARM64 安装包" /></a>
+    <a href="https://github.com/Astrmira/Peroperochat/releases/latest"><img src="https://img.shields.io/github/v/release/Astrmira/Peroperochat?style=flat-square&amp;label=Release&amp;labelColor=252737&amp;color=9b87cf" alt="最新发布版本" /></a>
+    <a href="https://github.com/Astrmira/Peroperochat/releases"><img src="https://img.shields.io/github/downloads/Astrmira/Peroperochat/total?style=flat-square&amp;label=Downloads&amp;labelColor=252737&amp;color=c78faf" alt="累计下载量" /></a>
+    <a href="./LICENSE"><img src="https://img.shields.io/github/license/Astrmira/Peroperochat?style=flat-square&amp;label=License&amp;labelColor=252737&amp;color=789cce" alt="GPL-3.0 许可证" /></a>
+    <a href="https://github.com/Astrmira/Peroperochat/stargazers"><img src="https://img.shields.io/github/stars/Astrmira/Peroperochat?style=flat-square&amp;logo=github&amp;labelColor=252737&amp;color=b5a0da" alt="GitHub Stars" /></a>
+    <a href="https://github.com/Astrmira/Peroperochat/releases/latest"><img src="https://img.shields.io/badge/Android-ARM64-3ddc84?style=flat-square&amp;logo=android&amp;logoColor=white&amp;labelColor=252737" alt="Android ARM64 安装包" /></a>
   </p>
-  <p><a href="#quick-start"><b>下载安装</b></a>　/　<a href="#features"><b>功能</b></a>　/　<a href="#modes"><b>两种模式</b></a>　/　<a href="#developers"><b>开发者</b></a>　/　<a href="docs/"><b>文档</b></a>　/　<a href="https://github.com/YoKONCy/PeroperoChat/issues"><b>反馈</b></a></p>
+  <p><a href="#quick-start"><b>下载安装</b></a>　/　<a href="#features"><b>功能</b></a>　/　<a href="#modes"><b>两种模式</b></a>　/　<a href="#developers"><b>开发者</b></a>　/　<a href="docs/"><b>文档</b></a>　/　<a href="https://github.com/Astrmira/Peroperochat/issues"><b>反馈</b></a></p>
 </div>
 
 <br />
@@ -142,7 +142,7 @@ PeroperoChat 基于 Vue 3、Tauri 2 与 Rust 构建，覆盖 Android（ARM64）�
 
 ### 安装 Android APK
 
-1. 前往 [Releases](https://github.com/YoKONCy/PeroperoChat/releases/latest) 下载 `PeroperoChat-v<版本>-arm64.apk`（支持 Android 7.0+ ARM64 设备）。
+1. 前往 [Releases](https://github.com/Astrmira/Peroperochat/releases/latest) 下载 `PeroperoChat-v<版本>-arm64.apk`（支持 Android 7.0+ ARM64 设备）。
 2. 安装后进入 **设置 → 模型连接**，填好接口地址、API Key 与模型即可开启独立模式。
 3. 如需连接桌面端，进入 **设置 → 运行模式与远程连接** 扫码或粘贴配对码即可。
 
@@ -153,7 +153,7 @@ PeroperoChat 基于 Vue 3、Tauri 2 与 Rust 构建，覆盖 Android（ARM64）�
 环境要求：**Node.js 20+**、**pnpm 9**、**Rust stable** 及对应平台 Tauri 构建依赖；构建 Android 另需 **Java 17**、**Android SDK 36** 与 **NDK r26c**。
 
 ```bash
-git clone https://github.com/YoKONCy/PeroperoChat.git
+git clone https://github.com/Astrmira/Peroperochat.git PeroperoChat
 cd PeroperoChat
 pnpm install --frozen-lockfile
 
@@ -222,8 +222,8 @@ pnpm lint        # ESLint 代码规范检查
 
 欢迎提交 Issue 或 Pull Request 参与改进——无论代码、视觉设计还是使用反馈都非常感谢。
 
-<a href="https://github.com/YoKONCy/PeroperoChat/graphs/contributors">
-  <img src="https://contrib.rocks/image?repo=YoKONCy/PeroperoChat" alt="贡献者" />
+<a href="https://github.com/Astrmira/Peroperochat/graphs/contributors">
+  <img src="https://contrib.rocks/image?repo=Astrmira/Peroperochat" alt="贡献者" />
 </a>
 
-<p align="center"><a href="#top">回到顶部 ↑</a> · <a href="https://github.com/YoKONCy/PeroperoChat/releases/latest">下载最新版本</a></p>
+<p align="center"><a href="#top">回到顶部 ↑</a> · <a href="https://github.com/Astrmira/Peroperochat/releases/latest">下载最新版本</a></p>
